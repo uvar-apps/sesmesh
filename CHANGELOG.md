@@ -109,7 +109,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   - Determinism suite (1–16 threads, repeated runs, byte-identical OBJ) and
     thread-scaling benchmark; scaling analysis in the design document.
 
+- Phase 6 SIMD and tuning (T6.1–T6.3, T6.5–T6.7):
+  - `SimdLevel::{Sse4_2, Avx2, Avx512, Neon}`, `SimdLevel::{ALL, name,
+    from_name, effective}`; CLI `--simd auto|scalar|sse4.2|avx2|avx512|neon`
+    (explicit levels capped at the detected one, other architectures are
+    usage errors).
+  - Vertex refinement evaluates exact `f64` candidate lists gathered once
+    per sub-block, with blockers restricted to nearby spheres.
+  - Default brick size 10 (was 8).
+  - Tests: every available SIMD level against the fallback, coordinates
+    offset by 10⁴ Å, 5 000 Å extents (automatic `f64` path); CI job summary
+    with the SIMD level matrix; field benchmark at every level.
+
 ### Fixed
 
+- Meshes far from the origin (≈ 10⁴ Å) could contain zero-area triangles:
+  vertices placed 10⁻⁴·h from a sample collapsed into one `f32` position.
+  The edge clamp is now at least four `f32` ulps of the largest coordinate.
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by
   fuzzing: a count of 377 777 773 requested 36 GB).

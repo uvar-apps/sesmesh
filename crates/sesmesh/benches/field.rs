@@ -1,5 +1,6 @@
-//! Field sampling on surface bricks (Plan T3.9): arrangement + brick
-//! classification + SIMD kernel, multi-threaded. Inputs from
+//! Field sampling on surface bricks (Plan T3.9, T6.7): arrangement + brick
+//! classification + SIMD kernel, multi-threaded, at every instruction set
+//! the CPU supports. Inputs from
 //! `tests/data/{fixtures,cache}` (`cargo xtask fetch --set small --set bench`);
 //! missing files are skipped. Probe 1.4 Å, Bondi radii, 8³-cell bricks.
 
@@ -41,18 +42,29 @@ fn field(c: &mut Criterion) {
         ),
         ("1AON", "tests/data/cache/1AON.cif.gz", &[0.5][..], false),
     ];
-    for (name, rel, spacings, scalar_too) in cases {
+    for (name, rel, spacings, all_levels) in cases {
         let Some(spheres) = spheres(rel) else {
             eprintln!("skipping {name}: {rel} not found");
             continue;
         };
         for &h in spacings {
-            let levels: &[SimdLevel] = if scalar_too {
-                &[SimdLevel::Auto, SimdLevel::Scalar]
+            // Every instruction set this CPU supports (Plan T6.7), or just
+            // the default for the large input.
+            let mut levels: Vec<SimdLevel> = if all_levels {
+                SimdLevel::ALL.to_vec()
             } else {
-                &[SimdLevel::Auto]
+                vec![SimdLevel::Auto]
             };
-            for &level in levels {
+            let mut seen = Vec::new();
+            levels.retain(|l| match l.effective() {
+                Some(name) if *l != SimdLevel::Auto || !all_levels => {
+                    let new = !seen.contains(&name);
+                    seen.push(name);
+                    new
+                }
+                _ => false,
+            });
+            for level in levels {
                 let run = || {
                     sample_surface_bricks(&spheres, 1.4, SurfaceKind::Ses, h, 8, level)
                         .expect("valid")

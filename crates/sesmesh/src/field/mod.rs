@@ -16,7 +16,7 @@ pub use point::{FieldSample, Patch, SesField};
 
 pub(crate) use kernel::{Engine, ScratchPool};
 pub(crate) use lattice::pack;
-pub(crate) use point::{Feature, NearEval};
+pub(crate) use point::{Feature, LocalCandidates, NearEval};
 
 use crate::error::Result;
 use crate::geom::Sphere;
@@ -55,6 +55,52 @@ pub enum SimdLevel {
     Auto,
     /// Portable scalar code (testing and diagnostics).
     Scalar,
+    /// x86 SSE4.2 (x86-64-v2), 4 lanes per instruction.
+    Sse4_2,
+    /// x86 AVX2 + FMA (x86-64-v3), 8 lanes.
+    Avx2,
+    /// x86 AVX-512 (Ice Lake class), 16 lanes.
+    Avx512,
+    /// ARM NEON, 4 lanes.
+    Neon,
+}
+
+impl SimdLevel {
+    /// All values.
+    pub const ALL: [SimdLevel; 6] = [
+        SimdLevel::Auto,
+        SimdLevel::Scalar,
+        SimdLevel::Sse4_2,
+        SimdLevel::Avx2,
+        SimdLevel::Avx512,
+        SimdLevel::Neon,
+    ];
+
+    /// Lower-case name (`auto`, `scalar`, `sse4.2`, `avx2`, `avx512`, `neon`).
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Auto => "auto",
+            Self::Scalar => "scalar",
+            Self::Sse4_2 => "sse4.2",
+            Self::Avx2 => "avx2",
+            Self::Avx512 => "avx512",
+            Self::Neon => "neon",
+        }
+    }
+
+    /// Name of the instruction set this choice runs on the current CPU
+    /// (explicit x86 levels are capped at the detected one), or `None` if
+    /// unavailable (e.g. `Neon` on x86).
+    pub fn effective(self) -> Option<&'static str> {
+        kernel::effective_level_name(self)
+    }
+
+    /// Parses a name as given by [`SimdLevel::name`] (case-insensitive).
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|l| l.name().eq_ignore_ascii_case(name.trim()))
+    }
 }
 
 /// Counts from [`sample_surface_bricks`].

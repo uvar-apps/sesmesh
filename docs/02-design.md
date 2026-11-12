@@ -440,8 +440,9 @@ Parallelisation per sphere follows in Phase 5.
 ### 7.1 Lattice and bricks
 
 * Sample lattice: points $\mathbf o + h\,(i,j,k)$, integer $i,j,k$.
-* **Brick** = $B^3$ cells (default $B = 8$; tunable 4–16, benchmarked in
-  Phase 9). A brick evaluates its own $(B+1)^3$ samples (an apron including its
+* **Brick** = $B^3$ cells (default $B = 10$ since Phase 6 — measured 4–10 %
+  faster end to end than 8 on 4HHB and 1AON; 12 is similar, 4/6/14/16 slower;
+  tunable 2–32). A brick evaluates its own $(B+1)^3$ samples (an apron including its
   "+" faces), so bricks are fully independent work items. Sample duplication
   overhead $((B+1)/B)^3$ (1.42× at $B=8$, 1.20× at $B=16$) is traded for zero
   inter-brick synchronization; P7 below guarantees consistency.
@@ -531,7 +532,24 @@ give the same minimum as the global sets.
   4. Output $\tilde F = r_p - \sqrt{\texttt{best2}}$.
 * Edge refinement, normals and attributes (Phase 4) use the exact `f64` point
   evaluator (`SesField`); a SIMD `TRACK_ARGMIN` variant will be added only if
-  profiling shows refinement to matter.
+  profiling shows refinement to matter. *As built (Phase 6):* refinement
+  evaluates against `f64` candidate lists gathered once per sub-block that
+  has crossing edges (`SesField::gather_local` / `eval_local`), with each
+  candidate's blockers restricted to the spheres within reach of the
+  sub-block (exact: a blocker of a closest point of any ball point lies
+  within $r_p + \text{band} + \rho$ of the ball centre plus its radius). Profile of a
+  1-thread 1AON run before this change: refinement ≈ 38 %, sampling kernel
+  ≈ 38 %, gathering ≈ 18 %, classification ≈ 6 %; one local evaluation now
+  costs ≈ 0.5 µs (≈ the SIMD kernel's cost per sample), so an `f32` SIMD
+  refinement batch would save little while losing exact `f64` vertices and
+  attributes; not pursued.
+* *Kernel experiments (Phase 6):* a "deep inside an atom" shortcut (skip a
+  vector whose 8 samples are all more than band + 0.01 Å inside some vdW
+  sphere, value exactly $-\text{band}$) made sampling ≈ 10 % *slower* — such
+  vectors are rare in surface sub-blocks — and was reverted. Candidate
+  statistics per 4³-cell sub-block on 4HHB at 0.5 Å: ≈ 96 evaluated
+  samples, 10 "inside" spheres, 23 class-S candidates (19 blockers each),
+  41 class-C (11 blockers each), 12 class-V; validity tests dominate.
 * **Precision**: kernel arithmetic is `f32` in the centred frame (§6.1).
   Differences of nearby coordinates are exact (Sterbenz), so the error is
   dominated by input rounding, ≈ 3·10⁻⁵ Å for |coordinates| ≤ 500 Å. If any
@@ -563,7 +581,9 @@ give the same minimum as the global sets.
 points (vertex refinement, re-projection, validation, the library's public
 `SesField` API). Points are batched by spatial cell, candidates gathered per
 batch (same rules as §7.4 with a per-batch radius), and evaluated with the
-`TRACK_ARGMIN` kernel.
+`TRACK_ARGMIN` kernel. *As built:* batches are the sampling sub-blocks and
+the evaluator is the exact `f64` one over the gathered lists (§7.5); the
+public `SesField::sample` still uses the global cell-grid search.
 
 ### 7.7 Cost model
 
@@ -597,10 +617,18 @@ components; `benches/surface.rs`, same machine):
 | 1AON | 0.5 Å | 2.17 M | 4.34 M | ≈ 3.6 s | |
 | 1AON | 0.25 Å | 8.74 M | 17.5 M | ≈ 8.8 s | |
 
-Vertex refinement now costs about as much as sampling (≈ 2.2–2.5 exact
-`f64` evaluations per vertex with a full candidate search each): batching it
-through the SIMD kernel with the brick's gathered candidates (Phase 6,
-T6.3) is the largest remaining lever.
+Vertex refinement then cost about as much as sampling (≈ 2.2–2.5 exact
+`f64` evaluations per vertex with a full candidate search each).
+
+After Phase 6 (local refinement lists, $B = 10$; same benchmark, machine
+under heavy background load — load average ≈ 15–20 — so differences of a
+few percent are noise): 1CRN 0.25 Å ≈ 41 ms, 4HHB 0.5 Å ≈ 0.22 s, 4HHB
+0.25 Å ≈ 0.54 s (was ≈ 0.7 s), 1AON 0.5 Å ≈ 3.1 s (was ≈ 3.6 s). Sampling
+per level (`benches/field.rs`, $B = 8$): NEON is 3–6 % faster than the
+autovectorized fallback on Apple Silicon (1CRN/4HHB at 0.5 and 0.25 Å); the
+x86 AVX2-vs-SSE2 ratio is to be measured in Phase 9. Remaining levers:
+fewer validity tests per candidate (tighter per-candidate blocker sets,
+blocker ordering), reuse of the sampling gather for refinement (≈ 5 %).
 
 ---
 
@@ -652,13 +680,17 @@ T6.3) is the largest remaining lever.
      bracket fall back to Illinois, then bisection; tolerance $10^{-5}$ Å, at
      most 8 evaluations, measured **2.2–2.5 evaluations per vertex** (pure
      Illinois needed 3.2–3.6). Evaluations are scalar `f64` per vertex inside
-     the parallel brick tasks; batching them through a SIMD kernel with the
-     brick's candidate lists (`TRACK_ARGMIN`) is a Phase 6 optimization.
+     the parallel brick tasks, against per-sub-block candidate lists since
+     Phase 6 (§7.5).
      `RefineMode::Linear` skips this (fast preview, one evaluation for the
      normal);
   3. clamp $t \in [10^{-4}, 1-10^{-4}]$ so vertices from edges meeting at a
      sample with $F \approx 0$ never coincide (no zero-area triangles,
-     FR-MESH-5; the induced error ≤ $10^{-4}h$);
+     FR-MESH-5; the induced error ≤ $10^{-4}h$); *as built (Phase 6):* the
+     clamp distance is at least four `f32` ulps of the largest coordinate,
+     so the separation survives the `f32` positions of `Mesh` (input
+     frame): ≤ 2.4·10⁻⁴ Å for coordinates up to 1 000 Å. Found by a test at
+     10⁴ Å from the origin, where 10⁻⁴·h collapsed into one `f32` value;
   4. from the final evaluation's closest point $\mathbf p$: normal
      $\mathbf n = (\mathbf p - \mathbf v)/\lVert\mathbf p - \mathbf v\rVert$ (P5), patch kind from the winning class
      (S→convex, C→saddle, V→concave), nearest atom = argmin over the class's
@@ -885,6 +917,16 @@ case classification); everything else relies on SoA layouts that LLVM
 autovectorizes. Kernels are written once, generic over `S: Simd`; tests run
 them at every level the CPU supports plus the fallback, comparing with the
 `f64` reference.
+
+*As built (Phase 6):* `SimdLevel::{Auto, Scalar, Sse4_2, Avx2, Avx512,
+Neon}` (CLI `--simd`). Explicit x86 levels are capped at the detected one
+through `fearless_simd`'s safe downgrades (`Level::as_avx2()` etc.: an
+AVX-512 request runs AVX2 on an AVX2 machine); a level of another
+architecture is an error (CLI usage error). `simd_levels_agree` checks every
+available level against the fallback (≤ 2·10⁻⁵ Å); the CI test job runs it on
+x86-64 (SSE4.2, AVX2, AVX-512 where the runner has it) and arm64 (NEON), and
+writes a level/kernel/time table to the job summary. MC case classification
+stays scalar (≈ 2 % of a 1-thread profile: not worth SIMD, Plan T6.4).
 
 ### 11.3 Memory budget (NFR-MEM)
 

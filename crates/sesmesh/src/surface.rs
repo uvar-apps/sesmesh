@@ -129,7 +129,8 @@ pub struct SurfaceParams {
     pub resolution: Resolution,
     /// Vertex placement. Default [`RefineMode::Exact`].
     pub refine: RefineMode,
-    /// Brick edge in cells (expert; 2..=32). Default 8.
+    /// Brick edge in cells (expert; 2..=32). Default 10 (measured fastest
+    /// among 4–16 on 4HHB and 1AON, Design §7.7).
     pub brick_size: usize,
     /// Kernel instruction set (expert). Default [`SimdLevel::Auto`].
     pub simd: SimdLevel,
@@ -149,7 +150,7 @@ impl SurfaceParams {
             probe_radius,
             resolution: Resolution::Quality(Quality::Medium),
             refine: RefineMode::Exact,
-            brick_size: 8,
+            brick_size: 10,
             simd: SimdLevel::Auto,
         }
     }
@@ -583,6 +584,39 @@ mod tests {
         for probe in [0.1, 10.0] {
             compute_surface(&spheres(&c), &SurfaceParams::ses(probe).with_spacing(0.5)).unwrap();
         }
+    }
+
+    /// Coordinates 10⁴ Å from the origin give the same surface as near it
+    /// (the `f32` kernel frame is centred on the molecule); an extent beyond
+    /// the `f32` limit selects the exact `f64` sampling path automatically
+    /// (Plan T6.5).
+    #[test]
+    fn far_coordinates_and_huge_extents() {
+        let c = random_chain(&mut Rng::new(31), 30);
+        let near = spheres(&c);
+        // A multiple of the spacing, so both lattices align.
+        let offset = [1.0e4, -2.0e4, 1.5e4];
+        let far: Vec<Sphere> = near
+            .iter()
+            .map(|s| Sphere::new([0, 1, 2].map(|k| s.center[k] + offset[k]), s.radius))
+            .collect();
+        let params = SurfaceParams::ses(c.probe).with_spacing(0.5);
+        let a = compute_surface(&near, &params).unwrap();
+        let b = compute_surface(&far, &params).unwrap();
+        assert_ne!(b.stats.simd, "scalar-f64");
+        assert!(a.stats.vertices.abs_diff(b.stats.vertices) <= 4);
+        assert!((a.stats.area - b.stats.area).abs() < 1e-4 * a.stats.area);
+        assert!((a.stats.volume - b.stats.volume).abs() < 1e-4 * a.stats.volume);
+        // Two copies 5 000 Å apart: f64 path, twice the surface.
+        let mut pair = near.clone();
+        pair.extend(
+            near.iter()
+                .map(|s| Sphere::new([s.center[0] + 5000.0, s.center[1], s.center[2]], s.radius)),
+        );
+        let p = compute_surface(&pair, &params).unwrap();
+        assert_eq!(p.stats.simd, "scalar-f64");
+        assert_eq!(p.stats.components, 2 * a.stats.components);
+        assert!((p.stats.area - 2.0 * a.stats.area).abs() < 1e-4 * a.stats.area);
     }
 
     /// Setting the flag from the progress callback at the given stage stops

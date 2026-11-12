@@ -14,7 +14,7 @@ use rustc_hash::FxHashMap;
 use super::tables::{self, corner_offset, edge_axis_lower};
 use super::{Mesh, PatchKind};
 use crate::error::{Error, Result};
-use crate::field::{Engine, Feature, NearEval, SurfaceKind, pack};
+use crate::field::{Engine, Feature, LocalCandidates, NearEval, SurfaceKind, pack};
 use crate::geom::Vec3;
 use crate::par;
 use crate::surface::RefineMode;
@@ -24,8 +24,21 @@ const MAX_ITER: usize = 8;
 /// Stop refining when `|F| ≤ TOL` (Å).
 const TOL: f64 = 1e-5;
 /// Edge parameter clamp: vertices of edges meeting at a sample never
-/// coincide, so no triangle has zero area (Spec FR-MESH-5).
+/// coincide, so no triangle has zero area (Spec FR-MESH-5). Raised where
+/// needed so the separation also survives `f32` storage (see
+/// [`edge_clamp`]).
 const T_MIN: f64 = 1e-4;
+
+/// Edge parameter clamp for this engine: at least [`T_MIN`], and at least
+/// four `f32` ulps of the largest coordinate (in Å), so vertices that edges
+/// meeting at a sample place next to it stay distinct after rounding to the
+/// stored `f32` positions (input frame). The vertex then moves by at most
+/// that distance: 2.4·10⁻⁴ Å for coordinates up to 1 000 Å.
+pub(crate) fn edge_clamp(engine: &Engine) -> f64 {
+    let m = engine.coord_max.clamp(1.0, f64::from(f32::MAX) / 4.0) as f32;
+    let ulp = f64::from(f32::from_bits(m.to_bits() + 1) - m);
+    (4.0 * ulp / engine.lattice.h).clamp(T_MIN, 0.25)
+}
 /// Bit position of the neighbour code in a triangle reference.
 const CODE_SHIFT: u32 = 28;
 const ID_MASK: u32 = (1 << CODE_SHIFT) - 1;
@@ -62,6 +75,23 @@ pub(crate) fn mesh_brick(
     let origin = lat.brick_origin(key);
     let mut out = BrickMesh::default();
 
+    // Vertex refinement evaluates the field against candidate lists
+    // gathered once per sub-block (the 2×2×2 split of the sampling engine),
+    // instead of a global cell-grid search per evaluation. A crossing edge
+    // lies in the closed sub-block of its lower sample, hence in that
+    // sub-block's circumscribed ball.
+    let sub = if b.is_multiple_of(2) && b >= 4 {
+        b / 2
+    } else {
+        b
+    };
+    let nsub = b / sub;
+    let h = lat.h;
+    let base = lat.point(origin);
+    let rho = 0.5 * 3f64.sqrt() * sub as f64 * h * (1.0 + 1e-9) + 1e-9;
+    let mut locals: [Option<LocalCandidates>; 8] = Default::default();
+    let t_min = edge_clamp(engine);
+
     for z in 0..b {
         for y in 0..b {
             for x in 0..b {
@@ -80,15 +110,27 @@ pub(crate) fn mesh_brick(
                     let mut ib = ia;
                     ib[axis] += 1;
                     let (pa, pb) = (lat.point(ia), lat.point(ib));
-                    vertex(
-                        engine,
+                    let sb = [x, y, z].map(|c| (c / sub).min(nsub - 1));
+                    let local = locals[sb[0] + 2 * sb[1] + 4 * sb[2]].get_or_insert_with(|| {
+                        let center = base
+                            + Vec3::new(
+                                (sb[0] * sub) as f64 + 0.5 * sub as f64,
+                                (sb[1] * sub) as f64 + 0.5 * sub as f64,
+                                (sb[2] * sub) as f64 + 0.5 * sub as f64,
+                            ) * h;
+                        let mut l = LocalCandidates::default();
+                        engine.field.gather_local(center, rho, engine.band, &mut l);
+                        l
+                    });
+                    let (fa, fb) = (f64::from(va), f64::from(vb));
+                    let edge = Edge {
                         pa,
                         pb,
-                        f64::from(va),
-                        f64::from(vb),
-                        refine,
-                        &mut out,
-                    );
+                        fa,
+                        fb,
+                        t_min,
+                    };
+                    vertex(engine, &edge, refine, local, &mut out);
                     out.edges.push((((z * b + y) * b + x) * 3 + axis) as u32);
                 }
             }
@@ -136,17 +178,31 @@ pub(crate) fn mesh_brick(
     out
 }
 
-/// Places the vertex of the crossing edge `pa → pb` (`fa`, `fb`: sampled
-/// values of opposite inside/outside state) and computes its attributes.
-fn vertex(
-    engine: &Engine,
+/// A crossing edge `pa → pb` with sampled values of opposite inside/outside
+/// state and the parameter clamp.
+struct Edge {
     pa: Vec3,
     pb: Vec3,
     fa: f64,
     fb: f64,
+    t_min: f64,
+}
+
+/// Places the vertex of a crossing edge and computes its attributes.
+fn vertex(
+    engine: &Engine,
+    edge: &Edge,
     refine: RefineMode,
+    local: &LocalCandidates,
     out: &mut BrickMesh,
 ) {
+    let &Edge {
+        pa,
+        pb,
+        fa,
+        fb,
+        t_min,
+    } = edge;
     let field = &engine.field;
     let band = engine.band;
     let d = pb - pa;
@@ -160,7 +216,7 @@ fn vertex(
         let (mut t0, mut g0, mut t1, mut g1) = (0.0, fa, 1.0, fb);
         let mut side = 0i8;
         for _ in 0..MAX_ITER {
-            let e = field.eval_near(pa + d * t, band);
+            let e = field.eval_local(pa + d * t, band, local);
             out.evals += 1;
             last = Some(e);
             let g = e.value;
@@ -196,10 +252,10 @@ fn vertex(
             };
         }
     }
-    let v = pa + d * t.clamp(T_MIN, 1.0 - T_MIN);
+    let v = pa + d * t.clamp(t_min, 1.0 - t_min);
     let e = last.unwrap_or_else(|| {
         out.evals += 1;
-        field.eval_near(v, band)
+        field.eval_local(v, band, local)
     });
     // Fallback normal: along the edge, from the inside end to the outside end.
     let outward = if fa < 0.0 { d } else { -d }.normalized();

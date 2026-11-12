@@ -135,7 +135,7 @@ struct SurfaceArgs {
     #[arg(long, value_enum, default_value_t = RefineArg::Exact, help_heading = "Resolution")]
     refine: RefineArg,
     /// Brick edge in grid cells (expert).
-    #[arg(long, default_value_t = 8, help_heading = "Resolution")]
+    #[arg(long, default_value_t = 10, help_heading = "Resolution")]
     brick_size: usize,
     /// Output file (`-`: standard output; a `.gz` suffix compresses).
     /// Default: the input name with an `.obj` extension, in the current
@@ -151,7 +151,8 @@ struct SurfaceArgs {
     /// Worker threads (default: all logical cores).
     #[arg(short = 'j', long, help_heading = "Performance")]
     threads: Option<usize>,
-    /// Field kernel instruction set (`auto`: best supported).
+    /// Field kernel instruction set (`auto`: best supported; explicit x86
+    /// levels are capped at what the CPU supports).
     #[arg(long, value_enum, default_value_t = SimdArg::Auto, help_heading = "Performance")]
     simd: SimdArg,
     /// Print errors only.
@@ -224,6 +225,11 @@ enum RefineArg {
 enum SimdArg {
     Auto,
     Scalar,
+    #[value(name = "sse4.2")]
+    Sse42,
+    Avx2,
+    Avx512,
+    Neon,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -409,8 +415,18 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
         .with_simd(match a.simd {
             SimdArg::Auto => SimdLevel::Auto,
             SimdArg::Scalar => SimdLevel::Scalar,
+            SimdArg::Sse42 => SimdLevel::Sse4_2,
+            SimdArg::Avx2 => SimdLevel::Avx2,
+            SimdArg::Avx512 => SimdLevel::Avx512,
+            SimdArg::Neon => SimdLevel::Neon,
         });
     p.validate().map_err(|e| Failure::Usage(e.to_string()))?;
+    if p.simd.effective().is_none() {
+        return Err(Failure::Usage(format!(
+            "--simd {} is not available on this CPU",
+            p.simd.name()
+        )));
+    }
     if a.precision > 9 {
         return Err(Failure::Usage(format!(
             "--precision must be 0..=9, got {}",

@@ -199,30 +199,50 @@ fn symmetric_and_degenerate_inputs() {
     }
 }
 
+/// Every instruction set this CPU supports gives the fallback's samples
+/// within 2·10⁻⁵ Å (Plan T6.2/T6.6); on x86 CI runners this covers SSE4.2,
+/// AVX2 and, where present, AVX-512.
 #[test]
 fn simd_levels_agree() {
     let c = random_chain(&mut Rng::new(11), 24);
     let s = spheres(&c);
     let run = |level| {
         let field = SesField::new(&s, c.probe, SurfaceKind::Ses).unwrap();
-        let engine = Engine::new(field, 0.3, 8, level).unwrap();
+        let engine = Engine::new(field, 0.3, 8, level).ok()?;
         let (_, bricks) = engine.surface_bricks().unwrap();
-        (
+        Some((
             engine.simd_name(),
             engine.map_bricks(&bricks, |_, v| v.to_vec()),
-        )
+        ))
     };
-    let (auto_name, auto) = run(SimdLevel::Auto);
-    let (scalar_name, scalar) = run(SimdLevel::Scalar);
+    let (scalar_name, scalar) = run(SimdLevel::Scalar).unwrap();
     assert_eq!(scalar_name, "scalar");
-    assert_eq!(auto.len(), scalar.len());
-    let worst = auto
-        .iter()
-        .flatten()
-        .zip(scalar.iter().flatten())
-        .map(|(a, b)| (a - b).abs())
-        .fold(0.0f32, f32::max);
-    assert!(worst <= 2e-5, "{auto_name} vs scalar differ by {worst}");
+    let mut tested = Vec::new();
+    for level in SimdLevel::ALL {
+        let Some((name, samples)) = run(level) else {
+            assert!(!matches!(level, SimdLevel::Auto | SimdLevel::Scalar));
+            continue;
+        };
+        assert_eq!(samples.len(), scalar.len());
+        let worst = samples
+            .iter()
+            .flatten()
+            .zip(scalar.iter().flatten())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f32, f32::max);
+        assert!(worst <= 2e-5, "{name} vs scalar differ by {worst}");
+        tested.push(name);
+    }
+    assert!(tested.len() >= 2, "{tested:?}");
+}
+
+#[test]
+fn simd_level_names() {
+    for level in SimdLevel::ALL {
+        assert_eq!(SimdLevel::from_name(level.name()), Some(level));
+    }
+    assert_eq!(SimdLevel::from_name("AVX2"), Some(SimdLevel::Avx2));
+    assert_eq!(SimdLevel::from_name("mmx"), None);
 }
 
 #[cfg(feature = "parallel")]

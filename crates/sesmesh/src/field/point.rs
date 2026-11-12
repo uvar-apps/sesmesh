@@ -68,7 +68,56 @@ pub(crate) struct PointEval {
     pub(crate) feature: Feature,
 }
 
-/// Result of [`SesField::eval_near`].
+/// Candidates for points of one ball (global internal indices), from
+/// [`SesField::gather_local`].
+#[derive(Debug, Default)]
+pub(crate) struct LocalCandidates {
+    /// SES: spheres that can contain a point of the ball; SAS/vdW: spheres
+    /// within reach, nearest first.
+    inside: Vec<u32>,
+    /// Non-contained spheres within reach (possible blockers), ascending.
+    near: Vec<u32>,
+    /// Class S candidates, nearest first, with their blockers among `near`
+    /// (`s_blk[s_off[k]..s_off[k + 1]]`).
+    spheres: Vec<u32>,
+    s_off: Vec<u32>,
+    s_blk: Vec<u32>,
+    /// Class C candidates, nearest first, with their blockers among `near`.
+    circles: Vec<u32>,
+    c_off: Vec<u32>,
+    c_blk: Vec<u32>,
+    vertices: Vec<u32>,
+    order: Vec<(f64, u32)>,
+}
+
+impl LocalCandidates {
+    fn clear(&mut self) {
+        self.inside.clear();
+        self.near.clear();
+        self.spheres.clear();
+        self.s_off.clear();
+        self.s_off.push(0);
+        self.s_blk.clear();
+        self.circles.clear();
+        self.c_off.clear();
+        self.c_off.push(0);
+        self.c_blk.clear();
+        self.vertices.clear();
+        self.order.clear();
+    }
+
+    /// Appends the members of `row` that are in `near` to `out`.
+    fn filter_blockers(near: &[u32], row: &[u32], out: &mut Vec<u32>) {
+        out.extend(row.iter().filter(|k| near.binary_search(k).is_ok()));
+    }
+}
+
+/// Nearest first; ties by index (deterministic).
+fn sort_nearest(v: &mut [(f64, u32)]) {
+    v.sort_unstable_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)));
+}
+
+/// Result of [`SesField::eval_local`].
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct NearEval {
     pub(crate) value: f64,
@@ -294,68 +343,245 @@ impl SesField {
             feature: Feature::Beyond,
         };
         a.cells.for_each_near(x, cutoff + a.max_expanded, |i| {
-            let iu = i as usize;
-            if a.status[iu] != Status::Exposed {
-                return;
-            }
-            let v = x - a.centers[iu];
-            let len = v.norm();
-            let lb = (len - a.expanded[iu]).abs();
-            if lb >= best.distance || len < 1e-12 {
-                return;
-            }
-            let q = a.centers[iu] + v * (a.expanded[iu] / len);
-            let free = a
-                .neighbors
-                .row(iu)
-                .iter()
-                .all(|&k| q.dist(a.centers[k as usize]) >= a.expanded[k as usize] - EPS);
-            if free {
-                best = PointEval {
-                    distance: lb,
-                    closest: q,
-                    feature: Feature::Sphere(i),
-                };
+            if a.status[i as usize] == Status::Exposed {
+                self.try_sphere(x, i, &mut best);
             }
         });
         self.circle_cells
             .for_each_near(x, cutoff + self.rho_max, |ci| {
-                let c = &a.circles[ci as usize];
-                let y = x - c.center;
-                let along = y.dot(c.axis);
-                let w = y - c.axis * along;
-                let wl = w.norm();
-                let dist = (along * along + (wl - c.radius) * (wl - c.radius)).sqrt();
-                if dist >= best.distance {
-                    return;
+                self.try_circle(x, ci, &mut best);
+            });
+        self.vertex_cells
+            .for_each_near(x, cutoff, |vi| self.try_vertex(x, vi, &mut best));
+        best
+    }
+
+    /// Class S candidate: radial projection of `x` on exposed sphere `i`.
+    #[inline]
+    fn try_sphere(&self, x: Vec3, i: u32, best: &mut PointEval) {
+        self.try_sphere_with(x, i, self.arr.neighbors.row(i as usize), best);
+    }
+
+    /// [`SesField::try_sphere`] with an explicit blocker list (a superset of
+    /// the spheres that can contain the candidate point).
+    #[inline]
+    fn try_sphere_with(&self, x: Vec3, i: u32, blockers: &[u32], best: &mut PointEval) {
+        let a = &self.arr;
+        let iu = i as usize;
+        let v = x - a.centers[iu];
+        let len = v.norm();
+        let lb = (len - a.expanded[iu]).abs();
+        if lb >= best.distance || len < 1e-12 {
+            return;
+        }
+        let q = a.centers[iu] + v * (a.expanded[iu] / len);
+        let free = blockers
+            .iter()
+            .all(|&k| q.dist(a.centers[k as usize]) >= a.expanded[k as usize] - EPS);
+        if free {
+            *best = PointEval {
+                distance: lb,
+                closest: q,
+                feature: Feature::Sphere(i),
+            };
+        }
+    }
+
+    /// Class C candidate: closest point of circle `ci`.
+    #[inline]
+    fn try_circle(&self, x: Vec3, ci: u32, best: &mut PointEval) {
+        self.try_circle_with(x, ci, self.arr.circle_blockers.row(ci as usize), best);
+    }
+
+    /// [`SesField::try_circle`] with an explicit blocker list.
+    #[inline]
+    fn try_circle_with(&self, x: Vec3, ci: u32, blockers: &[u32], best: &mut PointEval) {
+        let a = &self.arr;
+        let c = &a.circles[ci as usize];
+        let y = x - c.center;
+        let along = y.dot(c.axis);
+        let w = y - c.axis * along;
+        let wl = w.norm();
+        let dist = (along * along + (wl - c.radius) * (wl - c.radius)).sqrt();
+        if dist >= best.distance {
+            return;
+        }
+        let dir = if wl > 1e-12 { w / wl } else { c.e1 };
+        let q = c.center + dir * c.radius;
+        let free = blockers
+            .iter()
+            .all(|&k| q.dist(a.centers[k as usize]) >= a.expanded[k as usize] - EPS);
+        if free {
+            *best = PointEval {
+                distance: dist,
+                closest: q,
+                feature: Feature::Circle(ci),
+            };
+        }
+    }
+
+    /// Class V candidate: SAS vertex `vi`.
+    #[inline]
+    fn try_vertex(&self, x: Vec3, vi: u32, best: &mut PointEval) {
+        let p = self.arr.vertices[vi as usize].position;
+        let d = x.dist(p);
+        if d < best.distance {
+            *best = PointEval {
+                distance: d,
+                closest: p,
+                feature: Feature::Vertex(vi),
+            };
+        }
+    }
+
+    /// Collects into `out` every candidate that can matter for the field
+    /// clamped at this `band` (SES: distance cutoff `r_p + band`) at any
+    /// point within `rho` of
+    /// `b` (the same completeness argument as the kernel's gathering,
+    /// Design §7.4), nearest first.
+    pub(crate) fn gather_local(&self, b: Vec3, rho: f64, band: f64, out: &mut LocalCandidates) {
+        let a = &self.arr;
+        out.clear();
+        match self.kind {
+            SurfaceKind::Ses => {
+                // A closest point q of a point x of the ball is within
+                // `cutoff` of x, hence within `reach` of b: a sphere that can
+                // block q satisfies |b − c| < R + reach.
+                let reach = self.probe + band + rho;
+                a.cells.for_each_near(b, reach + a.max_expanded, |k| {
+                    let ku = k as usize;
+                    if a.status[ku] == Status::Contained {
+                        return;
+                    }
+                    let d = b.dist(a.centers[ku]);
+                    if d < a.expanded[ku] + reach {
+                        out.near.push(k);
+                    }
+                    // Can contain a point of the ball (SAS inside test).
+                    if d < a.expanded[ku] + rho {
+                        out.inside.push(k);
+                    }
+                    let lb = (d - a.expanded[ku]).abs();
+                    if a.status[ku] == Status::Exposed && lb <= reach {
+                        out.order.push((lb, k));
+                    }
+                });
+                out.near.sort_unstable();
+                sort_nearest(&mut out.order);
+                for &(_, k) in &out.order {
+                    out.spheres.push(k);
+                    LocalCandidates::filter_blockers(
+                        &out.near,
+                        a.neighbors.row(k as usize),
+                        &mut out.s_blk,
+                    );
+                    out.s_off.push(out.s_blk.len() as u32);
                 }
-                let dir = if wl > 1e-12 { w / wl } else { c.e1 };
-                let q = c.center + dir * c.radius;
-                let free = a
-                    .circle_blockers
-                    .row(ci as usize)
+                out.order.clear();
+                self.circle_cells
+                    .for_each_near(b, reach + self.rho_max, |ci| {
+                        let c = &a.circles[ci as usize];
+                        let y = b - c.center;
+                        let along = y.dot(c.axis);
+                        let wl = (y - c.axis * along).norm();
+                        let dist = (along * along + (wl - c.radius) * (wl - c.radius)).sqrt();
+                        if dist <= reach {
+                            out.order.push((dist, ci));
+                        }
+                    });
+                sort_nearest(&mut out.order);
+                for &(_, ci) in &out.order {
+                    out.circles.push(ci);
+                    LocalCandidates::filter_blockers(
+                        &out.near,
+                        a.circle_blockers.row(ci as usize),
+                        &mut out.c_blk,
+                    );
+                    out.c_off.push(out.c_blk.len() as u32);
+                }
+                out.order.clear();
+                self.vertex_cells.for_each_near(b, reach, |vi| {
+                    let d = b.dist(a.vertices[vi as usize].position);
+                    if d <= reach {
+                        out.order.push((d, vi));
+                    }
+                });
+                sort_nearest(&mut out.order);
+                out.vertices.extend(out.order.iter().map(|o| o.1));
+            }
+            SurfaceKind::Sas | SurfaceKind::Vdw => {
+                let reach = band + rho;
+                a.cells.for_each_near(b, reach + a.max_expanded, |k| {
+                    let ku = k as usize;
+                    if a.status[ku] != Status::Contained
+                        && b.dist(a.centers[ku]) - a.expanded[ku] < reach
+                    {
+                        out.order.push((b.dist(a.centers[ku]) - a.expanded[ku], k));
+                    }
+                });
+                sort_nearest(&mut out.order);
+                out.inside.extend(out.order.iter().map(|o| o.1));
+            }
+        }
+        out.order.clear();
+    }
+
+    /// Field value near the surface (exact where `|F| < band`) with the
+    /// feature carrying the closest point and that point, from candidates
+    /// gathered by [`SesField::gather_local`] for a ball containing `x` (same
+    /// `band`); used to place and annotate mesh vertices (Design §8.2).
+    pub(crate) fn eval_local(&self, x: Vec3, band: f64, l: &LocalCandidates) -> NearEval {
+        let a = &self.arr;
+        match self.kind {
+            SurfaceKind::Ses => {
+                let inside = l
+                    .inside
                     .iter()
-                    .all(|&k| q.dist(a.centers[k as usize]) >= a.expanded[k as usize] - EPS);
-                if free {
-                    best = PointEval {
-                        distance: dist,
-                        closest: q,
-                        feature: Feature::Circle(ci),
+                    .any(|&k| x.dist(a.centers[k as usize]) < a.expanded[k as usize]);
+                if !inside {
+                    return NearEval {
+                        value: self.probe,
+                        feature: Feature::Solvent,
+                        closest: x,
                     };
                 }
-            });
-        self.vertex_cells.for_each_near(x, cutoff, |vi| {
-            let p = a.vertices[vi as usize].position;
-            let d = x.dist(p);
-            if d < best.distance {
-                best = PointEval {
-                    distance: d,
-                    closest: p,
-                    feature: Feature::Vertex(vi),
+                let mut best = PointEval {
+                    distance: self.probe + band,
+                    closest: x,
+                    feature: Feature::Beyond,
                 };
+                for (k, &i) in l.spheres.iter().enumerate() {
+                    let blk = &l.s_blk[l.s_off[k] as usize..l.s_off[k + 1] as usize];
+                    self.try_sphere_with(x, i, blk, &mut best);
+                }
+                for (k, &ci) in l.circles.iter().enumerate() {
+                    let blk = &l.c_blk[l.c_off[k] as usize..l.c_off[k + 1] as usize];
+                    self.try_circle_with(x, ci, blk, &mut best);
+                }
+                for &vi in &l.vertices {
+                    self.try_vertex(x, vi, &mut best);
+                }
+                NearEval {
+                    value: self.probe - best.distance,
+                    feature: best.feature,
+                    closest: best.closest,
+                }
             }
-        });
-        best
+            SurfaceKind::Sas | SurfaceKind::Vdw => {
+                let mut best = (band, None);
+                for &k in &l.inside {
+                    let v = x.dist(a.centers[k as usize]) - a.expanded[k as usize];
+                    if v < best.0 {
+                        best = (v, Some(k));
+                    }
+                }
+                NearEval {
+                    value: best.0,
+                    feature: best.1.map_or(Feature::Beyond, Feature::Sphere),
+                    closest: x,
+                }
+            }
+        }
     }
 
     /// `min_i(|x − c_i| − R_i)` over spheres closer than `cutoff`, clamped at
@@ -374,30 +600,6 @@ impl SesField {
             }
         });
         best
-    }
-
-    /// Field value near the surface (exact where `|F| < band`) with the
-    /// feature carrying the closest point and that point; used to place and
-    /// annotate mesh vertices (Design §8.2).
-    pub(crate) fn eval_near(&self, x: Vec3, band: f64) -> NearEval {
-        match self.kind {
-            SurfaceKind::Ses => {
-                let e = self.ses_eval(x, self.probe + band);
-                NearEval {
-                    value: self.probe - e.distance,
-                    feature: e.feature,
-                    closest: e.closest,
-                }
-            }
-            SurfaceKind::Sas | SurfaceKind::Vdw => {
-                let (value, i) = self.sphere_eval(x, band);
-                NearEval {
-                    value,
-                    feature: i.map_or(Feature::Beyond, Feature::Sphere),
-                    closest: x,
-                }
-            }
-        }
     }
 
     /// Field value clamped to at most `band` (SES: distance clamped at

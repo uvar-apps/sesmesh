@@ -15,7 +15,7 @@ molecular surface) meshing for molecular structures, written in Rust.
   (AVX2 / AVX-512 / NEON).
 * Ships as a reusable library crate plus a command-line tool.
 
-> **Status: v0.1 MVP + parallel engine (Phases 0–5).** Structure files → closed, oriented SES /
+> **Status: v0.1 MVP + parallel and SIMD engine (Phases 0–6).** Structure files → closed, oriented SES /
 > SAS / vdW meshes with analytic normals → OBJ, from the library and the
 > `sesmesh` CLI. Cavity filtering, smoothing/decimation, PLY/MSMS output,
 > biological assemblies and batch mode follow (Phases 5–10, see the

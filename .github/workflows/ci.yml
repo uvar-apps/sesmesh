@@ -55,6 +55,30 @@ jobs:
         run: cargo test --workspace --locked
       - name: test (release)
         run: cargo test --workspace --locked --release
+      # Plan T6.6: which kernel each --simd choice runs on this runner, with
+      # the time of a small surface (the per-level equivalence tests ran in
+      # the test steps above).
+      - name: SIMD level matrix
+        shell: bash
+        run: |
+          {
+            echo "### SIMD levels on ${{ matrix.os }}"
+            echo
+            echo "| --simd | kernel | 1CRN at 0.25 Å |"
+            echo "|---|---|---|"
+            for level in auto scalar sse4.2 avx2 avx512 neon; do
+              line=$(cargo run -q --release --locked -p sesmesh-cli -- \
+                tests/data/fixtures/1CRN.cif.gz -s 0.25 --simd "$level" -o - --timings 2>&1 >/dev/null \
+                | grep -E "time:|error" || true)
+              if [[ "$line" == *"kernel)"* ]]; then
+                kernel=$(sed -E 's/.*, ([a-z0-9.-]+) kernel\).*/\1/' <<<"$line")
+                total=$(sed -E 's/.*\(([0-9.]+ ms), .*/\1/' <<<"$line")
+                echo "| $level | $kernel | $total |"
+              else
+                echo "| $level | not available | |"
+              fi
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
 
   docs:
     name: rustdoc

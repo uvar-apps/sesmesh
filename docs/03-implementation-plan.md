@@ -251,6 +251,28 @@ Exit (v0.1): Spec §6.1 acceptance criteria met; tag `v0.1.0` (not published).
 > Phase 3, with an auto-vs-scalar agreement test (part of T6.4). Remaining:
 > kernel tuning, SIMD refinement batches if needed, CI coverage of x86
 > levels, speed-up measurements on x86.
+>
+> Status (Phase 6 done, with documented analysis instead of the x86
+> speed-up targets, which need x86 hardware):
+> * T6.1: `SimdLevel::{Sse4_2, Avx2, Avx512, Neon}` and CLI `--simd`
+>   capped at the detected level (`SimdLevel::effective`); other-architecture
+>   levels are usage errors.
+> * T6.2: profiled and measured (Design §7.5 "Kernel experiments"); the
+>   deep-inside shortcut was slower and reverted; default brick size 8 → 10
+>   (4–10 % faster end to end).
+> * T6.3: instead of an `f32` SIMD batch, exact `f64` refinement over
+>   per-sub-block candidate lists with locally restricted blockers (a local
+>   evaluation costs about the kernel's per-sample cost; Design §7.5).
+> * T6.4: not done — MC case classification is ≈ 2 % of the profile.
+> * T6.5: test at 10⁴ Å offsets (f32 frame centred on the molecule) and at
+>   5 000 Å extent (automatic `f64` path); it exposed `f32` vertex collapse,
+>   fixed by an ulp-aware edge clamp (Design §8.2).
+> * T6.6: per-level agreement test on every CI runner, level matrix in the
+>   CI job summary; AVX-512 is covered where the runner has it (no Intel SDE
+>   job).
+> * T6.7: field benchmark at every available level; on Apple Silicon NEON is
+>   only ≈ 10 % faster than the autovectorized fallback (Design §7.5), x86
+>   numbers to be collected in Phase 9.
 
 | ID | Task | Deliverable / tests |
 |---|---|---|
@@ -265,6 +287,13 @@ Exit (v0.1): Spec §6.1 acceptance criteria met; tag `v0.1.0` (not published).
 Exit (v0.2): fast, deterministic, multi-level SIMD.
 
 ### Phase 7 — Mesh features (M4) — D§9, FR-SURF-4..7, FR-MESH-6, FR-OUT-2/5/6/7
+
+> Starting point (from Phases 4–5): `mesh::components` already gives
+> deterministic component ids with area, signed volume, χ, genus and
+> `is_cavity` (most of T7.1), and `Mesh` carries `vertex_atom` (input sphere
+> index) and `vertex_patch`. The default element palette for vertex colours
+> (T7.5) is the user-provided `atom-colors.json` (118 elements, hex colours;
+> see `AGENTS.md`).
 
 | ID | Task | Deliverable / tests |
 |---|---|---|

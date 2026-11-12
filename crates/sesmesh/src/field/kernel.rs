@@ -174,6 +174,8 @@ pub(crate) struct Engine {
     /// Half-width of the band where sampled values are exact (Design §7.2).
     pub(crate) band: f64,
     f32_ok: bool,
+    /// Upper bound of |coordinate| of any surface point (input frame).
+    pub(crate) coord_max: f64,
 }
 
 impl Engine {
@@ -210,16 +212,31 @@ impl Engine {
         let lattice = Lattice::new(spacing, brick, center);
         let reach = half + 2.0 * a.max_expanded + 2.0 * field.probe + 4.0 * brick as f64 * spacing;
         let f32_ok = reach < F32_MAX_COORD && reach / spacing < f64::from(1u32 << 23);
+        let detected = Level::new();
         let level = match simd {
-            SimdLevel::Auto => Level::new(),
+            SimdLevel::Auto => detected,
             SimdLevel::Scalar => Level::fallback(),
+            other => select_level(other, detected).ok_or_else(|| {
+                Error::InvalidInput(format!(
+                    "SIMD level {} is not available on this CPU (detected: {})",
+                    other.name(),
+                    level_name(detected)
+                ))
+            })?,
         };
+        let band = 3f64.sqrt() * spacing * 1.01;
+        let coord_max = center.x.abs().max(center.y.abs()).max(center.z.abs())
+            + half
+            + a.max_expanded
+            + field.probe
+            + 2.0 * band;
         Ok(Self {
             field,
             lattice,
             level,
-            band: 3f64.sqrt() * spacing * 1.01,
+            band,
             f32_ok,
+            coord_max,
         })
     }
 
@@ -635,6 +652,46 @@ impl Engine {
             local_of[k as usize] = u32::MAX;
         }
     }
+}
+
+/// See [`SimdLevel::effective`].
+pub(crate) fn effective_level_name(simd: SimdLevel) -> Option<&'static str> {
+    let detected = Level::new();
+    match simd {
+        SimdLevel::Auto => Some(level_name(detected)),
+        SimdLevel::Scalar => Some("scalar"),
+        other => select_level(other, detected).map(level_name),
+    }
+}
+
+/// The requested explicit level, capped at the detected one (an AVX-512
+/// request runs AVX2 on an AVX2 machine); `None` if the architecture has no
+/// such level family.
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+fn select_level(requested: SimdLevel, detected: Level) -> Option<Level> {
+    let avx512 = || detected.as_avx512().map(Simd::level);
+    let avx2 = || detected.as_avx2().map(Simd::level);
+    let sse42 = || detected.as_sse4_2().map(Simd::level);
+    let sse2 = || detected.as_sse2().map(Simd::level);
+    match requested {
+        SimdLevel::Avx512 => avx512().or_else(avx2).or_else(sse42).or_else(sse2),
+        SimdLevel::Avx2 => avx2().or_else(sse42).or_else(sse2),
+        SimdLevel::Sse4_2 => sse42().or_else(sse2),
+        _ => None,
+    }
+}
+
+#[cfg(target_arch = "aarch64")]
+fn select_level(requested: SimdLevel, detected: Level) -> Option<Level> {
+    match requested {
+        SimdLevel::Neon => detected.as_neon().map(Simd::level),
+        _ => None,
+    }
+}
+
+#[cfg(not(any(target_arch = "x86", target_arch = "x86_64", target_arch = "aarch64")))]
+fn select_level(_requested: SimdLevel, _detected: Level) -> Option<Level> {
+    None
 }
 
 fn level_name(level: Level) -> &'static str {
