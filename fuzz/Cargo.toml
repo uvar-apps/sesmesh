@@ -1,0 +1,58 @@
+[package]
+name = "sesmesh-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+sesmesh = { path = "../crates/sesmesh" }
+
+# Separate workspace: cargo-fuzz needs nightly and sanitizer flags.
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "pdb"
+path = "fuzz_targets/pdb.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "mmcif"
+path = "fuzz_targets/mmcif.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cif_lexer"
+path = "fuzz_targets/cif_lexer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "xyz"
+path = "fuzz_targets/xyz.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pqr"
+path = "fuzz_targets/pqr.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "detect"
+path = "fuzz_targets/detect.rs"
+test = false
+doc = false
+bench = false

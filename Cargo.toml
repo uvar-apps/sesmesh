@@ -6,6 +6,7 @@ members = [
     "crates/sesmesh-testkit",
     "xtask",
 ]
+exclude = ["fuzz"]
 default-members = [
     "crates/sesmesh",
     "crates/sesmesh-cli",
@@ -31,11 +32,19 @@ sesmesh-testkit = { path = "crates/sesmesh-testkit" }
 # first needs them.
 anyhow = "1.0"
 clap = { version = "4.6", features = ["derive"] }
+criterion = "0.8"
+fast-float2 = "0.2"
+flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
+memchr = "2.8"
+rayon = "1.12"
+rustc-hash = "2.1"
 serde = { version = "1.0", features = ["derive"] }
 sha2 = "0.11"
+thiserror = "2.0"
 toml = "1.2"
 
 [workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
 unsafe_code = "forbid"
 missing_docs = "deny"
 missing_debug_implementations = "warn"

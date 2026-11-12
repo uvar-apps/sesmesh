@@ -15,9 +15,10 @@ molecular surface) meshing for molecular structures, written in Rust.
   (AVX2 / AVX-512 / NEON).
 * Ships as a reusable library crate plus a command-line tool.
 
-> **Status: Phase 0 (project scaffold).** Nothing computes surfaces yet.
-> See the [implementation plan](docs/03-implementation-plan.md) for the
-> roadmap.
+> **Status: Phase 1 (structure layer) done.** Structure files can be read,
+> atoms selected and radii assigned through the library; nothing computes
+> surfaces yet. See the [implementation plan](docs/03-implementation-plan.md)
+> for the roadmap.
 
 ## Documentation
 

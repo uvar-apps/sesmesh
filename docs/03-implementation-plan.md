@@ -95,7 +95,6 @@ flowchart LR
 | `log` | 0.4 | lib | logging facade | always |
 | `rustc-hash` | 2.1 | lib | `FxHashMap` for brick lookup | always |
 | `itoa` | 1.0 | lib | integer formatting | export |
-| `memmap2` | 0.9 | lib | optional mmap input | `mmap` |
 | `toml` | 1.2 | lib | custom radius files | `radii-file` (default) |
 | `serde`, `serde_json` | 1.0 | lib | JSON stats | `json` |
 | `meshopt` | 0.7 | lib | QEM decimation (C++ meshoptimizer) | `decimate` |
@@ -137,13 +136,13 @@ Exit: CI green; conventions documented.
 | ID | Task | Deliverable / tests |
 |---|---|---|
 | T1.1 | `structure::Element`: Z 0–118 + `Unknown`, symbol parsing (case-insensitive, `D`→H isotope flag), inference from PDB atom-name field (D§5.3 rules). | Table-driven tests incl. ambiguous names (`" CA "` vs `"CA  "`, `"HG  "` vs `" HG1"`). |
-| T1.2 | `AtomRecord`, `Model`, `Structure`, string interner. | Size assertion (`AtomRecord` ≤ 72 B); construction tests. |
-| T1.3 | PDB reader: fixed columns, hybrid-36 decode [R41], MODEL/ENDMDL/TER, short lines, CRLF; chunked parallel parsing for files > 8 MB (sequential fallback). | Fixtures 1CRN, 1UBQ, 3FX2, 2PTN, 4HHB, 1BRS; hybrid-36 vectors from the cctbx reference; malformed-line errors with line numbers; snapshot of parsed summaries. |
+| T1.2 | `AtomRecord`, `Model`, `Structure`, string interner. | Size assertion (`AtomRecord` ≤ 96 B); construction tests. |
+| T1.3 | PDB reader: fixed columns, hybrid-36 decode [R41], MODEL/ENDMDL/TER, short lines, CRLF; chunked parallel parsing for files > 8 MB (sequential fallback). | Fixtures 1CRN, 1UBQ, 3FX2, 2PTN, 4HHB, 1BRS; hybrid-36 vectors from the cctbx reference; malformed-line errors with line numbers; field-by-field assertions on parsed records. |
 | T1.4 | CIF lexer (D§5.4): all token kinds, zero-copy, positions for errors. | Unit tests per token kind; edge cases (quotes followed by non-space, `;` fields, comments, CRLF); fuzz target. |
-| T1.5 | mmCIF `_atom_site` extraction: column mapping, defaults, model numbers, label/auth IDs. | Same fixtures as T1.3 in mmCIF: **identical atom sets** (coordinates, elements, names) to the PDB versions; a > 99 999-atom entry (e.g. 4V6X) parses; GEMMI/pdbtbx atom counts as oracle (offline-generated numbers). |
+| T1.5 | mmCIF `_atom_site` extraction: column mapping, defaults, model numbers, label/auth IDs. | Same fixtures as T1.3 in mmCIF: **identical atom sets** (coordinates, elements, names) to the PDB versions; a > 99 999-atom entry (e.g. 4V6X) parses; RCSB `deposited_atom_count` as independent oracle (replaces the GEMMI/pdbtbx counts originally planned). |
 | T1.6 | XYZ + extended XYZ reader (frames, `Properties=` descriptor, radius column). | Hand-written fixtures; multi-frame selection; error cases. |
 | T1.7 | PQR reader (with/without chain column). | Fixtures produced by PDB2PQR (vendored small file). |
-| T1.8 | `io::detect` (extension + sniffing), gzip via flate2/zlib-rs, stdin, optional mmap. | Detection matrix tests; `.gz` round trip. |
+| T1.8 | `io::detect` (extension + sniffing), gzip via flate2/zlib-rs, stdin. (mmap dropped: it needs `unsafe`.) | Detection matrix tests; `.gz` round trip. |
 | T1.9 | `Selection`: model, alt-loc policies, hydrogens, waters, hetero, chains (auth/label), residue exclusions, predicate. | Fixtures with alt-locs (e.g. 1CRN has none → synthetic file; pick a PDB entry with alt-locs for an integration test); counts per policy. |
 | T1.10 | Radii: Bondi [R34] + Mantina [R35], Alvarez [R36], ProtOr [R37] tables; custom TOML/text rules; assignment with lookup order D§5.6; unknown-element policy; warnings. | Every table value tested against transcription; rule precedence tests; warning aggregation. |
 | T1.11 | Benchmarks: PDB and mmCIF parsing throughput on 4V6X (and 3J3Q when fetched). | ≥ 200 MB/s/core target noted; regressions tracked. |

@@ -1,8 +1,7 @@
 name: Nightly
 
-# Long-running checks that are too slow for every push.
-# Fuzz smoke runs (cargo-fuzz, nightly toolchain) are added here with the
-# first fuzz targets (Plan T1.12); data-set tests with Plan T5.5.
+# Long-running checks that are too slow for every push: ignored tests (large
+# downloaded structures) and fuzz smoke runs (Plan T1.12).
 
 on:
   schedule:
@@ -24,4 +23,31 @@ jobs:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: download test and benchmark structures (verified against sets.lock)
+        run: cargo xtask fetch --set small --set bench
       - run: cargo test --workspace --locked --release -- --include-ignored
+
+  fuzz:
+    name: fuzz smoke (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [pdb, mmcif, cif_lexer, xyz, pqr, detect]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+      - name: seed corpus from fixtures
+        run: |
+          mkdir -p fuzz/corpus/${{ matrix.target }}
+          for f in tests/data/fixtures/*; do
+            case "$f" in
+              *.gz) gzip -dc "$f" > "fuzz/corpus/${{ matrix.target }}/$(basename "$f" .gz)" ;;
+              *.md) ;;
+              *) cp "$f" "fuzz/corpus/${{ matrix.target }}/" ;;
+            esac
+          done
+      - run: cargo fuzz run ${{ matrix.target }} -- -max_total_time=300 -rss_limit_mb=2048

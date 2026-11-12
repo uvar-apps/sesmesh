@@ -262,8 +262,11 @@ that extract only coordinate-level data; GEMMI and `pdbtbx` are used only as
 * `io::compress`: gzip via `flate2` with the `zlib-rs` backend [R51]; input is
   fully decompressed into memory (structure files are ≤ a few hundred MB; 3J3Q
   mmCIF ≈ 200 MB) because all parsers work on `&[u8]`.
-* Large uncompressed files are memory-mapped (`memmap2`, optional feature) or
-  read with a single `read_to_end`.
+  Decompressed size is capped (`ReadOptions::max_decompressed_bytes`, default
+  8 GiB) to stop decompression bombs; exceeding it is `Error::ResourceLimit`.
+* Files are read with a single `std::fs::read`. (Memory-mapping was dropped:
+  `memmap2::Mmap::map` is `unsafe`, which the crate forbids, and reading is
+  not the bottleneck.)
 * Parsers operate on bytes (no UTF-8 validation of the whole file), split lines
   with `memchr`, and parse numbers with a fast float parser (`fast-float2`) /
   hand-written integer parsing. Errors carry 1-based line and column.
@@ -299,15 +302,17 @@ that extract only coordinate-level data; GEMMI and `pdbtbx` are used only as
   `pdbx_PDB_ins_code`, `Cartn_x/y/z`, `occupancy`, `B_iso_or_equiv`,
   `pdbx_formal_charge`, `pdbx_PDB_model_num`, `group_PDB`. Missing optional
   columns get defaults; missing coordinates → error.
-* Performance: the lexer is sequential (quotes and text fields make blind
-  splitting unsafe), but row-to-record conversion of the token stream is
-  batched and parallelized; the lexer itself is `memchr`-driven and targets
-  ≥ 200 MB/s.
+* Performance: lexing and row conversion are sequential (quotes and text
+  fields make blind splitting unsafe). Measured ≈ 350 MiB/s on one Apple
+  Silicon core (4V6X, 1AON), above the 200 MB/s target, so the planned
+  parallel row conversion is deferred to Phase 9 tuning if profiling shows a
+  need. 3J3Q (2.44 M atoms, gzipped) reads in ≈ 0.8 s.
 * **Assemblies**: parse `pdbx_struct_assembly_gen` (assembly id, operator
   expression such as `(1-60)` or `(1,2)(3-5)`, asym id list) and
   `pdbx_struct_oper_list` (3×4 matrices); expand by applying operators to the
   selected chains. Chain IDs of generated copies get an operator suffix.
-* Only the first data block is read unless `--block` is given.
+* The data block is the one named by `--block`, else the first block that
+  contains `_atom_site`.
 
 ### 5.5 XYZ / extended XYZ / PQR (FR-IN-3..5)
 
@@ -321,11 +326,13 @@ that extract only coordinate-level data; GEMMI and `pdbtbx` are used only as
 
 ### 5.6 Selection and radii (FR-SEL, FR-RAD)
 
-* Selection order: model → alt-loc resolution (group by
-  chain/resSeq/iCode/atom name; keep highest occupancy, ties → first, or a
-  requested letter; atoms with blank alt-loc always kept) → hydrogens
-  (element H or D) → waters → hetero → chains → residue exclusions → user
-  predicate.
+* Selection order: model → alt-loc resolution → hydrogens (element H or D) →
+  waters → hetero → chains → residue exclusions → user predicate.
+* Alt-locs are resolved **per residue** (chain, resSeq, iCode), so a residue
+  never mixes conformers: keep the letter with the highest total occupancy
+  (ties → first appearing), or the first letter, or a requested letter (falling
+  back to highest occupancy where absent), or everything. Atoms with a blank
+  alt-loc are always kept.
 * Radii assignment returns `Vec<f64>` aligned with the selected atoms plus
   warnings. Lookup order: file radius (if enabled) → custom rules (exact
   `resName:atomName`, then wildcard `*:atomName`, `resName:*`, then element) →
@@ -334,14 +341,23 @@ that extract only coordinate-level data; GEMMI and `pdbtbx` are used only as
   from the cited papers [R34–R37], each value unit-tested against the source
   table (and cross-checked with an independent machine-readable transcription,
   e.g. QCElemental's Mantina table). Representative Bondi values (Å): H 1.20,
-  C 1.70, N 1.55, O 1.52, F 1.47, P 1.80, S 1.80, Cl 1.75, Br 1.85, I 1.98;
+  C 1.70, N 1.55, O 1.52, F 1.47, P 1.80, S 1.80, Cl 1.75, Br 1.83, I 1.98;
   Mantina additions include Be 1.53, B 1.92, Al 1.84, Ca 2.31, Ge 2.11,
-  Sb 2.06, Bi 2.07 [R35].
+  Sb 2.06, Bi 2.07 [R35]. Main-group values follow Mantina's Table 12 (which
+  reproduces Bondi), except H, where Mantina substitutes 1.10 Å and the Bondi
+  set keeps Bondi's 1.20 Å. Transition metals and U follow the "Bondi" column
+  of Alvarez's Table 1. Elements in neither paper (Fe, Mn, Co, ...) use the
+  fallback radius with a warning. Alvarez values come from Table 1 of [R36]
+  (93 elements; bracketed rough estimates included and marked).
 * ProtOr [R37] maps (residue, atom) to atom classes (e.g. `C3H0`, `C4H2`,
-  `N3H1`, `O1H0`, `S2H0`) with class radii from the paper; non-standard
-  residues fall back to element radii with a warning.
-* Custom radius file: TOML with `[element]` and `[residue."ALA"]`-style tables
-  (or a simple `key radius` text format); validated with line-numbered errors.
+  `N3H1`, `O1H0`, `S2H0`) with class radii from the paper; the 506
+  assignments (amino acids, nucleotides, a few modified residues) are
+  generated from FreeSASA's `protor.config`. Unclassified atoms fall back to
+  Bondi element radii; explicit hydrogens trigger a warning, since united-atom
+  radii already include them.
+* Custom radius file: TOML with `base`, `fallback`, an `[elements]` table and
+  an `[atoms]` table keyed `"RES:ATOM"` (`*` wildcards); unknown keys and
+  invalid radii are rejected with the parser's position.
 
 ---
 
@@ -812,8 +828,10 @@ let field = sesmesh::SesField::new(&spheres, 1.4)?;
 let (value, gradient) = field.value_and_gradient([x, y, z]);
 ```
 
-Cargo features: `default = ["parallel", "pdb", "mmcif", "xyz", "pqr", "gzip", "radii-file"]`;
-optional `json`, `decimate`, `mmap`. Assembly generation is part of `mmcif`/`pdb`.
+Cargo features: `default = ["parallel", "gzip", "radii-file"]`; optional
+`json` and `decimate` (later phases). The format readers are always built:
+they add no dependencies, so separate per-format features would only add
+`cfg` noise. Assembly generation will be part of the mmCIF/PDB readers.
 
 ---
 

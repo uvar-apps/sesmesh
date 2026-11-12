@@ -10,4 +10,4 @@ and XYZ files and writes triangle meshes with normals (OBJ).
 | [02 — Design](02-design.md) | Mathematical foundation (exact implicit SES field), architecture, data model, input readers, geometry precomputation, sparse brick field evaluation with SIMD, Marching Cubes with exact edge refinement and analytic normals, post-processing, output formats, concurrency, API/CLI, verification, risks, alternatives. |
 | [03 — Implementation Plan](03-implementation-plan.md) | Phased task breakdown (T0.1–T10.5) with tests and exit criteria, milestones v0.1–v1.0, dependencies, test-data and benchmark protocol, effort estimate. |
 
-Status: draft for review — no code yet.
+Status: Phases 0–1 implemented (scaffold, structure layer); surface computation not started.

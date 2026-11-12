@@ -2,7 +2,7 @@
 
 | Location | Content | In git |
 |---|---|---|
-| `tests/data/` (fixtures, added from Plan T1.3) | Small structure files tests need offline: PDB/mmCIF/XYZ/PQR fixtures, malformed inputs. PDB archive data is CC0. Keep the total under 5 MB. | yes |
+| `tests/data/fixtures/` | Small structure files tests need offline (see its [README](fixtures/README.md)). PDB archive data is CC0. Keep the total under 5 MB. | yes |
 | `tests/data/sets.toml` | Named download sets (`small`, `bench`, later `validation` and `sweep`). Edited by hand. | yes |
 | `tests/data/sets.lock` | SHA-256 of every downloaded file. Written by `cargo xtask fetch`. | yes |
 | `tests/data/cache/` | Downloaded files. | no (git-ignored) |
