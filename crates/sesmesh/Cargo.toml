@@ -1,0 +1,17 @@
+[package]
+name = "sesmesh"
+description = "Solvent Excluded Surface (Connolly surface) meshing for molecular structures"
+readme = "../../README.md"
+keywords = ["molecular-surface", "ses", "connolly", "mesh", "pdb"]
+categories = ["science", "graphics"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

@@ -1,0 +1,30 @@
+# Download sets for tests and benchmarks (Plan §4, task T0.4).
+#
+#   cargo xtask sets                 # list sets
+#   cargo xtask fetch --set small    # download into tests/data/cache/ (git-ignored)
+#
+# Files are fetched from the RCSB PDB archive (data is CC0) and verified
+# against tests/data/sets.lock. Small fixtures that tests need offline are
+# vendored separately under tests/data/ (Plan T1.3), not listed here.
+
+base_url = "https://files.rcsb.org/download/"
+
+[sets.small]
+description = "Small/medium proteins for integration tests, PDB + mmCIF"
+files = [
+    "4HHB.cif.gz", "4HHB.pdb.gz",  # haemoglobin, ~4.8 k atoms
+    "1BRS.cif.gz", "1BRS.pdb.gz",  # barnase-barstar complex
+    "1ECA.cif.gz", "1ECA.pdb.gz",  # erythrocruorin (EDTSurf example)
+]
+
+[sets.bench]
+description = "Benchmark structures (Spec §5.1), mmCIF"
+files = [
+    "1CRN.cif.gz",  # 327 atoms
+    "4HHB.cif.gz",  # ~4.8 k atoms
+    "1AON.cif.gz",  # GroEL-GroES, ~58.9 k atoms
+    "1JJ2.cif.gz",  # 50S ribosomal subunit, ~98.5 k atoms
+    "4V6X.cif.gz",  # human 80S ribosome, ~238 k atoms (mmCIF only)
+    "3J3Q.cif.gz",  # HIV-1 capsid, 2.44 M atoms (mmCIF only)
+    "1K4R.cif.gz",  # dengue virus, asymmetric unit (assembly ~545 k atoms)
+]

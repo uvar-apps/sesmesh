@@ -1,0 +1,37 @@
+# cargo-deny configuration: advisories, licences, bans, sources.
+# Run locally with `cargo deny check`; CI runs it on every push/PR.
+
+[graph]
+all-features = true
+
+[advisories]
+# RustSec advisories fail the check. Add justified, dated exceptions here.
+ignore = []
+
+[licenses]
+# Permissive licences compatible with distributing sesmesh as MIT OR Apache-2.0.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+    "CC0-1.0",
+]
+confidence-threshold = 0.8
+# The list anticipates planned dependencies (e.g. zlib-rs is Zlib-licensed).
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Workspace-internal path dependencies (e.g. sesmesh-testkit) have no version.
+allow-wildcard-paths = true
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -1,0 +1,3 @@
+[alias]
+# Development automation, e.g. `cargo xtask fetch --set small`.
+xtask = "run --package xtask --"

@@ -1,0 +1,73 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/sesmesh",
+    "crates/sesmesh-cli",
+    "crates/sesmesh-testkit",
+    "xtask",
+]
+default-members = [
+    "crates/sesmesh",
+    "crates/sesmesh-cli",
+    "crates/sesmesh-testkit",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+# Highest MSRV among planned dependencies (fearless_simd 1.2: 1.89).
+# See docs/03-implementation-plan.md §2. Checked by the `msrv` CI job.
+rust-version = "1.89"
+license = "MIT OR Apache-2.0"
+authors = ["sesmesh contributors"]
+# Nothing is published before the v1.0 release task (Plan T10.4).
+publish = false
+
+[workspace.dependencies]
+sesmesh = { path = "crates/sesmesh", version = "0.1.0" }
+sesmesh-testkit = { path = "crates/sesmesh-testkit" }
+
+# Versions follow docs/03-implementation-plan.md §2; add entries when a phase
+# first needs them.
+anyhow = "1.0"
+clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.11"
+toml = "1.2"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "deny"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+cast_lossless = "warn"
+cloned_instead_of_copied = "warn"
+dbg_macro = "warn"
+explicit_iter_loop = "warn"
+manual_let_else = "warn"
+needless_pass_by_value = "warn"
+redundant_closure_for_method_calls = "warn"
+semicolon_if_nothing_returned = "warn"
+todo = "warn"
+uninlined_format_args = "warn"
+unnested_or_patterns = "warn"
+
+[profile.release]
+lto = "thin"
+debug = "line-tables-only"
+
+# Distribution binaries (Plan T10.4): `cargo build --profile dist`.
+[profile.dist]
+inherits = "release"
+lto = "fat"
+codegen-units = 1
+debug = false
+strip = "symbols"
+
+# Benchmarks and profiling keep full debug info.
+[profile.bench]
+debug = true

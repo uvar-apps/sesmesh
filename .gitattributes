@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.gz binary
+# Parser fixtures that must keep CRLF line endings go in a directory marked
+# `-text` (added with the first such fixture, Plan T1.3).
