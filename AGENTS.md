@@ -35,12 +35,13 @@ depend on thread count. Keep docs and CHANGELOG in sync with any deviation from 
 
 ## Status
 
-- Done: Phases 0–4 = v0.1 MVP (file → closed SES/SAS/vdW mesh → OBJ, library + CLI). Parts of
-  Phases 5/6 were done early (rayon everywhere, SIMD sampling, parallel OBJ formatting). Pending
-  from Phase 4: T4.10 manual viewer check. Deviations are noted in the plan's Phase 4 status box.
-- Next — Phase 5: `SurfaceEngine` (reuse allocations), cancellation + progress (`--progress`),
-  scaling study. Phase 6: batched SIMD vertex refinement (largest perf lever, D§7.7). Phase 7:
-  cavity modes, component filters, OBJ groups/colours, JSON stats.
+- Done: Phases 0–5 = v0.1 MVP (file → closed SES/SAS/vdW mesh → OBJ, library + CLI) plus
+  `SurfaceEngine`, `Control` (cancel/progress), `--progress`, determinism suite, scaling study
+  (D§11.1). Deviations are noted in the plan's per-phase status boxes. `control.rs` holds
+  `Control`/`Progress`/`Stage`; `field::ScratchPool` backs `SurfaceEngine`.
+- Next — Phase 6: batched SIMD vertex refinement with the brick's gathered candidates (largest
+  perf lever, D§7.7), kernel tuning, x86 levels in CI. Phase 7: cavity modes, component filters,
+  OBJ groups/colours, JSON stats.
 - Accuracy: inscribed MC mesh underestimates area/volume (D§15 "Measured"; spec NFR-ACC note).
 - Performance notes and next optimizations: D§7.7.
 - `out/` holds untracked meshes from a throwaway prototype (not part of the library).

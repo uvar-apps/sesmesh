@@ -836,6 +836,39 @@ f 1//1 2//2 3//3
 * **Cancellation and progress**: `Arc<AtomicBool>` checked per brick batch;
   progress counters (`AtomicU64`) read by an optional callback invoked at most
   every 100 ms from the orchestrating thread.
+  *As built (Phase 5):* `Control<'a>` borrows an `&AtomicBool` and an
+  `&(dyn Fn(Progress) + Sync)`; the flag is checked per sphere (arrangement),
+  between stages and per brick, so `compute_surface_with` returns
+  `Error::Cancelled` within one brick's work (test: < 100 ms in release).
+  Progress is reported from worker threads (no orchestrating thread exists
+  inside a rayon `map`): every stage reports `(0, total)` and
+  `(total, total)`, the mesh stage about every percent of its bricks; the
+  callback must be `Sync` and tolerate slightly out-of-order `done` values.
+* *As built (Phase 5):* components use a lock-free union–find (atomics,
+  links from the larger root to the smaller, so the partition and its
+  smallest-vertex labelling are schedule-independent); validation and
+  component edge counts share one parallel sort of packed undirected edge
+  keys (`min << 33 | max << 1 | forward`). Measure stage on 1AON at 0.5 Å:
+  0.30 s → 0.16 s (10 threads). `SurfaceEngine` keeps the per-thread
+  sampling buffers in a pool between calls (FR-LIB-3).
+
+Measured scaling (Phase 5, Apple M-series with 4 performance + 6 efficiency
+cores; `benches/scaling.rs` and `sesmesh --timings -j N`):
+
+| Input | 1 | 2 | 4 | 8 | 10 threads |
+|---|---|---|---|---|---|
+| 4HHB, 0.5 Å (total) | 1.08 s | 0.60 s (1.8×) | 0.38 s (2.9×) | 0.24 s (4.6×) | 0.22 s (4.9×) |
+| 1AON, 0.5 Å (total) | 16.3 s | 8.6 s (1.9×) | 5.3 s (3.1×) | 3.7 s (4.4×) | 3.6 s (4.5×) |
+| 1AON, 0.5 Å (mesh stage) | 14.2 s | 7.4 s (1.9×) | 4.5 s (3.1×) | 3.0 s (4.7×) | 2.9 s (4.8×) |
+
+Up to the four performance cores the mesh stage scales at ≈ 80 %; the six
+efficiency cores add ≈ 1.6 performance-core equivalents (one efficiency core
+runs this workload several times slower than a performance core), which caps
+the speed-up near 5×. The remaining serial work is small (read, assembly
+concatenation, ≈ 4 % of the 10-thread total). The plan's "≥ 75 % at 8
+cores" target needs a homogeneous 8+ core x86 machine to measure (Phase 9
+benchmark protocol); the results above are the documented analysis for this
+hardware.
 
 ### 11.2 SIMD strategy
 
@@ -891,7 +924,9 @@ for atom data; well within the 16 GB target.
 // As built (Phase 4): compute_surface(&[Sphere], &SurfaceParams) -> SurfaceOutput
 // { mesh: Mesh, components, stats, diagnostics }; export::obj::{write_obj,
 // write_obj_path, ObjOptions}; mesh::{validate, components, area_volume}.
-// SurfaceEngine (FR-LIB-3) and Control (FR-LIB-5) come with Phase 5.
+// Phase 5: SurfaceEngine::{new, compute, compute_with}, Control::new()
+// .with_cancel(&AtomicBool).with_progress(&dyn Fn(Progress) + Sync),
+// compute_surface_with(spheres, params, &control), Error::Cancelled.
 
 // Geometry-only entry point (FR-LIB-1)
 let spheres: Vec<Sphere> = /* centres + radii */;

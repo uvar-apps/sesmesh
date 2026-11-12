@@ -129,6 +129,24 @@ fn output_is_identical_across_thread_counts() {
 }
 
 #[test]
+fn progress_lines_without_terminal() {
+    let o = run(&[
+        fixture("1L2Y.cif.gz").to_str().unwrap(),
+        "-o",
+        "-",
+        "--progress",
+    ]);
+    assert_eq!(code(&o), 0);
+    let stderr = String::from_utf8(o.stderr).unwrap();
+    for stage in ["geometry", "classify", "mesh", "assemble", "measure"] {
+        assert!(
+            stderr.contains(&format!("sesmesh: {stage} done")),
+            "{stderr}"
+        );
+    }
+}
+
+#[test]
 fn surface_kinds_and_radii_sets() {
     for args in [
         &["--surface", "sas"][..],

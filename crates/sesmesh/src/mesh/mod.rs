@@ -4,6 +4,8 @@
 pub(crate) mod extract;
 mod tables;
 
+use std::sync::atomic::{AtomicU32, Ordering};
+
 use crate::par;
 
 /// Which SES patch carries a vertex.
@@ -153,34 +155,62 @@ impl Component {
 
 /// Per-vertex component id (`0..n`, ordered by smallest vertex index) and the
 /// components' properties. Vertices used by no triangle get their own
-/// component.
+/// component. Parallel and deterministic.
+///
+/// # Panics
+/// If a triangle references a vertex that does not exist (see
+/// [`validate`]).
 pub fn components(mesh: &Mesh) -> (Vec<u32>, Vec<Component>) {
+    components_with(mesh, &Edges::new(mesh))
+}
+
+pub(crate) fn components_with(mesh: &Mesh, edges: &Edges) -> (Vec<u32>, Vec<Component>) {
     let n = mesh.positions.len();
-    let mut parent: Vec<u32> = (0..n as u32).collect();
-    fn find(parent: &mut [u32], mut x: u32) -> u32 {
-        while parent[x as usize] != x {
-            let up = parent[parent[x as usize] as usize];
-            parent[x as usize] = up;
-            x = up;
+    let tris = &mesh.triangles;
+    // Lock-free union–find: links always go from the larger root to the
+    // smaller, so parents only decrease (no cycles, stale reads are still
+    // ancestors) and every root is its component's smallest vertex; the
+    // partition, hence the result, does not depend on scheduling.
+    let parent: Vec<AtomicU32> = (0..n as u32).map(AtomicU32::new).collect();
+    let find = |mut x: u32| loop {
+        let p = parent[x as usize].load(Ordering::Relaxed);
+        if p == x {
+            return x;
         }
-        x
-    }
-    for t in &mesh.triangles {
-        for k in 1..3 {
-            let (a, b) = (find(&mut parent, t[0]), find(&mut parent, t[k]));
-            if a != b {
-                // Smaller index becomes the root: deterministic.
-                let (lo, hi) = (a.min(b), a.max(b));
-                parent[hi as usize] = lo;
-            }
+        let gp = parent[p as usize].load(Ordering::Relaxed);
+        if gp != p {
+            let _ =
+                parent[x as usize].compare_exchange(p, gp, Ordering::Relaxed, Ordering::Relaxed);
         }
-    }
-    let mut id = vec![u32::MAX; n];
+        x = gp;
+    };
+    let union = |a: u32, b: u32| loop {
+        let (ra, rb) = (find(a), find(b));
+        if ra == rb {
+            return;
+        }
+        let (lo, hi) = (ra.min(rb), ra.max(rb));
+        if parent[hi as usize]
+            .compare_exchange(hi, lo, Ordering::Relaxed, Ordering::Relaxed)
+            .is_ok()
+        {
+            return;
+        }
+    };
+    par::map(tris.len().div_ceil(SUM_CHUNK), |c| {
+        let end = ((c + 1) * SUM_CHUNK).min(tris.len());
+        for t in &tris[c * SUM_CHUNK..end] {
+            union(t[0], t[1]);
+            union(t[0], t[2]);
+        }
+    });
+    let roots = par::map(n, |v| find(v as u32));
+    let mut id = vec![0u32; n];
     let mut comps: Vec<Component> = Vec::new();
     for v in 0..n {
-        let root = find(&mut parent, v as u32) as usize;
-        if id[root] == u32::MAX {
-            id[root] = comps.len() as u32;
+        let r = roots[v] as usize;
+        if r == v {
+            id[v] = comps.len() as u32;
             comps.push(Component {
                 vertices: 0,
                 triangles: 0,
@@ -188,27 +218,55 @@ pub fn components(mesh: &Mesh) -> (Vec<u32>, Vec<Component>) {
                 volume: 0.0,
                 euler: 0,
             });
+        } else {
+            id[v] = id[r];
         }
-        id[v] = id[root];
         comps[id[v] as usize].vertices += 1;
     }
+    drop(roots);
+    // Per-component sums: per fixed chunk, merged in chunk order.
     let origin = mesh
         .positions
         .first()
         .map_or([0.0; 3], |p| p.map(f64::from));
-    for t in &mesh.triangles {
-        let c = &mut comps[id[t[0] as usize] as usize];
-        let (a, v) = triangle_area_volume(mesh, *t, origin);
-        c.triangles += 1;
-        c.area += a;
-        c.volume += v;
+    let parts = par::map(tris.len().div_ceil(SUM_CHUNK), |c| {
+        let end = ((c + 1) * SUM_CHUNK).min(tris.len());
+        let mut acc: Vec<(u32, usize, f64, f64)> = Vec::new();
+        for t in &tris[c * SUM_CHUNK..end] {
+            let comp = id[t[0] as usize];
+            let (a, v) = triangle_area_volume(mesh, *t, origin);
+            match acc.iter_mut().find(|e| e.0 == comp) {
+                Some(e) => {
+                    e.1 += 1;
+                    e.2 += a;
+                    e.3 += v;
+                }
+                None => acc.push((comp, 1, a, v)),
+            }
+        }
+        acc
+    });
+    for part in parts {
+        for (comp, t, a, v) in part {
+            let c = &mut comps[comp as usize];
+            c.triangles += t;
+            c.area += a;
+            c.volume += v;
+        }
     }
-    // Edges per component (each undirected edge counted once).
-    let mut edges = undirected_edges(mesh);
-    edges.dedup_by_key(|e| e.0);
+    // Undirected edges per component, each counted once.
+    let edge_parts = edges.par_runs(Vec::<(u32, i64)>::new, |acc, (a, _, _, _)| {
+        let comp = id[a as usize];
+        match acc.iter_mut().find(|e| e.0 == comp) {
+            Some(e) => e.1 += 1,
+            None => acc.push((comp, 1)),
+        }
+    });
     let mut edge_count = vec![0i64; comps.len()];
-    for (key, _) in &edges {
-        edge_count[id[(key >> 32) as usize] as usize] += 1;
+    for part in edge_parts {
+        for (comp, e) in part {
+            edge_count[comp as usize] += e;
+        }
     }
     for (c, e) in comps.iter_mut().zip(edge_count) {
         c.euler = c.vertices as i64 - e + c.triangles as i64;
@@ -216,18 +274,115 @@ pub fn components(mesh: &Mesh) -> (Vec<u32>, Vec<Component>) {
     (id, comps)
 }
 
-/// Sorted `(min << 32 | max, forward)` keys of all triangle edges.
-fn undirected_edges(mesh: &Mesh) -> Vec<(u64, bool)> {
-    let mut edges: Vec<(u64, bool)> = Vec::with_capacity(3 * mesh.triangles.len());
-    for t in &mesh.triangles {
-        for k in 0..3 {
-            let (a, b) = (t[k], t[(k + 1) % 3]);
-            let key = (u64::from(a.min(b)) << 32) | u64::from(a.max(b));
-            edges.push((key, a < b));
+/// The edges of all triangles as sorted keys `(min, max)` with the
+/// traversal direction, so the uses of each undirected edge are adjacent.
+pub(crate) enum Edges {
+    /// `min << 33 | max << 1 | forward` (fewer than 2³¹ vertices).
+    Packed(Vec<u64>),
+    /// `(min << 32 | max, forward)`.
+    Wide(Vec<(u64, bool)>),
+}
+
+/// Uses of one undirected edge: `(min, max, forward uses, backward uses)`.
+type EdgeUses = (u32, u32, usize, usize);
+
+impl Edges {
+    pub(crate) fn new(mesh: &Mesh) -> Self {
+        let tris = &mesh.triangles;
+        let each = |f: &mut dyn FnMut(u32, u32)| {
+            for t in tris {
+                for k in 0..3 {
+                    f(t[k], t[(k + 1) % 3]);
+                }
+            }
+        };
+        if mesh.positions.len() < (1 << 31) {
+            let mut keys = Vec::with_capacity(3 * tris.len());
+            each(&mut |a, b| {
+                keys.push(
+                    (u64::from(a.min(b)) << 33) | (u64::from(a.max(b)) << 1) | u64::from(a < b),
+                );
+            });
+            par::sort_unstable(&mut keys);
+            Self::Packed(keys)
+        } else {
+            let mut keys = Vec::with_capacity(3 * tris.len());
+            each(&mut |a, b| {
+                keys.push(((u64::from(a.min(b)) << 32) | u64::from(a.max(b)), a < b));
+            });
+            par::sort_unstable(&mut keys);
+            Self::Wide(keys)
         }
     }
-    par::sort_unstable(&mut edges);
-    edges
+
+    /// Calls `f(acc, uses)` for every undirected edge, in parallel fixed
+    /// chunks; returns the per-chunk accumulators in order.
+    fn par_runs<A, I, F>(&self, init: I, f: F) -> Vec<A>
+    where
+        A: Send,
+        I: Fn() -> A + Sync + Send,
+        F: Fn(&mut A, EdgeUses) + Sync + Send,
+    {
+        match self {
+            Self::Packed(k) => runs(
+                k,
+                |x| x >> 1,
+                |x| x & 1 == 1,
+                |g| ((g >> 32) as u32, g as u32),
+                init,
+                f,
+            ),
+            Self::Wide(k) => runs(
+                k,
+                |x| x.0,
+                |x| x.1,
+                |g| ((g >> 32) as u32, g as u32),
+                init,
+                f,
+            ),
+        }
+    }
+}
+
+/// Groups equal `group(x)` runs of the sorted `keys` in parallel chunks
+/// (a run belongs to the chunk where it starts).
+fn runs<T, A, I, F>(
+    keys: &[T],
+    group: impl Fn(&T) -> u64 + Sync + Send,
+    forward: impl Fn(&T) -> bool + Sync + Send,
+    split: impl Fn(u64) -> (u32, u32) + Sync + Send,
+    init: I,
+    f: F,
+) -> Vec<A>
+where
+    T: Sync,
+    A: Send,
+    I: Fn() -> A + Sync + Send,
+    F: Fn(&mut A, EdgeUses) + Sync + Send,
+{
+    par::map(keys.len().div_ceil(SUM_CHUNK), |c| {
+        let mut acc = init();
+        let mut i = c * SUM_CHUNK;
+        let end = ((c + 1) * SUM_CHUNK).min(keys.len());
+        while i > 0 && i < end && group(&keys[i]) == group(&keys[i - 1]) {
+            i += 1;
+        }
+        while i < end {
+            let g = group(&keys[i]);
+            let (mut fwd, mut bwd) = (0, 0);
+            while i < keys.len() && group(&keys[i]) == g {
+                if forward(&keys[i]) {
+                    fwd += 1;
+                } else {
+                    bwd += 1;
+                }
+                i += 1;
+            }
+            let (a, b) = split(g);
+            f(&mut acc, (a, b, fwd, bwd));
+        }
+        acc
+    })
 }
 
 /// Result of [`validate`]: counts of each defect (all zero for a closed,
@@ -262,6 +417,12 @@ impl Validation {
 /// Checks a mesh for the invariants of Spec FR-MESH-2 and FR-MESH-5
 /// (Design §9.3).
 pub fn validate(mesh: &Mesh) -> Validation {
+    validate_with(mesh, None).0
+}
+
+/// [`validate`], returning the sorted directed edges for reuse (`None` when
+/// indices are invalid).
+pub(crate) fn validate_with(mesh: &Mesh, edges: Option<Edges>) -> (Validation, Option<Edges>) {
     let n = mesh.positions.len();
     let bad_vertices = mesh
         .positions
@@ -284,22 +445,27 @@ pub fn validate(mesh: &Mesh) -> Validation {
         ..Validation::default()
     };
     if v.invalid_indices > 0 {
-        return v;
+        return (v, None);
     }
     let origin = mesh
         .positions
         .first()
         .map_or([0.0; 3], |p| p.map(f64::from));
-    v.degenerate_triangles = mesh
-        .triangles
-        .iter()
-        .filter(|t| {
-            t[0] == t[1]
-                || t[1] == t[2]
-                || t[0] == t[2]
-                || triangle_area_volume(mesh, **t, origin).0 == 0.0
-        })
-        .count();
+    let tris = &mesh.triangles;
+    v.degenerate_triangles = par::map(tris.len().div_ceil(SUM_CHUNK), |c| {
+        let end = ((c + 1) * SUM_CHUNK).min(tris.len());
+        tris[c * SUM_CHUNK..end]
+            .iter()
+            .filter(|t| {
+                t[0] == t[1]
+                    || t[1] == t[2]
+                    || t[0] == t[2]
+                    || triangle_area_volume(mesh, **t, origin).0 == 0.0
+            })
+            .count()
+    })
+    .iter()
+    .sum();
     let mut sorted: Vec<[u32; 3]> = mesh
         .triangles
         .iter()
@@ -311,22 +477,25 @@ pub fn validate(mesh: &Mesh) -> Validation {
         .collect();
     par::sort_unstable(&mut sorted);
     v.duplicate_triangles = sorted.windows(2).filter(|w| w[0] == w[1]).count();
-    let edges = undirected_edges(mesh);
-    let mut i = 0;
-    while i < edges.len() {
-        let mut j = i + 1;
-        while j < edges.len() && edges[j].0 == edges[i].0 {
-            j += 1;
-        }
-        match j - i {
-            1 => v.boundary_edges += 1,
-            2 if edges[i].1 == edges[i + 1].1 => v.misoriented_edges += 1,
-            2 => {}
-            _ => v.non_manifold_edges += 1,
-        }
-        i = j;
+    let edges = edges.unwrap_or_else(|| Edges::new(mesh));
+    for [boundary, non_manifold, misoriented] in edges.par_runs(
+        || [0usize; 3],
+        |acc, (a, b, fwd, bwd)| {
+            if a == b || (fwd, bwd) == (1, 1) {
+                return;
+            }
+            match fwd + bwd {
+                1 => acc[0] += 1,
+                2 => acc[2] += 1,
+                _ => acc[1] += 1,
+            }
+        },
+    ) {
+        v.boundary_edges += boundary;
+        v.non_manifold_edges += non_manifold;
+        v.misoriented_edges += misoriented;
     }
-    v
+    (v, Some(edges))
 }
 
 #[cfg(test)]

@@ -3,6 +3,7 @@
 //! classification and, later, vertex refinement.
 
 use super::SurfaceKind;
+use crate::control::Control;
 use crate::error::{Error, Result};
 use crate::geom::{Arrangement, CellGrid, EPS, Sphere, Status, Vec3};
 
@@ -113,6 +114,16 @@ impl SesField {
     /// # Errors
     /// [`Error::InvalidInput`] for non-finite or negative values.
     pub fn new(spheres: &[Sphere], probe_radius: f64, kind: SurfaceKind) -> Result<Self> {
+        Self::new_with(spheres, probe_radius, kind, &Control::new())
+    }
+
+    /// [`SesField::new`] with cancellation.
+    pub(crate) fn new_with(
+        spheres: &[Sphere],
+        probe_radius: f64,
+        kind: SurfaceKind,
+        control: &Control<'_>,
+    ) -> Result<Self> {
         if !(probe_radius.is_finite() && probe_radius >= 0.0) {
             return Err(Error::InvalidInput(format!(
                 "probe radius must be finite and >= 0, got {probe_radius}"
@@ -124,9 +135,9 @@ impl SesField {
             kind
         };
         let arr = match kind {
-            SurfaceKind::Ses => Arrangement::build(spheres, probe_radius)?,
-            SurfaceKind::Sas => Arrangement::build_spheres(spheres, probe_radius)?,
-            SurfaceKind::Vdw => Arrangement::build_spheres(spheres, 0.0)?,
+            SurfaceKind::Ses => Arrangement::build_with(spheres, probe_radius, true, control)?,
+            SurfaceKind::Sas => Arrangement::build_with(spheres, probe_radius, false, control)?,
+            SurfaceKind::Vdw => Arrangement::build_with(spheres, 0.0, false, control)?,
         };
         let cell = (2.0 * arr.max_expanded).max(1e-6);
         let circle_cells = CellGrid::new(

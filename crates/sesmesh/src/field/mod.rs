@@ -14,7 +14,7 @@ mod point;
 
 pub use point::{FieldSample, Patch, SesField};
 
-pub(crate) use kernel::Engine;
+pub(crate) use kernel::{Engine, ScratchPool};
 pub(crate) use lattice::pack;
 pub(crate) use point::{Feature, NearEval};
 

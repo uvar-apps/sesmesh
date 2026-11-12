@@ -7,6 +7,7 @@
 //! All constructions use `f64`. Spheres are stored in Morton order of their
 //! cells for memory locality; `orig` maps back to input indices.
 
+use crate::control::Control;
 use std::f64::consts::TAU;
 
 use super::Sphere;
@@ -337,16 +338,27 @@ impl Arrangement {
     /// [`Error::InvalidInput`] for non-finite coordinates, negative or
     /// non-finite radii, or an invalid probe radius.
     pub(crate) fn build(spheres: &[Sphere], probe: f64) -> Result<Self> {
-        Self::build_impl(spheres, probe, true)
+        Self::build_with(spheres, probe, true, &Control::new())
     }
 
     /// Like [`Arrangement::build`] but without circles, arcs and triple
     /// points: enough for the SAS and vdW fields.
     pub(crate) fn build_spheres(spheres: &[Sphere], probe: f64) -> Result<Self> {
-        Self::build_impl(spheres, probe, false)
+        Self::build_with(spheres, probe, false, &Control::new())
     }
 
-    fn build_impl(spheres: &[Sphere], probe: f64, with_circles: bool) -> Result<Self> {
+    /// [`Arrangement::build`] (`with_circles`) or
+    /// [`Arrangement::build_spheres`], checking `control` for cancellation
+    /// between stages and per sphere.
+    ///
+    /// # Errors
+    /// As [`Arrangement::build`], and [`Error::Cancelled`].
+    pub(crate) fn build_with(
+        spheres: &[Sphere],
+        probe: f64,
+        with_circles: bool,
+        control: &Control<'_>,
+    ) -> Result<Self> {
         if !(probe.is_finite() && probe >= 0.0) {
             return Err(Error::InvalidInput(format!(
                 "probe radius must be finite and >= 0, got {probe}"
@@ -420,6 +432,7 @@ impl Arrangement {
             found
         });
         stats.contained = contained.iter().filter(|&&c| c).count();
+        control.check()?;
 
         let rows: Vec<Vec<u32>> = par::map(n, |i| {
             let mut row = Vec::new();
@@ -443,6 +456,7 @@ impl Arrangement {
         }
         drop(rows);
         stats.neighbour_pairs = neighbors.total() / 2;
+        control.check()?;
 
         // Circles (i, j > i), their exposed arcs and the triple points they
         // carry, per sphere i in parallel; concatenated in sphere order.
@@ -452,12 +466,13 @@ impl Arrangement {
             neighbors: &neighbors,
         };
         let per_sphere: Vec<PerSphere> = par::map_init(n, Scratch::default, |scratch, i| {
-            if contained[i] || !with_circles {
+            if contained[i] || !with_circles || control.is_cancelled() {
                 PerSphere::default()
             } else {
                 geometry.circles_of(i, scratch)
             }
         });
+        control.check()?;
         let mut exposed: Vec<bool> = (0..n)
             .map(|i| !contained[i] && (!with_circles || neighbors.row(i).is_empty()))
             .collect();

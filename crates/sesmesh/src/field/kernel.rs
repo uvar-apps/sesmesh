@@ -7,9 +7,13 @@
 
 use fearless_simd::{Level, Simd, dispatch, f32x8, prelude::*};
 
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use super::lattice::{self, Lattice};
 use super::point::SesField;
 use super::{SimdLevel, SurfaceKind};
+use crate::control::{Control, Stage};
 use crate::error::{Error, Result};
 use crate::geom::{Status, Vec3};
 use crate::par;
@@ -103,7 +107,7 @@ impl Gathered {
 }
 
 /// Per-thread buffers reused across bricks.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct BrickScratch {
     g: Gathered,
     xs: Vec<f32>,
@@ -121,6 +125,44 @@ pub(crate) struct BrickScratch {
     local_of: Vec<u32>,
     touched: Vec<u32>,
     order: Vec<(f64, u32)>,
+}
+
+/// Per-thread brick buffers kept between computations
+/// ([`SurfaceEngine`](crate::SurfaceEngine), Spec FR-LIB-3).
+#[derive(Debug, Default)]
+pub(crate) struct ScratchPool(Mutex<Vec<BrickScratch>>);
+
+impl ScratchPool {
+    /// A buffer sized for `engine` (reused if one is pooled).
+    fn take<'p>(&'p self, engine: &Engine) -> Pooled<'p> {
+        let reused = self.0.lock().ok().and_then(|mut v| v.pop());
+        let s = match reused {
+            Some(mut s) if s.values.len() == engine.scratch_len() => {
+                // `local_of` is all-`u32::MAX` between bricks.
+                s.local_of.resize(engine.field.arr.centers.len(), u32::MAX);
+                s
+            }
+            _ => engine.scratch(),
+        };
+        Pooled {
+            scratch: s,
+            pool: self,
+        }
+    }
+}
+
+/// A pooled buffer, returned to its pool when dropped.
+struct Pooled<'p> {
+    scratch: BrickScratch,
+    pool: &'p ScratchPool,
+}
+
+impl Drop for Pooled<'_> {
+    fn drop(&mut self) {
+        if let Ok(mut v) = self.pool.0.lock() {
+            v.push(std::mem::take(&mut self.scratch));
+        }
+    }
 }
 
 /// Samples the field on the sparse brick lattice.
@@ -195,8 +237,12 @@ impl Engine {
         s * s * s
     }
 
+    fn scratch_len(&self) -> usize {
+        self.samples_per_brick().div_ceil(MAX_LANES) * MAX_LANES
+    }
+
     pub(crate) fn scratch(&self) -> BrickScratch {
-        let padded = self.samples_per_brick().div_ceil(MAX_LANES) * MAX_LANES;
+        let padded = self.scratch_len();
         BrickScratch {
             g: Gathered::default(),
             xs: vec![0.0; padded],
@@ -237,6 +283,53 @@ impl Engine {
                 f(bricks[i], &scratch.values[..n])
             },
         )
+    }
+
+    /// [`Engine::map_bricks`] with cancellation (checked per brick),
+    /// progress reports for `stage`, and per-thread buffers taken from and
+    /// returned to `pool`.
+    ///
+    /// # Errors
+    /// [`Error::Cancelled`].
+    pub(crate) fn map_bricks_with<T, F>(
+        &self,
+        bricks: &[[i32; 3]],
+        control: &Control<'_>,
+        stage: Stage,
+        pool: &ScratchPool,
+        f: F,
+    ) -> Result<Vec<T>>
+    where
+        T: Send,
+        F: Fn([i32; 3], &[f32]) -> T + Sync + Send,
+    {
+        let n = self.samples_per_brick();
+        let total = bricks.len() as u64;
+        let step = (total / 100).max(1);
+        let done = AtomicU64::new(0);
+        control.report(stage, 0, total);
+        let out = par::map_init(
+            bricks.len(),
+            || pool.take(self),
+            |scratch, i| {
+                if control.is_cancelled() {
+                    return None;
+                }
+                let s = &mut scratch.scratch;
+                self.evaluate(bricks[i], s);
+                let r = f(bricks[i], &s.values[..n]);
+                if control.has_progress() {
+                    let d = done.fetch_add(1, Ordering::Relaxed) + 1;
+                    if d.is_multiple_of(step) && d < total {
+                        control.report(stage, d, total);
+                    }
+                }
+                Some(r)
+            },
+        );
+        control.check()?;
+        control.report(stage, total, total);
+        Ok(out.into_iter().flatten().collect())
     }
 
     /// Samples of brick `key` into `scratch.values[..samples_per_brick()]`.

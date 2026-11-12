@@ -3,9 +3,10 @@
 
 use std::time::{Duration, Instant};
 
+use crate::control::{Control, Stage};
 use crate::diag::Diagnostics;
 use crate::error::{Error, Result};
-use crate::field::{Engine, SesField, SimdLevel, SurfaceKind};
+use crate::field::{Engine, ScratchPool, SesField, SimdLevel, SurfaceKind};
 use crate::geom::Sphere;
 use crate::mesh::{self, Mesh, extract};
 
@@ -340,7 +341,91 @@ pub struct SurfaceOutput {
 /// [`Error::ResourceLimit`] for meshes beyond `u32` indices, and
 /// [`Error::Internal`] if the mesh fails validation (a bug).
 pub fn compute_surface(spheres: &[Sphere], params: &SurfaceParams) -> Result<SurfaceOutput> {
+    compute_surface_with(spheres, params, &Control::new())
+}
+
+/// [`compute_surface`] with cancellation and progress reporting
+/// (Spec FR-LIB-5).
+///
+/// # Errors
+/// As [`compute_surface`], and [`Error::Cancelled`] when `control`'s flag is
+/// set.
+pub fn compute_surface_with(
+    spheres: &[Sphere],
+    params: &SurfaceParams,
+    control: &Control<'_>,
+) -> Result<SurfaceOutput> {
+    run(spheres, params, control, &ScratchPool::default())
+}
+
+/// A reusable surface computation (Spec FR-LIB-3), e.g. for the frames of a
+/// trajectory: parameters are validated once and the per-thread field
+/// sampling buffers are kept between calls.
+///
+/// ```
+/// use sesmesh::{Sphere, SurfaceEngine, SurfaceParams};
+///
+/// let mut engine = SurfaceEngine::new(SurfaceParams::ses(1.4).with_spacing(0.5))?;
+/// for x in [2.5, 3.0, 3.5] {
+///     let frame = [Sphere::new([0.0; 3], 1.7), Sphere::new([x, 0.0, 0.0], 1.7)];
+///     let out = engine.compute(&frame)?;
+///     assert_eq!(out.stats.components, 1);
+/// }
+/// # Ok::<(), sesmesh::Error>(())
+/// ```
+#[derive(Debug)]
+pub struct SurfaceEngine {
+    params: SurfaceParams,
+    pool: ScratchPool,
+}
+
+impl SurfaceEngine {
+    /// Creates an engine.
+    ///
+    /// # Errors
+    /// [`Error::InvalidInput`] for invalid parameters.
+    pub fn new(params: SurfaceParams) -> Result<Self> {
+        params.validate()?;
+        Ok(Self {
+            params,
+            pool: ScratchPool::default(),
+        })
+    }
+
+    /// The parameters.
+    pub fn params(&self) -> &SurfaceParams {
+        &self.params
+    }
+
+    /// Computes the surface of `spheres`.
+    ///
+    /// # Errors
+    /// As [`compute_surface`].
+    pub fn compute(&mut self, spheres: &[Sphere]) -> Result<SurfaceOutput> {
+        self.compute_with(spheres, &Control::new())
+    }
+
+    /// Computes the surface of `spheres` with cancellation and progress.
+    ///
+    /// # Errors
+    /// As [`compute_surface_with`].
+    pub fn compute_with(
+        &mut self,
+        spheres: &[Sphere],
+        control: &Control<'_>,
+    ) -> Result<SurfaceOutput> {
+        run(spheres, &self.params, control, &self.pool)
+    }
+}
+
+fn run(
+    spheres: &[Sphere],
+    params: &SurfaceParams,
+    control: &Control<'_>,
+    pool: &ScratchPool,
+) -> Result<SurfaceOutput> {
     params.validate()?;
+    control.check()?;
     let mut timings = Timings::default();
     let mut clock = Instant::now();
     let mut lap = |slot: &mut Duration| {
@@ -349,31 +434,46 @@ pub fn compute_surface(spheres: &[Sphere], params: &SurfaceParams) -> Result<Sur
         clock = now;
     };
 
-    let field = SesField::new(spheres, params.effective_probe(), params.kind)?;
+    control.report(Stage::Geometry, 0, 1);
+    let field = SesField::new_with(spheres, params.effective_probe(), params.kind, control)?;
     let kind = field.kind();
     let engine = Engine::new(field, params.spacing(), params.brick_size, params.simd)?;
+    control.report(Stage::Geometry, 1, 1);
     lap(&mut timings.geometry);
 
+    control.report(Stage::Classify, 0, 1);
     let (touched, bricks) = engine.surface_bricks()?;
+    control.check()?;
+    control.report(Stage::Classify, 1, 1);
     lap(&mut timings.classify);
 
-    let parts = engine.map_bricks(&bricks, |key, values| {
+    let parts = engine.map_bricks_with(&bricks, control, Stage::Mesh, pool, |key, values| {
         extract::mesh_brick(&engine, key, values, params.refine)
-    });
+    })?;
     lap(&mut timings.mesh);
 
+    control.report(Stage::Assemble, 0, 1);
     let refine_evaluations = parts.iter().map(|p| p.evals).sum();
     let mesh = extract::assemble(&bricks, &parts)?;
     drop(parts);
+    control.check()?;
+    control.report(Stage::Assemble, 1, 1);
     lap(&mut timings.assemble);
 
-    let check = mesh::validate(&mesh);
-    if !check.is_ok() {
-        return Err(Error::Internal(format!(
-            "mesh failed validation: {check:?}"
-        )));
-    }
-    let (_, components) = mesh::components(&mesh);
+    control.report(Stage::Measure, 0, 1);
+    let (check, edges) = mesh::validate_with(&mesh, None);
+    let edges = match edges {
+        Some(edges) if check.is_ok() => edges,
+        _ => {
+            return Err(Error::Internal(format!(
+                "mesh failed validation: {check:?}"
+            )));
+        }
+    };
+    control.check()?;
+    let (_, components) = mesh::components_with(&mesh, &edges);
+    drop(edges);
+    control.report(Stage::Measure, 1, 1);
     lap(&mut timings.measure);
 
     let stats = SurfaceStats {
@@ -404,6 +504,7 @@ pub fn compute_surface(spheres: &[Sphere], params: &SurfaceParams) -> Result<Sur
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::control::Progress;
     #[cfg(feature = "parallel")]
     use crate::export::obj::{ObjOptions, write_obj};
     use proptest::prelude::*;
@@ -411,6 +512,8 @@ mod tests {
         Cluster, Rng, cage, cluster_strategy, collinear, cubic_lattice, random_box, random_chain,
         with_duplicates,
     };
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicBool, Ordering};
 
     fn spheres(c: &Cluster) -> Vec<Sphere> {
         c.centers
@@ -480,6 +583,79 @@ mod tests {
         for probe in [0.1, 10.0] {
             compute_surface(&spheres(&c), &SurfaceParams::ses(probe).with_spacing(0.5)).unwrap();
         }
+    }
+
+    /// Setting the flag from the progress callback at the given stage stops
+    /// the computation with `Error::Cancelled`, promptly.
+    #[test]
+    fn cancellation_is_prompt() {
+        let c = random_chain(&mut Rng::new(21), 400);
+        let s = spheres(&c);
+        let params = SurfaceParams::ses(c.probe).with_spacing(0.25);
+        for (stage, after) in [(Stage::Geometry, 0), (Stage::Classify, 0), (Stage::Mesh, 1)] {
+            let flag = AtomicBool::new(false);
+            let set_at = Mutex::new(None::<Instant>);
+            let cb = |p: Progress| {
+                if p.stage == stage && p.done >= after && !flag.load(Ordering::Relaxed) {
+                    *set_at.lock().unwrap() = Some(Instant::now());
+                    flag.store(true, Ordering::Relaxed);
+                }
+            };
+            let control = Control::new().with_cancel(&flag).with_progress(&cb);
+            let r = compute_surface_with(&s, &params, &control);
+            let latency = set_at.lock().unwrap().expect("flag set").elapsed();
+            assert!(
+                matches!(r, Err(Error::Cancelled)),
+                "{stage:?}: {:?}",
+                r.map(|o| o.stats)
+            );
+            let bound = if cfg!(debug_assertions) { 2.0 } else { 0.1 };
+            assert!(latency.as_secs_f64() < bound, "{stage:?}: {latency:?}");
+        }
+    }
+
+    #[test]
+    fn progress_covers_every_stage() {
+        let c = random_chain(&mut Rng::new(22), 120);
+        let reports = Mutex::new(Vec::new());
+        let cb = |p: Progress| reports.lock().unwrap().push(p);
+        let params = SurfaceParams::ses(c.probe).with_spacing(0.3);
+        let out = compute_surface_with(&spheres(&c), &params, &Control::new().with_progress(&cb))
+            .unwrap();
+        let reports = reports.into_inner().unwrap();
+        let mut order: Vec<Stage> = Vec::new();
+        for p in &reports {
+            assert!(p.done <= p.total, "{p:?}");
+            if order.last() != Some(&p.stage) {
+                order.push(p.stage);
+            }
+        }
+        use Stage::*;
+        assert_eq!(order, [Geometry, Classify, Mesh, Assemble, Measure]);
+        for stage in order {
+            let total = reports.iter().find(|p| p.stage == stage).unwrap().total;
+            assert!(reports.iter().any(|p| p.stage == stage && p.done == 0));
+            assert!(reports.iter().any(|p| p.stage == stage && p.done == total));
+        }
+        let mesh_total = reports.iter().find(|p| p.stage == Mesh).unwrap().total;
+        assert_eq!(mesh_total, out.stats.surface_bricks as u64);
+        assert!(reports.iter().filter(|p| p.stage == Mesh).count() > 10);
+    }
+
+    /// The engine reuses buffers across frames of different sizes and
+    /// matches `compute_surface`.
+    #[test]
+    fn engine_matches_one_shot() {
+        let params = SurfaceParams::ses(1.4).with_spacing(0.35);
+        let mut engine = SurfaceEngine::new(params.clone()).unwrap();
+        for (seed, n) in [(1, 40), (2, 15), (3, 70), (4, 40)] {
+            let c = random_chain(&mut Rng::new(seed), n);
+            let s = spheres(&c);
+            let a = engine.compute(&s).unwrap();
+            let b = compute_surface(&s, &params).unwrap();
+            assert_eq!(a.mesh, b.mesh, "frame {seed}");
+        }
+        assert!(SurfaceEngine::new(SurfaceParams::ses(1.4).with_spacing(-1.0)).is_err());
     }
 
     proptest! {

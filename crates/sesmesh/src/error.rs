@@ -50,6 +50,11 @@ pub enum Error {
     #[error("no atoms selected: {0}")]
     EmptySelection(String),
 
+    /// The computation was cancelled through its
+    /// [`Control`](crate::Control).
+    #[error("cancelled")]
+    Cancelled,
+
     /// An internal invariant was violated (a bug in sesmesh; please report
     /// it with the input that triggers it).
     #[error("internal error: {0}")]

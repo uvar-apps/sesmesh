@@ -95,6 +95,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
     byte-identity, OBJ round trip and snapshot, CLI end to end; `surface`
     benchmark (1AON at 0.25 Å: 17.5 M triangles in ≈ 8.8 s on 10 cores).
 
+- Phase 5 parallelism (T5.5–T5.7, plus `SurfaceEngine` from T4.7):
+  - `Control` (cancellation flag, progress callback), `Progress`, `Stage`,
+    `compute_surface_with`, `Error::Cancelled`; cancellation checked per
+    sphere, per brick and between stages (< 100 ms latency).
+  - `SurfaceEngine` for repeated computations (keeps per-thread sampling
+    buffers between calls).
+  - CLI `--progress` (live line on a terminal, one line per stage
+    otherwise).
+  - Parallel connected components (lock-free union–find) and validation
+    sharing one sort of packed edge keys: measure stage 0.30 s → 0.16 s on
+    1AON at 0.5 Å.
+  - Determinism suite (1–16 threads, repeated runs, byte-identical OBJ) and
+    thread-scaling benchmark; scaling analysis in the design document.
+
 ### Fixed
 
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by

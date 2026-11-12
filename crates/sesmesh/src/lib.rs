@@ -38,6 +38,7 @@
 // (Spec FR-DIAG-1).
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
+mod control;
 pub mod diag;
 pub mod error;
 pub mod export;
@@ -50,6 +51,7 @@ pub mod radii;
 pub mod structure;
 mod surface;
 
+pub use control::{Control, Progress, Stage};
 pub use diag::{Diagnostics, Warning, WarningKind};
 pub use error::{Error, Result};
 pub use field::SimdLevel;
@@ -58,8 +60,8 @@ pub use geom::Sphere;
 pub use mesh::{Mesh, PatchKind};
 pub use structure::{AtomRecord, AtomSet, Element, Model, Selection, Structure};
 pub use surface::{
-    Quality, RefineMode, Resolution, SurfaceOutput, SurfaceParams, SurfaceStats, Timings,
-    compute_surface,
+    Quality, RefineMode, Resolution, SurfaceEngine, SurfaceOutput, SurfaceParams, SurfaceStats,
+    Timings, compute_surface, compute_surface_with,
 };
 
 /// Version of the `sesmesh` library, taken from `Cargo.toml`.

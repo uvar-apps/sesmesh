@@ -11,9 +11,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
-use std::io::{self, BufWriter, Write};
+use std::io::{self, BufWriter, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -22,8 +23,8 @@ use sesmesh::io::{Format, ReadOptions};
 use sesmesh::radii::{BuiltinRadii, RadiusOptions, RadiusRules, RadiusSet};
 use sesmesh::structure::{AltLocPolicy, ChainIdKind, ModelChoice, WATER_RESIDUES};
 use sesmesh::{
-    AtomSet, Diagnostics, Error, Quality, RefineMode, Selection, SimdLevel, Sphere, Structure,
-    SurfaceKind, SurfaceOutput, SurfaceParams, compute_surface,
+    AtomSet, Control, Diagnostics, Error, Progress, Quality, RefineMode, Selection, SimdLevel,
+    Sphere, Stage, Structure, SurfaceKind, SurfaceOutput, SurfaceParams, compute_surface_with,
 };
 
 /// Compute Solvent Excluded Surfaces (Connolly surfaces) of molecules and
@@ -156,6 +157,10 @@ struct SurfaceArgs {
     /// Print errors only.
     #[arg(long, help_heading = "Diagnostics")]
     quiet: bool,
+    /// Report progress on standard error (a live line on a terminal, one
+    /// line per stage otherwise).
+    #[arg(long, help_heading = "Diagnostics")]
+    progress: bool,
     /// Print stage timings.
     #[arg(long, help_heading = "Diagnostics")]
     timings: bool,
@@ -466,7 +471,14 @@ fn surface(a: &SurfaceArgs) -> CliResult<()> {
     let (atoms, radii) = atoms_and_radii(&structure, &a.input, &a.select, &a.radius, &mut diags)?;
     let spheres = Sphere::from_atoms(&atoms, &radii)?;
     let read_time = start.elapsed();
-    let out = compute_surface(&spheres, &params)?;
+    let reporter = ProgressLine::new(io::stderr().is_terminal());
+    let report = |p: Progress| reporter.update(p);
+    let mut control = Control::new();
+    if a.progress && !a.quiet {
+        control = control.with_progress(&report);
+    }
+    let out = compute_surface_with(&spheres, &params, &control)?;
+    reporter.finish();
     diags.merge(out.diagnostics.clone());
 
     let write_start = Instant::now();
@@ -537,6 +549,53 @@ fn surface(a: &SurfaceArgs) -> CliResult<()> {
         }
     }
     Ok(())
+}
+
+/// Progress display on standard error (FR-CLI-4). Reports may arrive from
+/// any worker thread; the line only moves forward.
+struct ProgressLine {
+    tty: bool,
+    /// Current stage, last percentage shown, whether a live line is open.
+    state: Mutex<(Option<Stage>, u64, bool)>,
+}
+
+impl ProgressLine {
+    fn new(tty: bool) -> Self {
+        Self {
+            tty,
+            state: Mutex::new((None, 0, false)),
+        }
+    }
+
+    fn update(&self, p: Progress) {
+        let Ok(mut st) = self.state.lock() else {
+            return;
+        };
+        let pct = (p.done * 100).checked_div(p.total).unwrap_or(100);
+        let new_stage = st.0 != Some(p.stage);
+        if !new_stage && pct <= st.1 {
+            return;
+        }
+        if new_stage {
+            *st = (Some(p.stage), 0, st.2);
+        }
+        st.1 = pct;
+        if self.tty {
+            eprint!("\rsesmesh: {:<9} {pct:>3}%", p.stage.name());
+            st.2 = true;
+        } else if p.done == p.total {
+            eprintln!("sesmesh: {} done", p.stage.name());
+        }
+    }
+
+    fn finish(&self) {
+        if let Ok(mut st) = self.state.lock()
+            && st.2
+        {
+            eprintln!();
+            st.2 = false;
+        }
+    }
 }
 
 /// OBJ header comments (FR-OUT-1).
