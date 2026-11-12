@@ -1,0 +1,65 @@
+//! Parallel iteration facade (Design §11.1): rayon with the `parallel`
+//! feature, plain sequential iteration otherwise. Every helper returns results
+//! in index order, so output never depends on scheduling.
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+
+/// `(0..n).map(f).collect()`, in parallel when enabled.
+pub(crate) fn map<T, F>(n: usize, f: F) -> Vec<T>
+where
+    T: Send,
+    F: Fn(usize) -> T + Sync + Send,
+{
+    #[cfg(feature = "parallel")]
+    {
+        (0..n).into_par_iter().map(f).collect()
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        (0..n).map(f).collect()
+    }
+}
+
+/// Like [`map`], with per-thread scratch state created by `init`.
+pub(crate) fn map_init<S, T, I, F>(n: usize, init: I, f: F) -> Vec<T>
+where
+    T: Send,
+    I: Fn() -> S + Sync + Send,
+    F: Fn(&mut S, usize) -> T + Sync + Send,
+{
+    #[cfg(feature = "parallel")]
+    {
+        (0..n).into_par_iter().map_init(init, f).collect()
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        let mut scratch = init();
+        (0..n).map(|i| f(&mut scratch, i)).collect()
+    }
+}
+
+/// Unstable sort, in parallel when enabled.
+pub(crate) fn sort_unstable<T: Ord + Send>(v: &mut [T]) {
+    #[cfg(feature = "parallel")]
+    v.par_sort_unstable();
+    #[cfg(not(feature = "parallel"))]
+    v.sort_unstable();
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn order_is_preserved() {
+        let v = super::map(10_000, |i| i * 2);
+        assert!(v.iter().enumerate().all(|(i, &x)| x == 2 * i));
+        let w = super::map_init(1000, Vec::<usize>::new, |s, i| {
+            s.push(i);
+            i
+        });
+        assert_eq!(w, (0..1000).collect::<Vec<_>>());
+        let mut u = vec![5, 3, 9, 1];
+        super::sort_unstable(&mut u);
+        assert_eq!(u, [1, 3, 5, 9]);
+    }
+}

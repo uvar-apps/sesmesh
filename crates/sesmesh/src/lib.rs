@@ -4,11 +4,11 @@
 //! surface) meshing for molecular structures read from PDB, PDBx/mmCIF and XYZ
 //! files.
 //!
-//! **Status:** Phases 1–2 — readers ([`io`]), atom selection
-//! ([`Selection`]), radius assignment ([`radii`]) and the sphere geometry
-//! behind the surface ([`Sphere`], [`geom`]) are implemented. The surface
-//! field and meshing follow in later phases; see the repository's `docs/`
-//! directory.
+//! **Status:** Phases 1–3 — readers ([`io`]), atom selection
+//! ([`Selection`]), radius assignment ([`radii`]), sphere geometry
+//! ([`Sphere`], [`geom`]) and the exact surface field with its multi-threaded
+//! SIMD sampling engine ([`SesField`], [`field`]) are implemented. Meshing and
+//! OBJ output follow in Phase 4; see the repository's `docs/` directory.
 //!
 //! ```
 //! use sesmesh::{io, radii, Diagnostics, Selection};
@@ -29,13 +29,16 @@
 
 pub mod diag;
 pub mod error;
+pub mod field;
 pub mod geom;
 pub mod io;
+mod par;
 pub mod radii;
 pub mod structure;
 
 pub use diag::{Diagnostics, Warning, WarningKind};
 pub use error::{Error, Result};
+pub use field::{SesField, SurfaceKind};
 pub use geom::Sphere;
 pub use structure::{AtomRecord, AtomSet, Element, Model, Selection, Structure};
 

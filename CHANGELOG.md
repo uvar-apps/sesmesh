@@ -51,6 +51,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
     random clusters, symmetric lattices/cages and crambin; arrangement
     benchmark.
 
+- Phase 3 field engine with multi-threading and SIMD built in (T3.1–T3.9,
+  plus parts of T5 and T6 moved forward):
+  - `SesField`: exact `f64` SES/SAS/vdW field at any point, with closest
+    feature (`Patch`) and outward normal; `SurfaceKind`, `SimdLevel`.
+  - Sparse brick lattice: touched bricks, conservative Lipschitz
+    classification of bricks and 2×2×2 sub-blocks, per-sub-block candidate
+    gathering, `fearless_simd` kernels (8 lanes, runtime dispatch:
+    AVX-512/AVX2/SSE4.2/NEON/WASM/scalar), exact `f64` path for very large
+    coordinates; `field::sample_surface_bricks` for benchmarks/diagnostics.
+  - rayon facade (`parallel` feature); parallel arrangement construction
+    (1AON 0.73 s → 0.16 s), classification and sampling, deterministic for
+    any thread count.
+  - Tests: point field and lattice samples vs the oracle (SES/SAS/vdW),
+    classification soundness, brick-seam sign consistency, symmetric inputs,
+    SIMD vs scalar agreement, 1 vs N threads; field benchmark.
+
 ### Fixed
 
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by

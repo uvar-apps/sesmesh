@@ -174,11 +174,11 @@ Exit: arrangement matches brute force on ≥ 10⁴ random clusters; oracle and a
 | T3.2 | Touched-brick set: dense bitset path and sort–dedup path (switch by lattice size). | Both paths give identical sets. |
 | T3.3 | Classification: cheap SAS/vdW bounds + Lipschitz test with $\varepsilon_c$ (D§7.3). | **Soundness test**: for random clusters, every sample of every brick classified uniform has the asserted sign (oracle). |
 | T3.4 | Candidate gathering with thread-local SoA scratch, nearest-first ordering, filtered blocker CSR (D§7.4). | Gathered sets ⊇ features that win/invalidate for sampled points (checked against oracle argmin). |
-| T3.5 | Kernel generic over `S: Simd`, instantiated at the fallback level only (D§7.5): clamped value, `TRACK_ARGMIN` variant; `f32` and `f64` instantiations. | Kernel vs oracle at 10⁶ random points per test run (abs error ≤ 2·10⁻⁵ Å in f32 frame; ≤ 10⁻⁹ in f64). |
-| T3.6 | **P7 consistency**: shared samples between adjacent surface bricks are bit-identical. | Dedicated test over all brick seams of 1CRN and random clusters. |
+| T3.5 | Kernel generic over `S: Simd` with **runtime dispatch** (`f32x8`), sub-block culling, exact `f64` point evaluator (`SesField`) for large coordinate ranges and point queries (D§7.5). | Kernel samples vs oracle (≤ 1e-4 Å or exact sign in uniform sub-blocks); point field vs oracle (≤ 1e-9). |
+| T3.6 | **P7 consistency**: neighbouring bricks agree on the sign of every shared sample (evaluated samples are bit-identical). | Dedicated test over all brick seams of 1CRN and random clusters. |
 | T3.7 | SAS and vdW field kinds; $r_p = 0$ routing. | Oracle comparison. |
 | T3.8 | `field::query`: batched point queries (value, gradient, closest feature, patch kind, nearest atom); public `SesField` wrapper. | Oracle comparison; gradient vs finite differences away from singular sets. |
-| T3.9 | Benchmark: samples/s per brick on 1CRN, 4HHB at fallback level. | Baseline numbers recorded for Phase 6. |
+| T3.9 | Benchmark (`benches/field.rs`): 1CRN, 4HHB, 1AON at 0.5/0.25 Å, auto vs scalar level. | Numbers in D§7.7. |
 
 Exit: correct, sound field sampling on all fixtures.
 
@@ -201,6 +201,12 @@ Exit (v0.1): Spec §6.1 acceptance criteria met; tag `v0.1.0` (not published).
 
 ### Phase 5 — Parallelism and determinism (M3) — D§11.1
 
+> Moved forward on request: T5.1 (`par` facade), parallel arrangement
+> (part of T5.2) and parallel brick classification/sampling (part of T5.3)
+> were implemented in Phase 3, with a 1 vs N threads checksum test (part of
+> T5.5). Remaining: parallel mesh assembly and OBJ output, cancellation and
+> progress, scaling study.
+
 | ID | Task | Deliverable / tests |
 |---|---|---|
 | T5.1 | `par` facade (rayon or sequential), `parallel` feature, respect caller's pool. | Builds and tests pass with `--no-default-features --features pdb,mmcif`. |
@@ -212,6 +218,12 @@ Exit (v0.1): Spec §6.1 acceptance criteria met; tag `v0.1.0` (not published).
 | T5.7 | Scaling benchmark (1AON, 1JJ2): speedup curve 1–16 threads; fix hotspots (false sharing, allocation, load imbalance via `with_min_len`). | ≥ 75 % efficiency at 8 cores or documented analysis. |
 
 ### Phase 6 — SIMD (M3) — D§7.5, D§11.2
+
+> Moved forward on request: T6.1 (level detection, dispatch, `SimdLevel`
+> override) and the core of T6.2 (SIMD sampling kernel) were implemented in
+> Phase 3, with an auto-vs-scalar agreement test (part of T6.4). Remaining:
+> kernel tuning, SIMD refinement batches if needed, CI coverage of x86
+> levels, speed-up measurements on x86.
 
 | ID | Task | Deliverable / tests |
 |---|---|---|

@@ -34,6 +34,7 @@ anyhow = "1.0"
 clap = { version = "4.6", features = ["derive"] }
 criterion = "0.8"
 fast-float2 = "0.2"
+fearless_simd = { version = "1.2", features = ["force_support_fallback"] }
 flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
 memchr = "2.8"
 proptest = "1.12"

@@ -477,14 +477,26 @@ $2\cdot10^{-3}$ Å).
 4. Otherwise it is a **surface brick**.
 
 Uniform bricks produce no geometry. This is the adaptive-distance-field idea
-[R31] and the brick culling of [R15], made exact by P1. (Optional
-optimization: the same test on $2^3$ sub-blocks inside surface bricks to skip
-far samples; enabled if Phase 9 benchmarks show a gain.)
+[R31] and the brick culling of [R15], made exact by P1.
+
+**Sub-block culling (implemented).** Inside each surface brick the same test
+classifies its $2^3$ sub-blocks. Samples lying only in uniform sub-blocks get
+the value $\pm\delta$ — exact sign, inexact value — and are not evaluated; the
+rest are evaluated by the kernel. Meshing needs exact values only at the two
+ends of sign-changing edges, which never touch a uniform sub-block (its sign
+is uniform on the closed sub-block), so this changes no vertex. On 1AON at
+0.5 Å about 23 % of samples are culled this way, at 0.25 Å about 56 %.
 
 ### 7.4 Per-brick candidate gathering
 
-Gather radius $G = r_p + \delta + \rho_b$ around $\mathbf b$. Into thread-local SoA scratch
-buffers (reused across bricks):
+Candidates are gathered per active **sub-block** (centre $\mathbf b$, circumradius
+$\rho$; the whole brick when $B$ is odd), which shrinks the reach compared with
+the brick. Gather radius $G = r_p + \delta + \rho$ around $\mathbf b$. Into thread-local
+SoA scratch buffers (reused across bricks):
+
+* near spheres: non-contained spheres with $\lVert\mathbf b - \mathbf c_k\rVert < R_k + G$, ordered so
+  that those that can contain a sample ($< R_k + \rho$) come first — only they
+  are scanned by the kernel's inside-SAS test; all serve as blockers;
 
 * class-S candidates: exposed spheres with $\lvert\,\lVert\mathbf b-\mathbf c_i\rVert - R_i\rvert \le G$, sorted
   by that value (nearest first → better pruning); for each, its blockers
@@ -500,9 +512,12 @@ give the same minimum as the global sets.
 
 ### 7.5 SIMD kernel
 
-* **Lanes = samples.** The $(B+1)^3$ sample positions of a brick are generated
-  from the brick origin and a precomputed table of lane offsets (shared by all
-  bricks of the same $B$ and $h$), padded to a multiple of the vector width.
+* **Lanes = samples.** The active samples of a sub-block are compacted into
+  `f32` coordinate arrays (frame-local, computed from integer lattice indices),
+  padded to a multiple of 16 so no scalar tail path exists. Vectors are
+  `f32x8` (one AVX2 register, two NEON registers — the extra
+  instruction-level parallelism measured ≈ 10 % faster than native 4-lane
+  NEON on 1AON).
 * Per vector of samples, keep `best2` (squared best distance, initialized to
   $D^2$):
   1. **V**: `best2 = min(best2, |x - v|²)` for each vertex (3 sub, 3 FMA, 1 min).
@@ -514,29 +529,33 @@ give the same minimum as the global sets.
      improves; else `q = m + ρ w/|w|` (deterministic fallback direction when
      `|w|` ≈ 0), validity over blockers, masked update.
   4. Output $\tilde F = r_p - \sqrt{\texttt{best2}}$.
-* A second instantiation (`TRACK_ARGMIN = true`, const generic) also records
-  the winning candidate (kind + index) and closest point per lane; used for
-  edge refinement, normals, attributes and point queries.
+* Edge refinement, normals and attributes (Phase 4) use the exact `f64` point
+  evaluator (`SesField`); a SIMD `TRACK_ARGMIN` variant will be added only if
+  profiling shows refinement to matter.
 * **Precision**: kernel arithmetic is `f32` in the centred frame (§6.1).
   Differences of nearby coordinates are exact (Sterbenz), so the error is
-  dominated by input rounding, ≈ 3·10⁻⁵ Å for |coordinates| ≤ 500 Å. If the
-  extent exceeds 4 000 Å the engine switches to the `f64` instantiation of the
-  same generic kernel (half throughput) and logs it.
-* **Bitwise consistency (P7).** A sample shared by two bricks is evaluated with
-  identical inputs (global lattice position computed identically, feature data
-  identical, same instruction sequence, same SIMD level, no scalar tail path —
-  tails are padded), and the gathered candidate sets of both bricks contain
-  every candidate that can win or invalidate (§7.4); skipping by lower bound
-  never changes the minimum. Hence both bricks compute *bit-identical* values
-  and identical inside/outside decisions — no cracks at brick seams.
-* Implementation: generic over `S: fearless_simd::Simd`, using the native
-  vector width (`S::f32s`: 4 on NEON/SSE, 8 on AVX2, 16 on AVX-512); the
-  `#[simd]` attribute from `fearless_simd_macros` for inlining; one runtime
-  `dispatch!` per brick batch (not per call). An expert option forces a lower
-  level (`--simd`), used by tests to compare levels.
-* **Reference kernel** (`field::reference`): straightforward scalar `f64`
-  evaluation over *all* features with brute-force validity tests; ground truth
-  for tests (§12).
+  dominated by input rounding, ≈ 3·10⁻⁵ Å for |coordinates| ≤ 500 Å. If any
+  coordinate would lie more than 2 000 Å from the frame origin, the engine
+  evaluates samples with the exact `f64` point evaluator instead (slow but
+  correct).
+* **Seam consistency (P7).** Neighbouring bricks must agree on the sign of
+  every shared sample. An evaluated sample uses identical inputs in every
+  brick (lattice position from integers, identical feature data, same
+  instruction sequence and SIMD level, padded tails), and every gathered
+  candidate set contains all candidates that can win or invalidate (§7.4);
+  skipping by lower bound never changes the minimum — so evaluated values are
+  bit-identical. A sample may instead be sign-only in one brick (uniform
+  sub-block); that sign is exact and the kernel's error (≤ 10⁻⁴ Å) is far below
+  the classification margin (2·10⁻³ Å), so signs agree. Verified by tests on
+  every seam of random clusters and crambin.
+* Implementation: kernels generic over `S: fearless_simd::Simd`, marked
+  `#[inline(always)]` and called through one `dispatch!` per sub-block, with
+  the level detected once per engine (`SimdLevel::Auto`) or forced to the
+  portable fallback (`SimdLevel::Scalar`, tests). On Apple Silicon LLVM
+  auto-vectorizes the fallback too, so NEON and "scalar" perform alike; the
+  difference shows on x86 (AVX2 8 lanes vs SSE2 autovectorization).
+* **References**: the brute-force oracle in `sesmesh-testkit` and the exact
+  `f64` point evaluator (`SesField`), itself checked against the oracle.
 
 ### 7.6 Point queries
 
@@ -548,13 +567,22 @@ batch (same rules as §7.4 with a per-batch radius), and evaluated with the
 
 ### 7.7 Cost model
 
-Per sample: ~10–40 vertex tests, ~10–30 sphere candidates and ~20–60 circle
-candidates of which most are pruned by lower bounds; validity tests only for
-the few improving candidates. Expected 100–400 flops/sample. A surface brick
-($B=8$) has 729 samples; surface brick count ≈ $1.5\,A/(Bh)^2$ for SES area $A$.
-Example: area ≈ 6·10⁵ Å² (≈ 1AON) at $h = 0.5$ Å → ≈ 56 k bricks → ≈ 41 M
-samples → well under one second of kernel time on 8 cores at ≥ 10 M
-samples/s/core. To be validated in Phase 9.
+Measured (Phase 3, Apple Silicon, 10 cores, release, probe 1.4 Å, $B = 8$),
+arrangement + classification + sampling:
+
+| Structure | Spacing | Surface bricks | Samples (all / evaluated) | Wall time |
+|---|---|---|---|---|
+| 1CRN | 0.5 Å | 302 | 0.22 M | ≈ 9 ms |
+| 1CRN | 0.25 Å | 1 514 | 1.1 M | ≈ 21 ms |
+| 4HHB | 0.5 Å | 2 651 | 1.9 M | ≈ 110 ms |
+| 4HHB | 0.25 Å | 14 701 | 10.7 M | ≈ 0.3 s |
+| 1AON | 0.5 Å | 33 251 | 24.2 M / 18.5 M | ≈ 1.3 s |
+| 1AON | 0.25 Å | 193 250 | 141 M / 62 M | ≈ 3.1 s |
+
+The kernel dominates (≈ 60 % of busy time on 1AON), at ≈ 0.5–0.65 µs per
+evaluated sample per core. Next levers (Phase 9): a SIMD coarse pass to
+certify finer sub-blocks (fewer evaluated samples), and cheaper candidate
+loops.
 
 ---
 

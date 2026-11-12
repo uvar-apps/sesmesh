@@ -22,6 +22,7 @@ radii-file = ["dep:serde", "dep:toml"]
 
 [dependencies]
 fast-float2.workspace = true
+fearless_simd.workspace = true
 flate2 = { workspace = true, optional = true }
 memchr.workspace = true
 rayon = { workspace = true, optional = true }
@@ -42,6 +43,10 @@ harness = false
 
 [[bench]]
 name = "geometry"
+harness = false
+
+[[bench]]
+name = "field"
 harness = false
 
 [lints]

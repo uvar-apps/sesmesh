@@ -13,6 +13,7 @@ use super::Sphere;
 use super::cells::{CellGrid, morton};
 use super::vec::{Vec3, orthonormal_basis};
 use crate::error::{Error, Result};
+use crate::par;
 
 /// Absolute geometric tolerance (Å) for containment, intersection and
 /// "strictly inside" tests. Wrong decisions within this tolerance change the
@@ -336,6 +337,16 @@ impl Arrangement {
     /// [`Error::InvalidInput`] for non-finite coordinates, negative or
     /// non-finite radii, or an invalid probe radius.
     pub(crate) fn build(spheres: &[Sphere], probe: f64) -> Result<Self> {
+        Self::build_impl(spheres, probe, true)
+    }
+
+    /// Like [`Arrangement::build`] but without circles, arcs and triple
+    /// points: enough for the SAS and vdW fields.
+    pub(crate) fn build_spheres(spheres: &[Sphere], probe: f64) -> Result<Self> {
+        Self::build_impl(spheres, probe, false)
+    }
+
+    fn build_impl(spheres: &[Sphere], probe: f64, with_circles: bool) -> Result<Self> {
         if !(probe.is_finite() && probe >= 0.0) {
             return Err(Error::InvalidInput(format!(
                 "probe radius must be finite and >= 0, got {probe}"
@@ -398,21 +409,20 @@ impl Arrangement {
             d + expanded[i] <= expanded[j] + EPS
                 && (expanded[j] - expanded[i] > EPS || d > EPS || active[j] < active[i])
         };
-        let mut contained = vec![false; n];
-        for i in 0..n {
+        let contained: Vec<bool> = par::map(n, |i| {
+            let mut found = false;
             cells.for_each_near(centers[i], expanded[i] + max_expanded, |j| {
                 let j = j as usize;
-                if j != i && !contained[i] && contains(j, i) {
-                    contained[i] = true;
+                if j != i && !found && contains(j, i) {
+                    found = true;
                 }
             });
-        }
+            found
+        });
         stats.contained = contained.iter().filter(|&&c| c).count();
 
-        let mut neighbors = Csr::default();
-        let mut row: Vec<u32> = Vec::new();
-        for i in 0..n {
-            row.clear();
+        let rows: Vec<Vec<u32>> = par::map(n, |i| {
+            let mut row = Vec::new();
             if !contained[i] {
                 cells.for_each_near(centers[i], expanded[i] + max_expanded, |j| {
                     let ju = j as usize;
@@ -425,107 +435,48 @@ impl Arrangement {
                 });
                 row.sort_unstable();
             }
+            row
+        });
+        let mut neighbors = Csr::default();
+        for row in &rows {
             neighbors.push_row(row.iter().copied());
         }
+        drop(rows);
         stats.neighbour_pairs = neighbors.total() / 2;
 
-        let mut exposed = vec![false; n];
+        // Circles (i, j > i), their exposed arcs and the triple points they
+        // carry, per sphere i in parallel; concatenated in sphere order.
+        let geometry = SphereGeometry {
+            centers: &centers,
+            expanded: &expanded,
+            neighbors: &neighbors,
+        };
+        let per_sphere: Vec<PerSphere> = par::map_init(n, Scratch::default, |scratch, i| {
+            if contained[i] || !with_circles {
+                PerSphere::default()
+            } else {
+                geometry.circles_of(i, scratch)
+            }
+        });
+        let mut exposed: Vec<bool> = (0..n)
+            .map(|i| !contained[i] && (!with_circles || neighbors.row(i).is_empty()))
+            .collect();
         let mut circles = Vec::new();
         let mut arcs = Vec::new();
         let mut circle_blockers = Csr::default();
-        let mut intervals = Vec::new();
-        let mut merged = Vec::new();
-        let mut blockers = Vec::new();
-        for i in 0..n {
-            if contained[i] {
-                continue;
-            }
-            if neighbors.row(i).is_empty() {
-                exposed[i] = true;
-                continue;
-            }
-            for &j in neighbors.row(i).iter().filter(|&&j| j as usize > i) {
-                let ju = j as usize;
-                let d = centers[i].dist(centers[ju]);
-                let axis = (centers[ju] - centers[i]) / d;
-                let t =
-                    (d * d + expanded[i] * expanded[i] - expanded[ju] * expanded[ju]) / (2.0 * d);
-                let rho2 = expanded[i] * expanded[i] - t * t;
-                if rho2 <= 0.0 {
-                    continue;
-                }
-                let (e1, e2) = orthonormal_basis(axis);
-                let mut circle = Circle {
-                    i: i as u32,
-                    j,
-                    center: centers[i] + axis * t,
-                    axis,
-                    e1,
-                    e2,
-                    radius: rho2.sqrt(),
-                    arcs: (0, 0),
-                };
-                intervals.clear();
-                blockers.clear();
-                let mut buried = false;
-                for &k in sorted_intersection(neighbors.row(i), neighbors.row(ju)) {
-                    match cut(&circle, centers[k as usize], expanded[k as usize]) {
-                        Cut::Empty => {}
-                        Cut::Full => {
-                            buried = true;
-                            break;
-                        }
-                        Cut::Interval { enter, leave } => {
-                            intervals.push(Buried::new(enter, leave, k));
-                            blockers.push(k);
-                        }
-                    }
-                }
-                if buried {
-                    continue;
-                }
-                let first = u32::try_from(arcs.len()).expect("fewer than 2^32 arcs");
-                if !exposed_arcs(&mut intervals, &mut merged, &mut arcs) {
-                    continue;
-                }
-                circle.arcs = (first, arcs.len() as u32);
-                circles.push(circle);
-                circle_blockers.push_row(blockers.iter().copied());
-                exposed[i] = true;
-                exposed[ju] = true;
-            }
-        }
-        if circle_blockers.offsets.is_empty() {
-            circle_blockers.offsets.push(0);
-        }
-
-        // Triple points: each triple i < j < k comes from circle (i, j) and a
-        // blocker k > j; it is kept if no other neighbour of i contains it
-        // (any sphere containing a point of sphere i intersects sphere i).
+        circle_blockers.offsets.push(0);
         let mut vertices = Vec::new();
-        for (ci, circle) in circles.iter().enumerate() {
-            let (i, j) = (circle.i as usize, circle.j);
-            for &k in circle_blockers.row(ci).iter().filter(|&&k| k > j) {
-                let Cut::Interval { enter, leave } =
-                    cut(circle, centers[k as usize], expanded[k as usize])
-                else {
-                    continue;
-                };
-                for [c, s] in [leave, enter] {
-                    let q = circle.center + (circle.e1 * c + circle.e2 * s) * circle.radius;
-                    let free = neighbors.row(i).iter().all(|&l| {
-                        l == j
-                            || l == k
-                            || q.dist(centers[l as usize]) >= expanded[l as usize] - EPS
-                    });
-                    if free {
-                        vertices.push(SasVertex {
-                            position: q,
-                            atoms: [i as u32, j, k],
-                        });
-                    }
-                }
+        for part in per_sphere {
+            let base = u32::try_from(arcs.len()).expect("fewer than 2^32 arcs");
+            for (mut circle, blockers) in part.circles.into_iter().zip(part.blockers) {
+                exposed[circle.i as usize] = true;
+                exposed[circle.j as usize] = true;
+                circle.arcs = (circle.arcs.0 + base, circle.arcs.1 + base);
+                circles.push(circle);
+                circle_blockers.push_row(blockers);
             }
+            arcs.extend(part.arcs);
+            vertices.extend(part.vertices);
         }
 
         let status: Vec<Status> = (0..n)
@@ -559,6 +510,111 @@ impl Arrangement {
             max_expanded,
             stats,
         })
+    }
+}
+
+/// Read-only inputs of the per-sphere circle stage.
+struct SphereGeometry<'a> {
+    centers: &'a [Vec3],
+    expanded: &'a [f64],
+    neighbors: &'a Csr,
+}
+
+/// Per-thread scratch buffers of the circle stage.
+#[derive(Default)]
+struct Scratch {
+    intervals: Vec<Buried>,
+    merged: Vec<Merged>,
+    blockers: Vec<u32>,
+}
+
+/// Circles of one sphere with arcs (ranges relative to `arcs`), blocker
+/// lists and triple points.
+#[derive(Default)]
+struct PerSphere {
+    circles: Vec<Circle>,
+    arcs: Vec<Arc>,
+    blockers: Vec<Vec<u32>>,
+    vertices: Vec<SasVertex>,
+}
+
+impl SphereGeometry<'_> {
+    fn circles_of(&self, i: usize, scratch: &mut Scratch) -> PerSphere {
+        let (centers, expanded) = (self.centers, self.expanded);
+        let mut out = PerSphere::default();
+        for &j in self.neighbors.row(i).iter().filter(|&&j| j as usize > i) {
+            let ju = j as usize;
+            let d = centers[i].dist(centers[ju]);
+            let axis = (centers[ju] - centers[i]) / d;
+            let t = (d * d + expanded[i] * expanded[i] - expanded[ju] * expanded[ju]) / (2.0 * d);
+            let rho2 = expanded[i] * expanded[i] - t * t;
+            if rho2 <= 0.0 {
+                continue;
+            }
+            let (e1, e2) = orthonormal_basis(axis);
+            let mut circle = Circle {
+                i: i as u32,
+                j,
+                center: centers[i] + axis * t,
+                axis,
+                e1,
+                e2,
+                radius: rho2.sqrt(),
+                arcs: (0, 0),
+            };
+            scratch.intervals.clear();
+            scratch.blockers.clear();
+            let mut buried = false;
+            for &k in sorted_intersection(self.neighbors.row(i), self.neighbors.row(ju)) {
+                match cut(&circle, centers[k as usize], expanded[k as usize]) {
+                    Cut::Empty => {}
+                    Cut::Full => {
+                        buried = true;
+                        break;
+                    }
+                    Cut::Interval { enter, leave } => {
+                        scratch.intervals.push(Buried::new(enter, leave, k));
+                        scratch.blockers.push(k);
+                    }
+                }
+            }
+            if buried {
+                continue;
+            }
+            let first = out.arcs.len() as u32;
+            if !exposed_arcs(&mut scratch.intervals, &mut scratch.merged, &mut out.arcs) {
+                continue;
+            }
+            circle.arcs = (first, out.arcs.len() as u32);
+            // Triple points: each triple i < j < k comes from circle (i, j)
+            // and a blocker k > j; it is kept if no other neighbour of i
+            // contains it (any sphere containing a point of sphere i
+            // intersects sphere i).
+            for &k in scratch.blockers.iter().filter(|&&k| k > j) {
+                let Cut::Interval { enter, leave } =
+                    cut(&circle, centers[k as usize], expanded[k as usize])
+                else {
+                    continue;
+                };
+                for [c, s] in [leave, enter] {
+                    let q = circle.center + (circle.e1 * c + circle.e2 * s) * circle.radius;
+                    let free = self.neighbors.row(i).iter().all(|&l| {
+                        l == j
+                            || l == k
+                            || q.dist(centers[l as usize]) >= expanded[l as usize] - EPS
+                    });
+                    if free {
+                        out.vertices.push(SasVertex {
+                            position: q,
+                            atoms: [i as u32, j, k],
+                        });
+                    }
+                }
+            }
+            out.circles.push(circle);
+            out.blockers.push(scratch.blockers.clone());
+        }
+        out
     }
 }
 

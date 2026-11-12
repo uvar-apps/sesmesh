@@ -15,9 +15,9 @@ molecular surface) meshing for molecular structures, written in Rust.
   (AVX2 / AVX-512 / NEON).
 * Ships as a reusable library crate plus a command-line tool.
 
-> **Status: Phases 1–2 done** (structure layer, SAS geometry). Structure
-> files can be read, atoms selected, radii assigned and the SAS arrangement
-> built through the library; the surface itself is not computed yet. See the [implementation plan](docs/03-implementation-plan.md)
+> **Status: Phases 1–3 done** (structure layer, SAS geometry, multi-threaded
+> SIMD field engine). The exact surface field can be evaluated and sampled
+> on a sparse grid; triangle meshing and OBJ output (Phase 4) are next. See the [implementation plan](docs/03-implementation-plan.md)
 > for the roadmap.
 
 ## Documentation
