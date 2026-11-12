@@ -49,5 +49,9 @@ harness = false
 name = "field"
 harness = false
 
+[[bench]]
+name = "surface"
+harness = false
+
 [lints]
 workspace = true

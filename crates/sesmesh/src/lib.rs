@@ -4,11 +4,22 @@
 //! surface) meshing for molecular structures read from PDB, PDBx/mmCIF and XYZ
 //! files.
 //!
-//! **Status:** Phases 1–3 — readers ([`io`]), atom selection
-//! ([`Selection`]), radius assignment ([`radii`]), sphere geometry
-//! ([`Sphere`], [`geom`]) and the exact surface field with its multi-threaded
-//! SIMD sampling engine ([`SesField`], [`field`]) are implemented. Meshing and
-//! OBJ output follow in Phase 4; see the repository's `docs/` directory.
+//! Pipeline: read a structure ([`io`]), select atoms ([`Selection`]), assign
+//! radii ([`radii`]), build [`Sphere`]s, compute the surface mesh
+//! ([`compute_surface`] → [`Mesh`]) and write it ([`export::obj`]). The exact
+//! field is also available for point queries ([`SesField`]).
+//!
+//! ```
+//! use sesmesh::{compute_surface, mesh, Sphere, SurfaceParams};
+//!
+//! let atoms = [Sphere::new([0.0, 0.0, 0.0], 1.7), Sphere::new([3.0, 0.0, 0.0], 1.7)];
+//! let out = compute_surface(&atoms, &SurfaceParams::ses(1.4).with_spacing(0.3))?;
+//! assert!(mesh::validate(&out.mesh).is_ok()); // closed, oriented, manifold
+//! assert_eq!(out.stats.components, 1);
+//! # Ok::<(), sesmesh::Error>(())
+//! ```
+//!
+//! Readers, selection and radii:
 //!
 //! ```
 //! use sesmesh::{io, radii, Diagnostics, Selection};
@@ -29,18 +40,27 @@
 
 pub mod diag;
 pub mod error;
+pub mod export;
 pub mod field;
 pub mod geom;
 pub mod io;
+pub mod mesh;
 mod par;
 pub mod radii;
 pub mod structure;
+mod surface;
 
 pub use diag::{Diagnostics, Warning, WarningKind};
 pub use error::{Error, Result};
+pub use field::SimdLevel;
 pub use field::{SesField, SurfaceKind};
 pub use geom::Sphere;
+pub use mesh::{Mesh, PatchKind};
 pub use structure::{AtomRecord, AtomSet, Element, Model, Selection, Structure};
+pub use surface::{
+    Quality, RefineMode, Resolution, SurfaceOutput, SurfaceParams, SurfaceStats, Timings,
+    compute_surface,
+};
 
 /// Version of the `sesmesh` library, taken from `Cargo.toml`.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

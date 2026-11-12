@@ -324,6 +324,13 @@ Additional targets:
   area within 1.0 % and volume within 0.5 % at *h* = 0.25 Å; within 3 % / 1 %
   at *h* = 0.5 Å. (EDTSurf's published errors at 256³ are 1.99 % / 0.48 % [R12].)
 * Vertex distance to the analytic SES ≤ 10⁻³ Å (with refinement enabled).
+* *Note (Phase 4 measurement):* for single spheres and sphere pairs with
+  atomic radii (1.2–1.8 Å) the Marching Cubes mesh, whose vertices lie on the
+  surface, underestimates area by 0.4–0.65 % and volume by 0.8–1.35 % at
+  *h* = 0.25 Å (O(*h*²), ≈ 0.2 % / 0.3 % at 0.125 Å). The analytic bound above
+  is therefore met for area only marginally and not for volume at 0.25 Å;
+  whether to tighten the method (e.g. curvature-aware vertex placement) or
+  the requirement is decided in Phase 9 with the protein results.
 * Normal angular error vs analytic normal ≤ 0.1° away from SES singular curves.
 
 ### 5.4 Robustness (NFR-ROB)

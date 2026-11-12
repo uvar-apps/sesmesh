@@ -1,0 +1,354 @@
+//! Per-brick Marching Cubes with exact edge refinement (Design §8.2) and the
+//! global assembly of brick meshes (Design §8.3).
+//!
+//! Edges are keyed by their lower sample and axis. A brick owns the edges
+//! whose lower sample lies in its half-open cell range `[0, b)³`, creates one
+//! vertex per owned crossing edge (in ascending local edge id: deterministic)
+//! and emits triangles as references `(neighbour code, local edge id)`; the
+//! code's bits select the +x/+y/+z neighbour owning the edge. A neighbour
+//! owning a crossing edge is always a surface brick, because sample signs are
+//! exact and uniform bricks have no crossing edge, so references resolve.
+
+use rustc_hash::FxHashMap;
+
+use super::tables::{self, corner_offset, edge_axis_lower};
+use super::{Mesh, PatchKind};
+use crate::error::{Error, Result};
+use crate::field::{Engine, Feature, NearEval, SurfaceKind, pack};
+use crate::geom::Vec3;
+use crate::par;
+use crate::surface::RefineMode;
+
+/// Field evaluations per edge (at most).
+const MAX_ITER: usize = 8;
+/// Stop refining when `|F| ≤ TOL` (Å).
+const TOL: f64 = 1e-5;
+/// Edge parameter clamp: vertices of edges meeting at a sample never
+/// coincide, so no triangle has zero area (Spec FR-MESH-5).
+const T_MIN: f64 = 1e-4;
+/// Bit position of the neighbour code in a triangle reference.
+const CODE_SHIFT: u32 = 28;
+const ID_MASK: u32 = (1 << CODE_SHIFT) - 1;
+
+/// The mesh of one brick before assembly.
+#[derive(Debug, Default)]
+pub(crate) struct BrickMesh {
+    /// Owned crossing edges (local ids), ascending; one vertex each.
+    edges: Vec<u32>,
+    positions: Vec<[f32; 3]>,
+    normals: Vec<[f32; 3]>,
+    atoms: Vec<u32>,
+    patches: Vec<PatchKind>,
+    /// Triangles as packed edge references.
+    tris: Vec<[u32; 3]>,
+    /// Exact field evaluations spent on vertices.
+    pub(crate) evals: u64,
+}
+
+/// Meshes the cells of brick `key` from its samples (Engine layout: `(b+1)³`,
+/// x fastest). Only signs are used for case selection; crossing edges have
+/// exact sample values at both ends (Engine docs), refined further with the
+/// exact `f64` field.
+pub(crate) fn mesh_brick(
+    engine: &Engine,
+    key: [i32; 3],
+    values: &[f32],
+    refine: RefineMode,
+) -> BrickMesh {
+    let lat = &engine.lattice;
+    let b = lat.b as usize;
+    let s = b + 1;
+    let stride = [1, s, s * s];
+    let origin = lat.brick_origin(key);
+    let mut out = BrickMesh::default();
+
+    for z in 0..b {
+        for y in 0..b {
+            for x in 0..b {
+                let i = (z * s + y) * s + x;
+                let va = values[i];
+                for (axis, &st) in stride.iter().enumerate() {
+                    let vb = values[i + st];
+                    if (va < 0.0) == (vb < 0.0) {
+                        continue;
+                    }
+                    let ia = [
+                        origin[0] + x as i64,
+                        origin[1] + y as i64,
+                        origin[2] + z as i64,
+                    ];
+                    let mut ib = ia;
+                    ib[axis] += 1;
+                    let (pa, pb) = (lat.point(ia), lat.point(ib));
+                    vertex(
+                        engine,
+                        pa,
+                        pb,
+                        f64::from(va),
+                        f64::from(vb),
+                        refine,
+                        &mut out,
+                    );
+                    out.edges.push((((z * b + y) * b + x) * 3 + axis) as u32);
+                }
+            }
+        }
+    }
+    // Cells can cross only on edges owned by "+" neighbours, so the cell
+    // pass runs even when this brick owns no vertex.
+    let corner_step: [usize; 8] = std::array::from_fn(|c| {
+        let o = corner_offset(c);
+        o[0] + o[1] * s + o[2] * s * s
+    });
+    for z in 0..b {
+        for y in 0..b {
+            for x in 0..b {
+                let i0 = (z * s + y) * s + x;
+                let mut case = 0;
+                for (c, &st) in corner_step.iter().enumerate() {
+                    if values[i0 + st] < 0.0 {
+                        case |= 1 << c;
+                    }
+                }
+                if case == 0 || case == 255 {
+                    continue;
+                }
+                for t in tables::triangles(case) {
+                    out.tris.push(t.map(|e| {
+                        let (axis, lo) = edge_axis_lower(e as usize);
+                        let o = corner_offset(lo);
+                        let l = [x + o[0], y + o[1], z + o[2]];
+                        let mut code = 0u32;
+                        let mut lc = [0usize; 3];
+                        for a in 0..3 {
+                            if l[a] == b {
+                                code |= 1 << a;
+                            } else {
+                                lc[a] = l[a];
+                            }
+                        }
+                        (code << CODE_SHIFT) | (((lc[2] * b + lc[1]) * b + lc[0]) * 3 + axis) as u32
+                    }));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Places the vertex of the crossing edge `pa → pb` (`fa`, `fb`: sampled
+/// values of opposite inside/outside state) and computes its attributes.
+fn vertex(
+    engine: &Engine,
+    pa: Vec3,
+    pb: Vec3,
+    fa: f64,
+    fb: f64,
+    refine: RefineMode,
+    out: &mut BrickMesh,
+) {
+    let field = &engine.field;
+    let band = engine.band;
+    let d = pb - pa;
+    let mut t = (fa / (fa - fb)).clamp(0.0, 1.0);
+    let mut last: Option<NearEval> = None;
+    if refine == RefineMode::Exact {
+        // Safeguarded Newton: the closest point gives the exact gradient
+        // (|∇F| = 1), so one step from the linear guess usually lands within
+        // TOL; steps leaving the bracket fall back to Illinois (modified
+        // regula falsi). The bracket [t0, t1] always holds the sign change.
+        let (mut t0, mut g0, mut t1, mut g1) = (0.0, fa, 1.0, fb);
+        let mut side = 0i8;
+        for _ in 0..MAX_ITER {
+            let e = field.eval_near(pa + d * t, band);
+            out.evals += 1;
+            last = Some(e);
+            let g = e.value;
+            if g.abs() <= TOL {
+                break;
+            }
+            if (g < 0.0) == (g0 < 0.0) {
+                t0 = t;
+                g0 = g;
+                if side == -1 {
+                    g1 *= 0.5;
+                }
+                side = -1;
+            } else {
+                t1 = t;
+                g1 = g;
+                if side == 1 {
+                    g0 *= 0.5;
+                }
+                side = 1;
+            }
+            let slope = gradient(engine, pa + d * t, &e).map_or(0.0, |n| n.dot(d));
+            let newton = t - g / slope;
+            t = if slope.abs() > 1e-3 * d.norm() && newton > t0 && newton < t1 {
+                newton
+            } else {
+                let s = (t0 * g1 - t1 * g0) / (g1 - g0);
+                if s.is_finite() && s > t0 && s < t1 {
+                    s
+                } else {
+                    0.5 * (t0 + t1)
+                }
+            };
+        }
+    }
+    let v = pa + d * t.clamp(T_MIN, 1.0 - T_MIN);
+    let e = last.unwrap_or_else(|| {
+        out.evals += 1;
+        field.eval_near(v, band)
+    });
+    // Fallback normal: along the edge, from the inside end to the outside end.
+    let outward = if fa < 0.0 { d } else { -d }.normalized();
+    let (normal, patch, atom) = attributes(engine, v, &e, outward);
+    out.positions.push(v.to_array().map(|c| c as f32));
+    out.normals.push(normal.to_array().map(|c| c as f32));
+    out.atoms.push(atom);
+    out.patches.push(patch);
+}
+
+/// Exact gradient of the field at `x` from its evaluation (`None` in the
+/// solvent or beyond the cutoff).
+fn gradient(engine: &Engine, x: Vec3, e: &NearEval) -> Option<Vec3> {
+    let a = &engine.field.arr;
+    let w = match (engine.field.kind, e.feature) {
+        (_, Feature::Solvent | Feature::Beyond) => return None,
+        (SurfaceKind::Ses, _) => e.closest - x,
+        (_, Feature::Sphere(i)) => x - a.centers[i as usize],
+        _ => return None,
+    };
+    let len = w.norm();
+    (len > 1e-12).then(|| w / len)
+}
+
+/// Normal, patch kind and nearest atom (input index) of a vertex `v` from the
+/// evaluation of a point next to it (Design §8.2 step 4).
+fn attributes(engine: &Engine, v: Vec3, e: &NearEval, outward: Vec3) -> (Vec3, PatchKind, u32) {
+    let field = &engine.field;
+    let a = &field.arr;
+    let unit = |w: Vec3| {
+        let len = w.norm();
+        if len > 1e-9 { w / len } else { outward }
+    };
+    let nearest = |atoms: &[u32]| {
+        let mut best = (f64::INFINITY, atoms[0]);
+        for &k in atoms {
+            let d = v.dist(a.centers[k as usize]) - a.radii[k as usize];
+            if d < best.0 {
+                best = (d, k);
+            }
+        }
+        a.orig[best.1 as usize]
+    };
+    match (field.kind, e.feature) {
+        (SurfaceKind::Ses, Feature::Sphere(i)) => {
+            (unit(e.closest - v), PatchKind::Convex, a.orig[i as usize])
+        }
+        (SurfaceKind::Ses, Feature::Circle(c)) => {
+            let c = &a.circles[c as usize];
+            (unit(e.closest - v), PatchKind::Saddle, nearest(&[c.i, c.j]))
+        }
+        (SurfaceKind::Ses, Feature::Vertex(k)) => (
+            unit(e.closest - v),
+            PatchKind::Concave,
+            nearest(&a.vertices[k as usize].atoms),
+        ),
+        (_, Feature::Sphere(i)) => (
+            unit(v - a.centers[i as usize]),
+            PatchKind::Convex,
+            a.orig[i as usize],
+        ),
+        _ => {
+            let (_, i) = field.sphere_eval(v, field.probe + engine.band + 8.0);
+            (
+                outward,
+                PatchKind::Convex,
+                i.map_or(0, |i| a.orig[i as usize]),
+            )
+        }
+    }
+}
+
+/// Concatenates brick meshes (in brick order) and resolves triangle
+/// references to global vertex indices.
+///
+/// # Errors
+/// [`Error::ResourceLimit`] beyond `u32` vertex indices; [`Error::Internal`]
+/// for an unresolvable reference (a bug).
+pub(crate) fn assemble(bricks: &[[i32; 3]], parts: &[BrickMesh]) -> Result<Mesh> {
+    let mut base = Vec::with_capacity(parts.len() + 1);
+    let mut total = 0usize;
+    for p in parts {
+        base.push(total);
+        total += p.edges.len();
+    }
+    if total > u32::MAX as usize {
+        return Err(Error::ResourceLimit {
+            what: format!("mesh with {total} vertices (u32 indices)"),
+            limit: u64::from(u32::MAX),
+        });
+    }
+    let index: FxHashMap<u64, u32> = bricks
+        .iter()
+        .enumerate()
+        .map(|(i, k)| (pack(*k), i as u32))
+        .collect();
+    let resolved = par::map(parts.len(), |bi| -> Result<Vec<[u32; 3]>> {
+        let key = bricks[bi];
+        let mut cache = [None::<usize>; 8];
+        cache[0] = Some(bi);
+        let mut target_of = |code: usize| -> Result<usize> {
+            if let Some(t) = cache[code] {
+                return Ok(t);
+            }
+            let nk = [0, 1, 2].map(|a| key[a] + ((code >> a) & 1) as i32);
+            let t = index.get(&pack(nk)).map(|&t| t as usize).ok_or_else(|| {
+                Error::Internal(format!(
+                    "triangle of brick {key:?} references edge of missing brick {nk:?}"
+                ))
+            })?;
+            cache[code] = Some(t);
+            Ok(t)
+        };
+        let mut tris = Vec::with_capacity(parts[bi].tris.len());
+        for tri in &parts[bi].tris {
+            let mut out = [0u32; 3];
+            for (o, &r) in out.iter_mut().zip(tri) {
+                let target = target_of((r >> CODE_SHIFT) as usize)?;
+                let id = r & ID_MASK;
+                let pos = parts[target].edges.binary_search(&id).map_err(|_| {
+                    Error::Internal(format!(
+                        "brick {key:?} references edge {id} without vertex in brick {:?}",
+                        bricks[target]
+                    ))
+                })?;
+                *o = (base[target] + pos) as u32;
+            }
+            tris.push(out);
+        }
+        Ok(tris)
+    });
+    let mut mesh = Mesh {
+        positions: Vec::with_capacity(total),
+        normals: Vec::with_capacity(total),
+        triangles: Vec::with_capacity(
+            resolved
+                .iter()
+                .map(|r| r.as_ref().map_or(0, Vec::len))
+                .sum(),
+        ),
+        vertex_atom: Vec::with_capacity(total),
+        vertex_patch: Vec::with_capacity(total),
+    };
+    for (p, tris) in parts.iter().zip(resolved) {
+        mesh.positions.extend_from_slice(&p.positions);
+        mesh.normals.extend_from_slice(&p.normals);
+        mesh.vertex_atom.extend_from_slice(&p.atoms);
+        mesh.vertex_patch.extend_from_slice(&p.patches);
+        mesh.triangles.extend(tris?);
+    }
+    Ok(mesh)
+}

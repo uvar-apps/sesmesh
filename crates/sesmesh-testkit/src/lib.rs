@@ -7,6 +7,7 @@
 //!   single- and two-sphere surfaces.
 //! * [`clusters`] — deterministic random and symmetric sphere clusters, and
 //!   `proptest` strategies.
+//! * [`obj`] — a minimal OBJ reader for round-trip tests.
 //!
 //! The crate deliberately does not depend on `sesmesh`: it works on plain
 //! `[f64; 3]` centres and radii, so `sesmesh`'s own unit tests can use it
@@ -14,6 +15,7 @@
 
 pub mod analytic;
 pub mod clusters;
+pub mod obj;
 pub mod oracle;
 
 /// A point or vector in Å.

@@ -50,6 +50,11 @@ pub enum Error {
     #[error("no atoms selected: {0}")]
     EmptySelection(String),
 
+    /// An internal invariant was violated (a bug in sesmesh; please report
+    /// it with the input that triggers it).
+    #[error("internal error: {0}")]
+    Internal(String),
+
     /// A configured resource limit would be exceeded.
     #[error("{what} exceeds the configured limit of {limit} bytes")]
     ResourceLimit {

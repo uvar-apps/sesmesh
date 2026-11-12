@@ -20,6 +20,10 @@ doc = false
 [dependencies]
 sesmesh.workspace = true
 clap.workspace = true
+rayon.workspace = true
+
+[dev-dependencies]
+sesmesh-testkit.workspace = true
 
 [lints]
 workspace = true

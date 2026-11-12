@@ -14,8 +14,9 @@ mod point;
 
 pub use point::{FieldSample, Patch, SesField};
 
-#[allow(unused_imports)] // consumed by the mesher (Plan Phase 4)
-pub(crate) use kernel::{BrickScratch, Engine};
+pub(crate) use kernel::Engine;
+pub(crate) use lattice::pack;
+pub(crate) use point::{Feature, NearEval};
 
 use crate::error::Result;
 use crate::geom::Sphere;

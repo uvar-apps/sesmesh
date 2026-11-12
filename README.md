@@ -15,10 +15,44 @@ molecular surface) meshing for molecular structures, written in Rust.
   (AVX2 / AVX-512 / NEON).
 * Ships as a reusable library crate plus a command-line tool.
 
-> **Status: Phases 1–3 done** (structure layer, SAS geometry, multi-threaded
-> SIMD field engine). The exact surface field can be evaluated and sampled
-> on a sparse grid; triangle meshing and OBJ output (Phase 4) are next. See the [implementation plan](docs/03-implementation-plan.md)
-> for the roadmap.
+> **Status: v0.1 MVP (Phases 0–4).** Structure files → closed, oriented SES /
+> SAS / vdW meshes with analytic normals → OBJ, from the library and the
+> `sesmesh` CLI. Cavity filtering, smoothing/decimation, PLY/MSMS output,
+> biological assemblies and batch mode follow (Phases 5–10, see the
+> [implementation plan](docs/03-implementation-plan.md)).
+
+## Quick start
+
+```bash
+cargo build --release
+target/release/sesmesh 1crn.cif -o 1crn.obj            # SES, 0.5 Å grid
+target/release/sesmesh 4hhb.cif.gz -q high --timings    # 0.25 Å grid
+target/release/sesmesh ligand.xyz --radii alvarez --probe 1.2 -s 0.1 -o lig.obj
+target/release/sesmesh info 1crn.pdb
+target/release/sesmesh radii --set protor
+```
+
+Run `sesmesh surface --help` for all options (selection, radii, surface kind,
+resolution, output precision, threads). Exit codes: 0 success, 1 runtime
+error, 2 usage error, 3 input parse error, 4 resource limit.
+
+As a library:
+
+```rust
+use sesmesh::export::obj::{write_obj_path, ObjOptions};
+use sesmesh::{compute_surface, io, radii, Diagnostics, Selection, Sphere, SurfaceParams};
+
+fn main() -> sesmesh::Result<()> {
+    let structure = io::read_path("1crn.cif", &io::ReadOptions::default())?;
+    let mut diags = Diagnostics::new();
+    let atoms = structure.select(&Selection::default(), &mut diags)?;
+    let radii = radii::assign(&atoms, &radii::RadiusOptions::default(), &mut diags)?;
+    let spheres = Sphere::from_atoms(&atoms, &radii)?;
+    let out = compute_surface(&spheres, &SurfaceParams::ses(1.4).with_spacing(0.25))?;
+    println!("{} triangles, area {:.1} Å²", out.stats.triangles, out.stats.area);
+    write_obj_path("1crn.obj", &out.mesh, &ObjOptions::default())
+}
+```
 
 ## Documentation
 

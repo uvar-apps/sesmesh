@@ -67,6 +67,16 @@ pub(crate) struct PointEval {
     pub(crate) feature: Feature,
 }
 
+/// Result of [`SesField::eval_near`].
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct NearEval {
+    pub(crate) value: f64,
+    pub(crate) feature: Feature,
+    /// SES: closest point of `P` (the probe centre for surface points);
+    /// SAS/vdW: the evaluated point itself.
+    pub(crate) closest: Vec3,
+}
+
 /// The exact surface field of a sphere set: SES (Connolly), SAS or vdW.
 ///
 /// ```
@@ -353,6 +363,30 @@ impl SesField {
             }
         });
         best
+    }
+
+    /// Field value near the surface (exact where `|F| < band`) with the
+    /// feature carrying the closest point and that point; used to place and
+    /// annotate mesh vertices (Design §8.2).
+    pub(crate) fn eval_near(&self, x: Vec3, band: f64) -> NearEval {
+        match self.kind {
+            SurfaceKind::Ses => {
+                let e = self.ses_eval(x, self.probe + band);
+                NearEval {
+                    value: self.probe - e.distance,
+                    feature: e.feature,
+                    closest: e.closest,
+                }
+            }
+            SurfaceKind::Sas | SurfaceKind::Vdw => {
+                let (value, i) = self.sphere_eval(x, band);
+                NearEval {
+                    value,
+                    feature: i.map_or(Feature::Beyond, Feature::Sphere),
+                    closest: x,
+                }
+            }
+        }
     }
 
     /// Field value clamped to at most `band` (SES: distance clamped at

@@ -25,17 +25,22 @@ depend on thread count. Keep docs and CHANGELOG in sync with any deviation from 
 - `field/` `SesField` exact f64 field (`point.rs`), lattice + brick/sub-block classification
   (`lattice.rs`), per-sub-block gathering + `fearless_simd` kernels + `Engine::map_bricks`
   (`kernel.rs`), tests (`tests.rs`)
+- `mesh/` `Mesh`, validation, components (`mod.rs`), generated MC table (`mc_table.rs`,
+  generator + exhaustive tests in `tables.rs`; regenerate with `SESMESH_BLESS=1 cargo test -p
+  sesmesh mc_table`), per-brick MC + exact refinement + assembly (`extract.rs`)
+- `surface.rs` `SurfaceParams`, `compute_surface`, stats · `export/` OBJ writer, fast formatter
 - `par.rs` rayon facade (feature `parallel`) · `crates/sesmesh-testkit` brute-force oracle,
-  analytic two-sphere references, cluster generators
+  analytic two-sphere references, cluster generators, minimal OBJ reader
+- `crates/sesmesh-cli/src/main.rs` CLI (`surface` default, `info`, `radii`), tests in `tests/cli.rs`
 
 ## Status
 
-- Done: Phases 0–3 (scaffold/CI, structure layer, SAS geometry, multi-threaded SIMD field engine).
-  Parts of Phases 5/6 (rayon, SIMD dispatch) were moved into Phase 3.
-- Next — Phase 4 (MVP): per-brick Marching Cubes over `Engine::map_bricks` samples (values are
-  exact or `±band` sign-only — only signs matter for case selection; refine crossing edges with
-  `SesField` exact roots), edge ownership + global assembly (D§8), analytic normals from the
-  closest point, OBJ writer, `SurfaceParams`/engine API, CLI `sesmesh surface|info|radii`,
-  analytic one/two-sphere accuracy tests (testkit `analytic`).
+- Done: Phases 0–4 = v0.1 MVP (file → closed SES/SAS/vdW mesh → OBJ, library + CLI). Parts of
+  Phases 5/6 were done early (rayon everywhere, SIMD sampling, parallel OBJ formatting). Pending
+  from Phase 4: T4.10 manual viewer check. Deviations are noted in the plan's Phase 4 status box.
+- Next — Phase 5: `SurfaceEngine` (reuse allocations), cancellation + progress (`--progress`),
+  scaling study. Phase 6: batched SIMD vertex refinement (largest perf lever, D§7.7). Phase 7:
+  cavity modes, component filters, OBJ groups/colours, JSON stats.
+- Accuracy: inscribed MC mesh underestimates area/volume (D§15 "Measured"; spec NFR-ACC note).
 - Performance notes and next optimizations: D§7.7.
 - `out/` holds untracked meshes from a throwaway prototype (not part of the library).

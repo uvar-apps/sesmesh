@@ -22,6 +22,17 @@ pub(crate) fn lookup(residue: &str, atom: &str) -> Option<(&'static str, f64)> {
     Some((class, radius))
 }
 
+/// All entries `(residue, atom, class, radius)`, sorted.
+pub(crate) fn table() -> Vec<(&'static str, &'static str, &'static str, f64)> {
+    ATOMS
+        .iter()
+        .map(|&(r, a, c)| {
+            let (class, radius) = CLASSES[c as usize];
+            (r, a, class, radius)
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

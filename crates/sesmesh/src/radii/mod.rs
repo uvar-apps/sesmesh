@@ -68,6 +68,15 @@ impl BuiltinRadii {
             .collect()
     }
 
+    /// Per-atom entries `(residue, atom, class, radius)` of the set (ProtOr
+    /// only; empty for element-only sets), sorted by residue and atom.
+    pub fn atom_table(self) -> Vec<(&'static str, &'static str, &'static str, f64)> {
+        match self {
+            BuiltinRadii::ProtOr => protor::table(),
+            BuiltinRadii::Bondi | BuiltinRadii::Alvarez => Vec::new(),
+        }
+    }
+
     /// Radius for an atom of `residue` named `atom`. For ProtOr, unclassified
     /// atoms use their element radius.
     pub fn atom_radius(self, residue: &str, atom: &str, element: Option<Element>) -> Option<f64> {
