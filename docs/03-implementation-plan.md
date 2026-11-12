@@ -154,15 +154,15 @@ Exit: all fixtures parse identically across formats; fuzz smoke clean.
 
 | ID | Task | Deliverable / tests |
 |---|---|---|
-| T2.1 | Internal `Vec3<f64>`/`Vec3<f32>` (not public), robust helpers (orthonormal basis, trilateration). | Unit tests incl. near-degenerate cases. |
+| T2.1 | Internal `Vec3` (`f64`, not public), robust helpers (orthonormal basis). The `f32` kernel data is SoA, built in Phase 3. | Unit tests incl. near-degenerate cases. |
 | T2.2 | `testkit` **oracle**: brute-force $F(\mathbf x)$, $\nabla F$, closest feature, over all spheres/circles/triple points with exhaustive validity (D§2.3); SAS/vdW fields. | Hand-checked cases: single sphere, two spheres (inside/outside/saddle region), three spheres with a probe pocket. |
 | T2.3 | `testkit` **analytic references**: single sphere; two-sphere axisymmetric profile integration (area, volume) incl. self-intersecting torus regime; closed-form equal-radius saddle area (D§15). Random cluster generators (proptest strategies). | Cross-check closed form vs quadrature (≤ 1e-9 rel). |
-| T2.4 | Frame choice and Morton reordering with `orig_index` (D§6.1). | Round-trip index mapping tests. |
+| T2.4 | Morton reordering with `orig` index map (D§6.1). Frame choice moved to the field engine (Phase 3), where the grid spacing is known. | Round-trip index mapping tests. |
 | T2.5 | Cell lists (counting sort, CSR) + ball range queries, generic over point sets (spheres, circles, vertices). | Property test: range query == brute force. |
 | T2.6 | Neighbour CSR, containment/buried flags, duplicate collapse (D§6.3). | Property test vs brute force; sphere-in-sphere cases. |
 | T2.7 | Circles + angular interval union + exposed arcs + blocker lists $K(i,j)$ (D§6.4). | Property test: arc exposure vs dense sampling of circle points (10⁴ samples) on random clusters. |
-| T2.8 | SAS vertices: canonical trilateration, exposure test, dedupe; sphere exposure flags. | Vertex set == exhaustive triple enumeration (N ≤ 40); symmetric configurations (C60, cubic lattice) stable and deterministic. |
-| T2.9 | Benchmark arrangement on 4HHB, 1AON. | Timings recorded. |
+| T2.8 | SAS vertices: each triple once from circle (i,j) and blocker k > j, exposure test against N(i); sphere exposure flags. | Vertex set == exhaustive triple enumeration (N ≤ 40); symmetric configurations (C60, cubic lattice) stable and deterministic. |
+| T2.9 | Benchmark arrangement on 4HHB, 1AON. | Timings recorded (D§6.4): 1CRN 3.3 ms, 4HHB 56 ms, 1AON 0.73 s, 4V6X 3.0 s single-threaded. |
 
 Exit: arrangement matches brute force on ≥ 10⁴ random clusters; oracle and analytic references available to all crates as a dev-dependency.
 

@@ -369,28 +369,31 @@ first index keeps ownership for attributes).
 
 ### 6.1 Frame and spatial reordering
 
-* Choose a frame origin $\mathbf o$ = centroid of the bounding box rounded to a
-  multiple of the grid spacing $h$, so the sampling lattice coincides with
-  multiples of $h$ in input coordinates (results do not depend on which atoms
-  set the bounding box) and kernel coordinates are small (f32 precision,
-  §7.5).
-* Sort spheres by cell index (Morton order of cells) to improve locality in
-  all later stages; keep `orig_index`.
+* The arrangement stores `f64` coordinates in the input frame. The field
+  engine (§7) chooses its frame origin $\mathbf o$ = centroid of the bounding
+  box rounded to a multiple of the grid spacing $h$ (known only there), so the
+  sampling lattice coincides with multiples of $h$ in input coordinates and
+  kernel coordinates are small (f32 precision, §7.5).
+* Spheres are sorted by the Morton code of their cell (ties: input index) to
+  improve locality in all later stages; `orig` maps internal to input
+  indices.
 
 ### 6.2 Cell lists
 
 Uniform grid with cell size $s = 2\max_i R_i$ (≈ 6.4 Å for proteins with
-$r_p = 1.4$), built by parallel counting sort (cell id per sphere → histogram →
-prefix sum → scatter) into CSR form. Range queries visit the cells
+$r_p = 1.4$), built by counting sort (cell id per sphere → histogram →
+prefix sum → scatter) into CSR form (parallel in Phase 5). Very sparse inputs
+double the cell size until the grid has at most $\max(65\,536, 8N)$ cells. Range queries visit the cells
 overlapping a query ball. The same structure (different cell sizes) indexes
 exposed circles (by centre, with $\rho_{\max}$ padding) and SAS vertices.
 
 ### 6.3 Neighbours and circles
 
-1. $N(i) = \{j \ne i : \lVert\mathbf c_i - \mathbf c_j\rVert < R_i + R_j\}$, built per atom in
-   parallel (two passes: count, fill), sorted by $j$. If sphere $i$ lies inside
-   sphere $j$ ($D + R_i \le R_j$), $i$ is marked **buried** and dropped from circle
-   construction.
+1. If sphere $i$ lies inside sphere $j$ ($D + R_i \le R_j$; exact duplicates keep
+   the lower input index), $i$ is marked **contained** and ignored by every
+   later stage. Then
+   $N(i) = \{j \ne i : \lVert\mathbf c_i - \mathbf c_j\rVert < R_i + R_j\}$ over
+   non-contained spheres, sorted by $j$.
 2. For each pair $i < j$, $j \in N(i)$, neither contained: build the circle
    frame $(\mathbf m, \mathbf u, \mathbf e_1, \mathbf e_2, \rho)$ with a deterministic orthonormal basis.
 
@@ -400,28 +403,35 @@ For circle $(i,j)$ and each $k \in N(i) \cap N(j)$, the set of circle points
 inside ball $k$ is an angular interval: with $\mathbf g = \mathbf m - \mathbf c_k$,
 $\lVert\mathbf q(\theta)-\mathbf c_k\rVert^2 = \lVert\mathbf g\rVert^2 + \rho^2 + 2\rho(\cos\theta\,\mathbf e_1\!\cdot\!\mathbf g + \sin\theta\,\mathbf e_2\!\cdot\!\mathbf g) < R_k^2$,
 i.e. $\cos(\theta - \varphi_k) < \beta_k$ — empty, full, or an interval centred at
-$\varphi_k + \pi$. Intervals are merged (sort by start angle, sweep with wrap-around);
-early exit when the union covers $2\pi$.
+$\varphi_k + \pi$. The interval endpoints $\varphi_k \pm \alpha_k$ are computed as unit
+vectors with angle-addition formulas, and intervals are sorted and merged
+(with wrap-around) on a monotone trig-free *pseudo-angle* of those vectors;
+`atan2` is evaluated only for the arcs of exposed circles. Exit early when a
+single sphere covers the whole circle. (This trig-free formulation made the
+circle stage ≈ 1.8× faster on 1AON.)
 
 * Circle **buried** if the union covers the whole circle → discarded.
-* Otherwise its **blocker list** $K(i,j)$ = the $k$ with non-empty intervals, and
-  each exposed-arc endpoint is a **triple point** $(i,j,k)$ — a probe position
-  touching three atoms (= reduced-surface vertex [R9]). Each point is
-  recomputed in canonical order $i<j<k$ by direct trilateration in `f64` and
-  re-tested for exposure against $N(i)$ (robust single source of truth);
-  duplicates from the three circles are merged by key.
-* Sphere $i$ is **exposed** iff $N(i) = \varnothing$, or it has at least one exposed
-  arc, or none of its neighbours' caps reach it (no circles at all). A buried
-  sphere is still a blocker but never a class-S candidate.
-* Tolerance: a point is "inside" sphere $k$ iff $\lVert\mathbf q - \mathbf c_k\rVert^2 < R_k^2(1 - 10^{-12})$
-  (relative, f64). This deterministic rule decides exactly-fitting probes
-  (§2.3). An optional deterministic jitter (hash of atom index → $\le 10^{-4}$ Å),
-  as used by NanoShaper for degenerate configurations [R13], can be enabled
-  for symmetric/idealized inputs.
+* Otherwise its **blocker list** $K(i,j)$ = the $k$ with non-empty intervals; the
+  endpoints of exposed arcs are **triple points** — probe positions touching
+  three atoms (= reduced-surface vertices [R9]). Each triple $i<j<k$ is
+  enumerated exactly once, from exposed circle $(i,j)$ and blocker $k > j$: both
+  crossing points are computed and kept if no other neighbour of $i$ contains
+  them (any sphere containing a point of sphere $i$ intersects sphere $i$), a
+  single source of truth independent of how the arcs were merged.
+* Sphere $i$ is **exposed** iff $N(i) = \varnothing$ or it has at least one exposed
+  circle. A buried sphere is still a blocker but never a class-S candidate.
+* Tolerance: absolute `EPS` = $10^{-9}$ Å for containment, intersection and
+  "strictly inside" tests (`f64`). This deterministic rule decides
+  exactly-fitting probes (§2.3); symmetric lattices and cages are covered by
+  tests. An optional deterministic jitter (as used by NanoShaper for
+  degenerate configurations [R13]) remains possible if such inputs prove
+  problematic in practice.
 
-Cost: $O(N\bar k^2)$ with early exit; dominated by interior atoms whose circles
-are buried quickly. Output size is proportional to the number of surface
-atoms.
+Cost: $O(N\bar k^2)$; output size is proportional to the number of surface
+atoms. Measured single-threaded on Apple Silicon (Plan T2.9): 1CRN 3.3 ms,
+4HHB 56 ms, 1AON (59 k atoms) 0.73 s, 4V6X (238 k atoms) 3.0 s; dominated by
+the ≈ 20 blocker tests of each of the ≈ 20 candidate circles per atom.
+Parallelisation per sphere follows in Phase 5.
 
 ---
 

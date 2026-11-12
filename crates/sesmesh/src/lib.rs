@@ -4,10 +4,11 @@
 //! surface) meshing for molecular structures read from PDB, PDBx/mmCIF and XYZ
 //! files.
 //!
-//! **Status:** Phase 1 — the structure layer is implemented: readers
-//! ([`io`]), atom selection ([`Selection`]) and radius assignment
-//! ([`radii`]). Surface computation follows in later phases; see the
-//! repository's `docs/` directory.
+//! **Status:** Phases 1–2 — readers ([`io`]), atom selection
+//! ([`Selection`]), radius assignment ([`radii`]) and the sphere geometry
+//! behind the surface ([`Sphere`], [`geom`]) are implemented. The surface
+//! field and meshing follow in later phases; see the repository's `docs/`
+//! directory.
 //!
 //! ```
 //! use sesmesh::{io, radii, Diagnostics, Selection};
@@ -28,12 +29,14 @@
 
 pub mod diag;
 pub mod error;
+pub mod geom;
 pub mod io;
 pub mod radii;
 pub mod structure;
 
 pub use diag::{Diagnostics, Warning, WarningKind};
 pub use error::{Error, Result};
+pub use geom::Sphere;
 pub use structure::{AtomRecord, AtomSet, Element, Model, Selection, Structure};
 
 /// Version of the `sesmesh` library, taken from `Cargo.toml`.

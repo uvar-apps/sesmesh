@@ -33,9 +33,15 @@ toml = { workspace = true, optional = true }
 [dev-dependencies]
 criterion.workspace = true
 flate2.workspace = true
+proptest.workspace = true
+sesmesh-testkit.workspace = true
 
 [[bench]]
 name = "parse"
+harness = false
+
+[[bench]]
+name = "geometry"
 harness = false
 
 [lints]

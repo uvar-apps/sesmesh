@@ -36,6 +36,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   - Decompressed-size limit for gzip input (`ReadOptions::max_decompressed_bytes`,
     `Error::ResourceLimit`).
 
+- Phase 2 geometry (T2.1–T2.9):
+  - Public `Sphere` input type (`Sphere::from_atoms`) and
+    `geom::arrangement_stats`.
+  - Internal SAS arrangement: Morton-ordered spheres, CSR cell lists,
+    containment and duplicate removal, neighbour lists, intersection circles
+    with exposed arcs and blocker lists (trig-free pseudo-angle interval
+    union), exposed triple points (probe positions), sphere exposure flags.
+  - `sesmesh-testkit`: brute-force SES/SAS/vdW oracle, two-sphere analytic
+    area/volume references (closed form and quadrature, incl. the
+    self-intersecting torus), deterministic random and symmetric clusters and
+    proptest strategies.
+  - Verification: arrangement matches the oracle and dense sampling on 10 000
+    random clusters, symmetric lattices/cages and crambin; arrangement
+    benchmark.
+
 ### Fixed
 
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by
