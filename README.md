@@ -71,6 +71,11 @@ fn main() -> sesmesh::Result<()> {
   statistics
 * [Validation report](docs/validation-report.md): accuracy, robustness,
   large inputs, performance
+* [CLI manual](docs/cli.md): every option, examples, exit codes
+* Library: crate documentation (`cargo doc --open -p sesmesh`) and
+  [examples](crates/sesmesh/examples/)
+* [API review](docs/api-review.md) (semver policy) and
+  [release process](docs/release.md)
 
 ## Workspace layout
 
@@ -100,6 +105,45 @@ To download the optional test and benchmark structures from the RCSB PDB:
 ```bash
 cargo xtask fetch --set small
 ```
+
+## How it works and what to cite
+
+sesmesh evaluates the exact implicit SES distance function of Quan & Stamm
+[1] on a sparse narrow-band grid, using the SAS arrangement (atom spheres,
+intersection circles and probe positions) of Connolly's analytic surface
+[2, 3]; it extracts the zero level set with Marching Cubes [4] (uniform
+face rule, Flying Edges-style row skipping [5]), places every vertex on the
+exact surface and takes normals from the closest point. Optional smoothing
+uses Taubin's λ|μ filter [6] followed by exact re-projection. The SES itself
+goes back to Lee & Richards [7] and Richards [8].
+
+If you use sesmesh in published work, please cite the methods above:
+
+1. C. Quan, B. Stamm, "Mathematical analysis and calculation of molecular
+   surfaces," *J. Comput. Phys.* 322:760–782, 2016.
+   doi:[10.1016/j.jcp.2016.07.007](https://doi.org/10.1016/j.jcp.2016.07.007)
+2. M. L. Connolly, "Analytical molecular surface calculation," *J. Appl.
+   Cryst.* 16(5):548–558, 1983.
+   doi:[10.1107/S0021889883010985](https://doi.org/10.1107/S0021889883010985)
+3. M. L. Connolly, "Solvent-accessible surfaces of proteins and nucleic
+   acids," *Science* 221:709–713, 1983.
+4. W. E. Lorensen, H. E. Cline, "Marching cubes: a high resolution 3D surface
+   construction algorithm," *Comput. Graph.* 21(4):163–169, 1987.
+   doi:[10.1145/37402.37422](https://doi.org/10.1145/37402.37422)
+5. W. Schroeder, R. Maynard, B. Geveci, "Flying edges: a high-performance
+   scalable isocontouring algorithm," *IEEE LDAV* 2015.
+   doi:[10.1109/LDAV.2015.7348069](https://doi.org/10.1109/LDAV.2015.7348069)
+6. G. Taubin, "A signal processing approach to fair surface design,"
+   *SIGGRAPH '95*, 351–358, 1995.
+7. B. Lee, F. M. Richards, "The interpretation of protein structures:
+   estimation of static accessibility," *J. Mol. Biol.* 55(3):379–400, 1971.
+   doi:[10.1016/0022-2836(71)90324-X](https://doi.org/10.1016/0022-2836(71)90324-X)
+8. F. M. Richards, "Areas, volumes, packing, and protein structure," *Annu.
+   Rev. Biophys. Bioeng.* 6:151–176, 1977.
+
+Radius sets: Bondi (1964) with Mantina et al. (2009), Alvarez (2013), and
+ProtOr (Tsai et al. 1999, classification from FreeSASA). The full reference
+list is in the [specification](docs/01-product-specification.md#12-references).
 
 ## Licence
 

@@ -46,6 +46,9 @@ impl StringPool {
     }
 
     /// Returns the handle for `s`, adding it if needed.
+    ///
+    /// # Panics
+    /// Beyond 2³² distinct strings.
     pub fn intern(&mut self, s: &str) -> Sym {
         if let Some(&sym) = self.index.get(s) {
             return sym;

@@ -28,6 +28,7 @@ pub enum WarningKind {
 /// An aggregated warning: one entry per distinct `(kind, message)`, with an
 /// occurrence count and a few examples.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub struct Warning {
     /// Category.
     pub kind: WarningKind,
@@ -73,22 +74,20 @@ impl Diagnostics {
     /// Records one occurrence of a warning. `example` is only evaluated while
     /// fewer than [`Self::MAX_EXAMPLES`] examples are stored.
     pub fn warn(&mut self, kind: WarningKind, message: &str, example: impl FnOnce() -> String) {
-        let entry = match self
+        let i = self
             .warnings
-            .iter_mut()
+            .iter()
             .position(|w| w.kind == kind && w.message == message)
-        {
-            Some(i) => &mut self.warnings[i],
-            None => {
+            .unwrap_or_else(|| {
                 self.warnings.push(Warning {
                     kind,
                     message: message.to_owned(),
                     count: 0,
                     examples: Vec::new(),
                 });
-                self.warnings.last_mut().expect("just pushed")
-            }
-        };
+                self.warnings.len() - 1
+            });
+        let entry = &mut self.warnings[i];
         entry.count += 1;
         if entry.examples.len() < Self::MAX_EXAMPLES {
             entry.examples.push(example());

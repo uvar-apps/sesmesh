@@ -21,8 +21,9 @@ edition = "2024"
 rust-version = "1.89"
 license = "MIT OR Apache-2.0"
 authors = ["sesmesh contributors"]
-# Nothing is published before the v1.0 release task (Plan T10.4).
-publish = false
+repository = "https://github.com/uvar-apps/sesmesh"
+# Only `sesmesh` and `sesmesh-cli` are publishable (Plan T10.4); `cargo
+# publish` is run by hand or by the release workflow, never implicitly.
 
 [workspace.dependencies]
 sesmesh = { path = "crates/sesmesh", version = "0.1.0" }

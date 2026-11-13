@@ -392,6 +392,18 @@ Exit (v0.3): all Must/Should requirements implemented.
 
 Exit (v1.0): Spec §6.2 release criteria.
 
+> Status (Phase 10 done except the release itself):
+> * T10.1: crate guide, five examples run in CI (`cargo doc` clean).
+> * T10.2: `docs/cli.md`; `--help` texts reviewed (PLY/MSMS mentioned).
+> * T10.3: `docs/api-review.md` (checklist, `#[non_exhaustive]` audit,
+>   semver policy); `Warning` made non-exhaustive; Send/Sync test.
+> * T10.4: `.github/workflows/release.yml` (tier-1 `dist` binaries,
+>   checksums, draft release on tags, manual crates.io publish), crates made
+>   publishable; `cargo publish --workspace --dry-run` passes; names free on
+>   crates.io (2026-11-13). Not tagged or published: v1.0 criteria open
+>   (`docs/release.md`).
+> * T10.5: README citations and documentation links; no screenshots yet.
+
 ---
 
 ## 4. Test data plan

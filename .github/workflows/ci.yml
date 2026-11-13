@@ -55,6 +55,13 @@ jobs:
         run: cargo test --workspace --locked
       - name: test (release)
         run: cargo test --workspace --locked --release
+      # Plan T10.1: the library examples run on every tier-1 target.
+      - name: examples
+        shell: bash
+        run: |
+          for example in file_to_obj spheres_to_mesh trajectory custom_radii field_queries; do
+            cargo run -q --release --locked -p sesmesh --example "$example"
+          done
       # Plan T6.6: which kernel each --simd choice runs on this runner, with
       # the time of a small surface (the per-level equivalence tests ran in
       # the test steps above).

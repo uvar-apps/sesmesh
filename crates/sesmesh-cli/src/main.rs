@@ -32,11 +32,16 @@ use sesmesh::{
 };
 
 /// Compute Solvent Excluded Surfaces (Connolly surfaces) of molecules and
-/// write them as triangle meshes with normals.
+/// write them as triangle meshes with normals (OBJ, PLY, MSMS).
 ///
-/// `sesmesh <INPUT>` is short for `sesmesh surface <INPUT>`.
+/// `sesmesh <INPUTS>...` is short for `sesmesh surface <INPUTS>...`.
 #[derive(Debug, Parser)]
-#[command(name = "sesmesh", version, about, long_about = None)]
+#[command(
+    name = "sesmesh",
+    version,
+    about = "Compute Solvent Excluded Surfaces (Connolly surfaces) of molecules as triangle meshes (OBJ, PLY, MSMS)",
+    after_help = "`sesmesh <INPUTS>...` is short for `sesmesh surface <INPUTS>...`. Manual: docs/cli.md"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -44,7 +49,8 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Command {
-    /// Compute a surface and write it as an OBJ mesh (default command).
+    /// Compute a surface and write it as a mesh: OBJ, PLY or MSMS (default
+    /// command).
     Surface(Box<SurfaceArgs>),
     /// Summarize an input: models, chains, atoms, bounding box, radii coverage.
     Info(Box<InfoArgs>),

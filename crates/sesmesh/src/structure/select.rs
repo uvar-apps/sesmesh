@@ -153,6 +153,9 @@ impl Structure {
     ///
     /// # Errors
     /// See [`Structure::select`].
+    ///
+    /// # Panics
+    /// Beyond 2³² atoms in one model.
     pub fn select_with<F>(
         &self,
         selection: &Selection,

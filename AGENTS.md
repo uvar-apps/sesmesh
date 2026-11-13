@@ -46,12 +46,12 @@ any deviation from the plan.
 
 ## Repository state at handoff (2026-11-13)
 
-- `main` = `origin/main` = Phase 8 (`phase-8-lod`), except T8.4 decimation and shell completions
-  (issues #1, #2).
+- `main` = `origin/main` = Phase 9 plus the Rust 1.100 clippy fix (`55b8d22`); CI green.
 - Root `atom-colors.json` and `out/` are untracked on purpose.
-- Branch `phase-9-validation`: Phase 9 committed locally (report `docs/validation-report.md`);
-  not yet merged into `main` or pushed: fast-forward `main` and push when the user asks.
-- Phases 0–9 done (T8.4 deferred; cross-tool references T9.2/T9.6 open). Next: Phase 10.
+- Branch `phase-10-release`: Phase 10 committed locally; not yet merged into `main` or pushed:
+  fast-forward `main` and push when the user asks.
+- Phases 0–10 done except the release itself: v1.0 criteria open (docs/release.md: #1, #3, #4,
+  #5, #20, #22). Versioning, tagging and `cargo publish` are the user's decisions.
 
 ## Layout (crates/sesmesh/src)
 
@@ -75,6 +75,9 @@ any deviation from the plan.
   `estimate_memory`) and Taubin smoothing + re-projection (`mesh/post.rs`)
 - `par.rs` rayon facade (feature `parallel`) · `crates/sesmesh-testkit` brute-force oracle,
   analytic two-sphere references, cluster generators, minimal OBJ reader
+- Docs: `docs/cli.md` (CLI manual), `docs/api-review.md` (API checklist, semver policy),
+  `docs/release.md` (release process, v1.0 status), `.github/workflows/release.yml`
+- `crates/sesmesh/examples/` five runnable examples (run in CI)
 - `crates/sesmesh-cli/src/main.rs` CLI (`surface` default, `info`, `radii`; `--progress`,
   `--simd`, `-j`, `--timings`, `--cavities`, `--vertex-colors`, `--palette`, `--group-components`,
   `--face-normals`, `--vertex-data`, `--atom-areas`, `--stats`, `--density`, `--smooth`,

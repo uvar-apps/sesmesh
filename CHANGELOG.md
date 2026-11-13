@@ -161,6 +161,21 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   - `estimate_memory` takes the sphere count and uses measured costs
     (150 B/triangle + 800 B/sphere); density test tightened to ±5 %.
 
+- Phase 10 documentation and release preparation (T10.1–T10.5):
+  - Crate guide in the rustdoc (concepts, modules, features, versioning) and
+    five examples (`file_to_obj`, `spheres_to_mesh`, `trajectory`,
+    `custom_radii`, `field_queries`), run in CI.
+  - `docs/cli.md` (CLI manual), `docs/api-review.md` (API Guidelines
+    checklist, `#[non_exhaustive]` audit, semver policy),
+    `docs/release.md` (process and v1.0 status).
+  - Release workflow: tier-1 binaries (`dist` profile) with checksums, draft
+    GitHub release on `v*` tags, manual crates.io publish; `sesmesh` and
+    `sesmesh-cli` are publishable (`cargo publish --workspace --dry-run`
+    passes), with repository and documentation metadata.
+  - README: documentation links, method description and citations.
+  - `Warning` is `#[non_exhaustive]`; `tests/api.rs` checks `Send + Sync`
+    of the main types; CLI help mentions PLY and MSMS.
+
 ### Fixed
 
 - Validation ignored vertex positions when a mesh had no normals.
