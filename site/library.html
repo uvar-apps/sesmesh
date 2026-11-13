@@ -15,7 +15,7 @@
 <body>
 
 <header class="top">
-  <a class="brand" href="./">sesmesh <small>1.0.0</small></a>
+  <a class="brand" href="./">sesmesh <small>1.1.0</small></a>
   <ul class="nav">
     <li><a href="./">Home</a></li>
     <li><a href="cli.html">CLI</a></li>
@@ -33,7 +33,7 @@
   <div class="wrap pagehead">
     <span class="label inv">Guide · Rust crate</span>
     <h1>The <span class="knock">Library</span></h1>
-    <p class="lede">The engine behind the CLI as a crate: <code>sesmesh = "1"</code>. Every snippet on this page compiles against 1.0.0; the <a href="https://docs.rs/sesmesh">API reference</a> documents every public item.</p>
+    <p class="lede">The engine behind the CLI as a crate: <code>sesmesh = "1"</code>. Every snippet on this page compiles against 1.1.0; the <a href="https://docs.rs/sesmesh">API reference</a> documents every public item.</p>
   </div>
 </section>
 
@@ -138,6 +138,7 @@ assert_eq!(out.stats.components, <span class="n">1</span>);</code></pre></div>
     .with_spacing(<span class="n">0.25</span>)                    <span class="c">// grid spacing in Å</span>
     .with_cavities(CavityMode::Re<span class="k">move</span>)     <span class="c">// drop internal cavities</span>
     .with_smoothing(<span class="n">2</span>)                     <span class="c">// Taubin rounds + exact re-projection</span>
+    .with_remove_fragments(<span class="k">true</span>)           <span class="c">// drop sub-grid fragments (1.1)</span>
     .with_decimation(Decimation::ratio(<span class="n">0.25</span>).with_max_error(<span class="n">0.05</span>))
     .with_max_memory(<span class="n">4</span> &lt;&lt; <span class="n">30</span>)              <span class="c">// 4 GiB estimate limit …</span>
     .with_auto_coarsen(<span class="k">true</span>)               <span class="c">// … coarsen instead of failing</span>
@@ -147,6 +148,7 @@ assert_eq!(out.stats.components, <span class="n">1</span>);</code></pre></div>
         <tr><td><code>SurfaceParams::ses(r)</code>, <code>::sas(r)</code>, <code>::vdw()</code></td><td>Surface kind and probe radius</td></tr>
         <tr><td><code>with_spacing(h)</code>, <code>with_quality(Quality::High)</code>, <code>with_density(d)</code></td><td>Resolution: spacing in Å, preset, or vertices per Å²</td></tr>
         <tr><td><code>with_cavities(CavityMode::…)</code></td><td><code>Keep</code> (exact SES), <code>Remove</code>, <code>Only</code>; plus <code>with_min_cavity_volume</code>, <code>with_min_component_area</code></td></tr>
+        <tr><td><code>with_remove_fragments(true)</code></td><td>Drop sub-grid fragments: tiny solid components without a convex atom patch, cut off by the grid from re-entrant sheets thinner than the spacing (off by default, since 1.1)</td></tr>
         <tr><td><code>with_smoothing(n)</code></td><td>Taubin rounds, then exact re-projection</td></tr>
         <tr><td><code>with_decimation(Decimation::…)</code></td><td><code>ratio</code>, <code>with_max_triangles</code>, <code>with_max_error</code> (Å)</td></tr>
         <tr><td><code>with_max_memory(bytes)</code>, <code>with_auto_coarsen(true)</code></td><td>Memory guard: refuse, or coarsen until the estimate fits</td></tr>
@@ -165,7 +167,7 @@ assert_eq!(out.stats.components, <span class="n">1</span>);</code></pre></div>
         <tr><td><code>out.mesh.triangles</code></td><td><code>Vec&lt;[u32; 3]&gt;</code>, counter-clockwise seen from outside, grouped by component</td></tr>
         <tr><td><code>out.mesh.vertex_atom</code>, <code>.vertex_patch</code>, <code>.vertex_component</code></td><td>Nearest input sphere, patch (<code>PatchKind</code>: convex, saddle, concave), component index</td></tr>
         <tr><td><code>out.components</code></td><td>Per component: vertices, triangles, area, signed volume (cavities negative), Euler characteristic, first triangle</td></tr>
-        <tr><td><code>out.stats</code></td><td>Totals, spacing used, decimation, refine evaluations, SIMD kernel, stage timings</td></tr>
+        <tr><td><code>out.stats</code></td><td>Totals, spacing used, removed fragments, decimation, the memory guard's estimate, refine evaluations, SIMD kernel, stage timings</td></tr>
       </table></div>
       <p>Per-vertex colours and per-atom areas, the way the CLI computes them:</p>
       <div class="code"><div class="code-head"><span>Rust</span><button type="button">Copy</button></div>

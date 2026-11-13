@@ -15,7 +15,7 @@
 <body>
 
 <header class="top">
-  <a class="brand" href="./">sesmesh <small>1.0.0</small></a>
+  <a class="brand" href="./">sesmesh <small>1.1.0</small></a>
   <ul class="nav">
     <li><a href="./">Home</a></li>
     <li><a href="cli.html" aria-current="page">CLI</a></li>
@@ -216,15 +216,21 @@ sesmesh: wrote 1crn.obj in 0.02 s</code></pre></div>
       <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
 <pre><code><span class="p">$ </span>sesmesh 1aon.cif.gz --cavities remove
 <span class="p">$ </span>sesmesh 1aon.cif.gz --cavities only --min-cavity-volume 10 -o pockets.obj
-<span class="p">$ </span>sesmesh 2ptn.pdb --min-component-area 5</code></pre></div>
+<span class="p">$ </span>sesmesh 2ptn.pdb --min-component-area 5
+<span class="p">$ </span>sesmesh 4hhb.cif.gz -q high --drop-fragments      <span class="c"># since 1.1</span></code></pre></div>
+      <p><code>--drop-fragments</code> removes sub-grid fragments: tiny solid components without a
+        convex atom patch that the grid cuts off from re-entrant sheets thinner than the spacing
+        (4HHB at 0.25 Å: 32 components instead of 33). It is off by default, so default output
+        is unchanged.</p>
     </section>
 
     <section id="big">
       <span class="label">09</span>
       <h2>Large structures</h2>
-      <p>Memory grows with surface area: about 150 bytes per triangle and 800 bytes per atom at
-        peak. Set a limit to refuse inputs that will not fit — or to coarsen the grid until they
-        do.</p>
+      <p>Memory grows with surface area. Before any mesh exists, sesmesh estimates the peak
+        memory of the whole run; <code>--max-memory</code> refuses inputs whose estimate exceeds the
+        limit, and <code>--auto-coarsen</code> coarsens the grid until it fits instead. The estimate
+        is deliberately conservative and is printed in the summary.</p>
       <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
 <pre><code><span class="p">$ </span>sesmesh 3j3q.cif.gz -q draft --progress --timings     <span class="c"># 2.44 M atoms</span>
 <span class="p">$ </span>sesmesh 3j3q.cif.gz -q high --max-memory 8G           <span class="c"># exit code 4 if too big</span>
