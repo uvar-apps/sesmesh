@@ -789,9 +789,10 @@ six neighbours are outside ($F = +0.025 \ldots +0.219$ Å), and MC emits an
 isolated octahedron (6 vertices, 8 triangles, 0.037 Å², all concave); a
 0.01 Å flood fill through $F < 0$ reaches the CE2 sphere after 1.1 Å, so in
 the exact SES the sheet belongs to the main body. These fragments are
-dropped by default (`SurfaceParams::remove_fragments`, CLI
-`--keep-fragments`) and counted in `SurfaceStats::removed_fragments`, not in
-`removed_components`; cavities contain a whole probe ball (≥ 11.5 Å³ for
+dropped on request (`SurfaceParams::remove_fragments`, CLI
+`--drop-fragments`; off by default in 1.x so default output does not change,
+a candidate default for 2.0) and counted in `SurfaceStats::removed_fragments`,
+not in `removed_components`; cavities contain a whole probe ball (≥ 11.5 Å³ for
 $r_p = 1.4$ Å) and are never fragments. Validation corpus (53 entries,
 Bondi radii, $r_p = 1.4$ Å):
 
@@ -822,7 +823,7 @@ triangles (fragments hold no atom centre, every atom centre stays inside),
   vertex against the cavity mesh by ray parity; few, small meshes).
 * `only`: keep cavity components only.
 * Filters: `min_cavity_volume` (Å³), `min_component_area` (Å²); sub-grid
-  fragments (§9.1) are dropped before them.
+  fragments (§9.1), when requested, are dropped before them.
 * Triangles are reordered so each component is a contiguous range (enables
   per-component OBJ groups).
 * *As built (Phase 7):* `CavityMode::{Keep, Remove, Only}`,
@@ -1145,7 +1146,7 @@ sesmesh radii [--set bondi|alvarez|protor]
 | Input | `--format auto\|pdb\|mmcif\|xyz\|pqr`, `--model N` (1), `--frame N` (XYZ, 0), `--block NAME` (mmCIF), `--assembly ID` |
 | Selection | `--altloc highest\|first\|<letter>\|all` (highest), `--hydrogens` (off), `--waters` (off), `--no-hetatm`, `--chains A,B`, `--exclude-resn NAME,...`, `--chain-ids auth\|label` (auth) |
 | Radii | `--radii bondi\|alvarez\|protor\|uniform:<r>\|file:<path>` (bondi), `--file-radii` (on for PQR), `--unknown-radius <r>` (1.8), `--strict-radii` |
-| Surface | `--surface ses\|sas\|vdw` (ses), `--probe <r>` (1.4), `--cavities keep\|remove\|only` (keep), `--min-cavity-volume <A³>`, `--min-component-area <A²>`, `--keep-fragments` |
+| Surface | `--surface ses\|sas\|vdw` (ses), `--probe <r>` (1.4), `--cavities keep\|remove\|only` (keep), `--min-cavity-volume <A³>`, `--min-component-area <A²>`, `--drop-fragments` |
 | Resolution | `-s/--grid-spacing <Å>`, `-q/--quality draft\|low\|medium\|high\|ultra` (medium = 0.5 Å), `--density <v/Å²>`, `--refine exact\|linear` (exact), `--brick-size N` (expert) |
 | Post-process | `--smooth <iters>`, `--decimate <ratio>` / `--max-triangles N`, `--decimate-error <Å>` |
 | Output | `-o <path>` (input stem + `.obj`), `--output-format obj\|ply\|msms` (by extension), `--precision N` (4), `--no-normals`, `--face-normals`, `--group-components`, `--vertex-colors element\|chain\|patch\|component`, `--vertex-data <csv>`, `--atom-areas <csv>`, `--stats [<json>]` |

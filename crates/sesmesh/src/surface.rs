@@ -201,8 +201,8 @@ pub struct SurfaceParams {
     /// vertex on a convex atom patch. Every true solid component contains an
     /// atom and reaches the solvent through convex patches; such fragments
     /// are pieces of reentrant sheets thinner than the grid spacing, cut off
-    /// from the body they belong to (Design §9.1). Default `true`; no effect
-    /// on SAS and vdW surfaces.
+    /// from the body they belong to (Design §9.1). Default `false` (opt-in,
+    /// so 1.x output does not change); no effect on SAS and vdW surfaces.
     pub remove_fragments: bool,
     /// Vertex normals. Default [`NormalMode::Analytic`].
     pub normals: NormalMode,
@@ -240,7 +240,7 @@ impl SurfaceParams {
             cavities: CavityMode::Keep,
             min_cavity_volume: 0.0,
             min_component_area: 0.0,
-            remove_fragments: true,
+            remove_fragments: false,
             normals: NormalMode::Analytic,
             max_memory: None,
             auto_coarsen: false,
@@ -336,8 +336,8 @@ impl SurfaceParams {
         self
     }
 
-    /// Drops (`true`, the default) or keeps sub-grid fragments, see
-    /// [`SurfaceParams::remove_fragments`].
+    /// Drops (`true`) or keeps (`false`, the default) sub-grid fragments,
+    /// see [`SurfaceParams::remove_fragments`].
     #[must_use]
     pub fn with_remove_fragments(mut self, on: bool) -> Self {
         self.remove_fragments = on;
@@ -1094,8 +1094,8 @@ mod tests {
                 })
                 .collect();
             let base = SurfaceParams::ses(probe).with_spacing(rng.uniform(0.2, 0.5));
-            let kept = compute_surface(&s, &base.clone().with_remove_fragments(false)).unwrap();
-            let out = compute_surface(&s, &base).unwrap();
+            let kept = compute_surface(&s, &base).unwrap();
+            let out = compute_surface(&s, &base.with_remove_fragments(true)).unwrap();
             assert!(mesh::validate(&out.mesh).is_ok());
             let mask = post::fragments(&kept.mesh, &kept.mesh.vertex_component, &kept.components);
             let n = mask.iter().filter(|&&f| f).count();

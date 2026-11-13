@@ -91,7 +91,7 @@ any deviation from the plan.
   `docs/release.md` (release process, v1.0 status), `.github/workflows/release.yml`
 - `crates/sesmesh/examples/` five runnable examples (run in CI)
 - `crates/sesmesh-cli/src/main.rs` CLI (`surface` default, `info`, `radii`; `--progress`,
-  `--simd`, `-j`, `--timings`, `--cavities`, `--keep-fragments`, `--vertex-colors`, `--palette`, `--group-components`,
+  `--simd`, `-j`, `--timings`, `--cavities`, `--drop-fragments`, `--vertex-colors`, `--palette`, `--group-components`,
   `--face-normals`, `--vertex-data`, `--atom-areas`, `--stats`, `--density`, `--smooth`,
   `--max-memory`, `--auto-coarsen`, `--decimate`, `--max-triangles`, `--decimate-error`,
   `--output-format`, `--assembly`; batch mode with `--output-dir` / `--keep-going`;
@@ -162,7 +162,7 @@ tick them in #19. Summary:
 - SES sheets thinner than h (two probe balls from opposite sides of an atom triangle almost
   meeting) give MC "sub-grid fragments": solid components without a convex vertex, mostly
   8-triangle octahedra around one node (4HHB 0.25 Å: one; validation corpus 0.25 Å: 1 358).
-  Dropped by default since after 1.0 (`remove_fragments`, Design §9.1); real solid components
-  always have convex patches (≥ 40 Å² in the corpus).
+  Dropped on request (`remove_fragments`, `--drop-fragments`, Design §9.1; opt-in in 1.x to keep
+  default output); real solid components always have convex patches (≥ 40 Å² in the corpus).
 - `out/` holds `1crn-ses-*` prototype meshes (marching tetrahedra) and `*-sesmesh.obj` from the
   real CLI for comparison.

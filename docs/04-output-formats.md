@@ -10,8 +10,8 @@ volumes in Å³.
 # sesmesh 1.0.0
 # input: 1crn.cif  format: mmcif  model: 1  atoms: 327 selected / 327 read
 # surface: ses  probe_radius: 1.4000  grid_spacing: 0.2500  radii: bondi  refine: exact  smoothing: 0  decimation: none
-# cavities: keep  min_cavity_volume: 0  min_component_area: 0  keep_fragments: false  normals: analytic
-# vertices: 55542  triangles: 111076  components: 2  cavities: 1  removed: 0  fragments_removed: 0  euler: 4
+# cavities: keep  min_cavity_volume: 0  min_component_area: 0  normals: analytic
+# vertices: 55542  triangles: 111076  components: 2  cavities: 1  removed: 0  euler: 4
 # area_A2: 2314.2175  volume_A3: 4662.7007
 # normals point to the solvent; faces counter-clockwise seen from outside
 o ses
@@ -132,7 +132,7 @@ column sums to the total area of the written mesh.
   "parameters": {"surface": "ses", "probe_radius": 1.4, "grid_spacing": 0.25,
                  "radii": "bondi", "refine": "exact", "cavities": "keep",
                  "min_cavity_volume": 0.0, "min_component_area": 0.0,
-                 "keep_fragments": false, "normals": "analytic",
+                 "drop_fragments": false, "normals": "analytic",
                  "brick_size": 10, "simd": "auto", "smoothing": 0,
                  "decimation": null},
   "mesh": {"vertices": 55542, "triangles": 111076, "area": 2314.2,
@@ -170,8 +170,9 @@ column sums to the total area of the written mesh.
   drops components with area < A. Anything inside a dropped cavity is dropped
   with it. The OBJ header and statistics report the number of removed
   components.
-* Sub-grid fragments — tiny solid SES components without a vertex on a
-  convex atom patch, cut off by the grid from reentrant sheets thinner than
-  the spacing (Design §9.1) — are dropped first, whatever the mode, unless
-  `--keep-fragments` is given; the OBJ header (`fragments_removed`) and the
-  statistics (`mesh.removed_fragments`) count them separately.
+* `--drop-fragments` drops sub-grid fragments — tiny solid SES components
+  without a vertex on a convex atom patch, cut off by the grid from reentrant
+  sheets thinner than the spacing (Design §9.1) — first, whatever the mode.
+  With it the OBJ header gains `drop_fragments: true` (before `normals`) and
+  `fragments_removed: N` (before `euler`); the statistics count them in
+  `mesh.removed_fragments`, apart from `removed_components`.

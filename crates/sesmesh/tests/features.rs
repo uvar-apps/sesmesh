@@ -97,10 +97,11 @@ fn thin_sheet() -> Vec<Sphere> {
 }
 
 #[test]
-fn sub_grid_fragments_are_dropped() {
+fn sub_grid_fragments_are_dropped_on_request() {
     let s = thin_sheet();
     let base = SurfaceParams::ses(1.4).with_spacing(0.25);
-    let kept = run(&s, &base.clone().with_remove_fragments(false));
+    // Kept by default (1.x output unchanged).
+    let kept = run(&s, &base);
     assert_eq!(kept.stats.components, 2, "{:?}", kept.components);
     assert_eq!(kept.stats.removed_fragments, 0);
     assert_grouped(&kept);
@@ -116,7 +117,8 @@ fn sub_grid_fragments_are_dropped() {
     assert!(patches(1).all(|p| p == mesh::PatchKind::Concave));
     assert!(patches(0).any(|p| p == mesh::PatchKind::Convex));
 
-    let out = run(&s, &base);
+    let drop = base.clone().with_remove_fragments(true);
+    let out = run(&s, &drop);
     assert_eq!(out.stats.components, 1);
     assert_eq!(out.stats.removed_fragments, 1);
     assert_eq!(out.stats.removed_components, 0);
@@ -128,7 +130,7 @@ fn sub_grid_fragments_are_dropped() {
     assert_grouped(&out);
     // Filters count separately; an area filter that also covers the
     // fragment leaves it to the fragment count.
-    let filtered = run(&s, &base.clone().with_min_component_area(1.0));
+    let filtered = run(&s, &drop.with_min_component_area(1.0));
     assert_eq!(
         (
             filtered.stats.removed_components,
@@ -136,13 +138,7 @@ fn sub_grid_fragments_are_dropped() {
         ),
         (0, 1)
     );
-    let filtered = run(
-        &s,
-        &base
-            .clone()
-            .with_remove_fragments(false)
-            .with_min_component_area(1.0),
-    );
+    let filtered = run(&s, &base.clone().with_min_component_area(1.0));
     assert_eq!(
         (
             filtered.stats.removed_components,
@@ -152,7 +148,7 @@ fn sub_grid_fragments_are_dropped() {
     );
     // SAS and vdW surfaces are unions of spheres: never fragments.
     for p in [SurfaceParams::sas(1.4), SurfaceParams::vdw()] {
-        let out = run(&s, &p.with_spacing(0.25));
+        let out = run(&s, &p.with_spacing(0.25).with_remove_fragments(true));
         assert_eq!(out.stats.removed_fragments, 0);
     }
 }
@@ -588,11 +584,11 @@ fn memory_guard_can_coarsen() {
 
 /// The 4HHB report behind Design §9.1 "Sub-grid fragments": at 0.25 Å the
 /// outer surface, 31 cavities and one 8-triangle fragment (the sheet of
-/// [`thin_sheet`]), which is dropped.
+/// [`thin_sheet`]), dropped on request.
 #[test]
 #[cfg(feature = "gzip")]
 #[ignore = "needs tests/data/cache (cargo xtask fetch --set small); slow in debug"]
-fn hemoglobin_fragment_is_dropped() {
+fn hemoglobin_fragment() {
     use sesmesh::io::{ReadOptions, read_path};
     use sesmesh::radii::{RadiusOptions, assign};
     use sesmesh::{Diagnostics, Selection};
@@ -606,13 +602,16 @@ fn hemoglobin_fragment_is_dropped() {
     let atoms = structure.select(&Selection::default(), &mut diags).unwrap();
     let radii = assign(&atoms, &RadiusOptions::default(), &mut diags).unwrap();
     let spheres = Sphere::from_atoms(&atoms, &radii).unwrap();
-    let out = run(&spheres, &SurfaceParams::ses(1.4).with_spacing(0.25));
-    assert_eq!(
-        (
-            out.stats.components,
-            out.stats.cavities,
-            out.stats.removed_fragments
-        ),
-        (32, 31, 1)
-    );
+    let base = SurfaceParams::ses(1.4).with_spacing(0.25);
+    for (drop, components, removed) in [(false, 33, 0), (true, 32, 1)] {
+        let out = run(&spheres, &base.clone().with_remove_fragments(drop));
+        assert_eq!(
+            (
+                out.stats.components,
+                out.stats.cavities,
+                out.stats.removed_fragments
+            ),
+            (components, 31, removed)
+        );
+    }
 }

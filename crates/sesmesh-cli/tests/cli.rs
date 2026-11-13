@@ -247,7 +247,8 @@ fn cavity_modes_and_groups() {
 }
 
 /// Three atoms spanned by an SES sheet thinner than the grid (Design §9.1):
-/// one sub-grid fragment at 0.25 Å, dropped unless `--keep-fragments`.
+/// one sub-grid fragment at 0.25 Å, kept unless `--drop-fragments` (the
+/// default header stays as in 1.0).
 #[test]
 fn sub_grid_fragments() {
     let xyz = tmp("thin-sheet.xyz");
@@ -279,17 +280,23 @@ fn sub_grid_fragments() {
         (groups, json, String::from_utf8(o.stderr).unwrap(), text)
     };
     let (groups, json, err, text) = run_with(&[]);
+    assert_eq!(groups, 2);
+    assert_eq!(json["mesh"]["removed_fragments"], 0);
+    assert_eq!(json["parameters"]["drop_fragments"], false);
+    assert_eq!(json["components"][1]["triangles"], 8);
+    assert!(!err.contains("fragment"), "{err}");
+    assert!(!text.contains("fragment"));
+    assert!(text.contains("min_component_area: 0  normals: analytic\n"));
+    assert!(text.contains("removed: 0  euler: "));
+    let (groups, json, err, text) = run_with(&["--drop-fragments"]);
     assert_eq!(groups, 1);
     assert_eq!(json["mesh"]["removed_fragments"], 1);
     assert_eq!(json["mesh"]["removed_components"], 0);
-    assert_eq!(json["parameters"]["keep_fragments"], false);
+    assert_eq!(json["parameters"]["drop_fragments"], true);
     assert!(err.contains("dropped 1 sub-grid fragment(s)"), "{err}");
-    assert!(text.contains("fragments_removed: 1"));
-    let (groups, json, err, _) = run_with(&["--keep-fragments", "--quiet"]);
-    assert_eq!(groups, 2);
-    assert_eq!(json["mesh"]["removed_fragments"], 0);
-    assert_eq!(json["parameters"]["keep_fragments"], true);
-    assert_eq!(json["components"][1]["triangles"], 8);
+    assert!(text.contains("drop_fragments: true  normals: analytic\n"));
+    assert!(text.contains("fragments_removed: 1  euler: "));
+    let (_, _, err, _) = run_with(&["--drop-fragments", "--quiet"]);
     assert!(err.is_empty(), "{err}");
 }
 
