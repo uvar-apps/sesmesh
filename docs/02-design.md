@@ -768,6 +768,16 @@ $\chi = V - E + F$, genus $g = (2-\chi)/2$.
 * Filters: `min_cavity_volume` (Å³), `min_component_area` (Å²).
 * Triangles are reordered so each component is a contiguous range (enables
   per-component OBJ groups).
+* *As built (Phase 7):* `CavityMode::{Keep, Remove, Only}`,
+  `min_cavity_volume`, `min_component_area` in `SurfaceParams`; the filters
+  apply in every mode, and every component lying inside a *removed* cavity
+  (one vertex inside it by ray parity, after a bounding-box test) is removed
+  with it. Removed components' vertices are compacted away; components are
+  renumbered in order; `SurfaceStats::removed_components` counts them.
+  `Mesh::vertex_component` and `Component::first_triangle` describe the
+  grouping. Normal modes (`NormalMode::{Analytic, FaceAverage, None}`) are
+  applied after compaction. Tests: hollow atom shell with a core atom
+  (3 components), atom ring of genus 1, separated molecules.
 
 ### 9.3 Validation (FR-DIAG-3)
 
@@ -800,6 +810,8 @@ can replace it later to drop the C++ build dependency.
 
 Each triangle's area is split equally among its three vertices' nearest
 atoms; summed per atom in fixed order; reported in input atom order.
+*As built (Phase 7):* `mesh::atom_areas(&Mesh, n_atoms)`; CLI
+`--atom-areas <csv>` (columns in `docs/04-output-formats.md`).
 
 ---
 
@@ -831,6 +843,14 @@ f 1//1 2//2 3//3
 * Options: `--no-normals` (`f a b c`), `--group-components` (`g component_N`),
   `--vertex-colors <scheme>` (`v x y z r g b`, non-standard but read by
   MeshLab/Blender), `-o -` for stdout, `.gz` suffix → gzip stream.
+* *As built (Phase 7):* `ObjOptions::{vertex_colors, groups}`; groups are
+  named `component_<i>` / `cavity_<i>`; colour schemes element (palette
+  `sesmesh::color::ElementPalette`, generated from the bundled
+  `crates/sesmesh/data/atom-colors.json`, overridable with `--palette`),
+  chain, patch, component. Statistics JSON (`--stats`) and the CSV side files
+  are written by the CLI with `serde_json` (no library `json` feature was
+  needed: `SurfaceStats` and `Component` expose every value). Formats:
+  `docs/04-output-formats.md`.
 
 ### 10.2 Other formats
 

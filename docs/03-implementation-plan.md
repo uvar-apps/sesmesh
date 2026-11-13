@@ -294,6 +294,22 @@ Exit (v0.2): fast, deterministic, multi-level SIMD.
 > index) and `vertex_patch`. The default element palette for vertex colours
 > (T7.5) is the user-provided `atom-colors.json` (118 elements, hex colours;
 > see `AGENTS.md`).
+>
+> Status (Phase 7 done):
+> * T7.1: triangles grouped by component (`Component::first_triangle`,
+>   `Mesh::vertex_component`); genus test on a 20-atom ring (χ = 0),
+>   separated molecules; 2PTN cavity comparison with EDTSurf/NanoShaper
+>   numbers moves to Phase 9 (needs the reference data).
+> * T7.2: `CavityMode`, `min_cavity_volume`, `min_component_area`, removal of
+>   components inside removed cavities (ray parity), vertex compaction; test
+>   on a hollow atom shell with a core atom.
+> * T7.3: `mesh::atom_areas`, CLI `--atom-areas` (sum equals the mesh area).
+> * T7.4: `NormalMode::{Analytic, FaceAverage, None}`; CLI `--face-normals`,
+>   `--no-normals`.
+> * T7.5: OBJ groups and vertex colours (element/chain/patch/component;
+>   palette from `atom-colors.json`, `--palette` override), `--vertex-data`
+>   CSV, `--stats` JSON written by the CLI (`serde_json`) instead of a library
+>   `json` feature; formats in `docs/04-output-formats.md`.
 
 | ID | Task | Deliverable / tests |
 |---|---|---|

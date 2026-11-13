@@ -218,3 +218,125 @@ fn exit_codes() {
     assert_eq!(code(&run(&["--version"])), 0);
     assert_eq!(code(&run(&["surface", "--help"])), 0);
 }
+
+#[test]
+fn cavity_modes_and_groups() {
+    let crn = fixture("1CRN.cif.gz");
+    let crn = crn.to_str().unwrap();
+    let count = |args: &[&str]| -> (usize, usize) {
+        let mut all = vec![crn, "-s", "0.5", "-o", "-", "--quiet", "--group-components"];
+        all.extend_from_slice(args);
+        let o = run(&all);
+        assert_eq!(
+            code(&o),
+            0,
+            "{args:?}: {}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+        let text = String::from_utf8(o.stdout).unwrap();
+        let groups = text.lines().filter(|l| l.starts_with("g ")).count();
+        let cavities = text.lines().filter(|l| l.starts_with("g cavity_")).count();
+        assert_closed(&obj::parse(&text).unwrap());
+        (groups, cavities)
+    };
+    // Crambin has one internal cavity.
+    assert_eq!(count(&[]), (2, 1));
+    assert_eq!(count(&["--cavities", "remove"]), (1, 0));
+    assert_eq!(count(&["--cavities", "only"]), (1, 1));
+    assert_eq!(count(&["--min-cavity-volume", "1e6"]), (1, 0));
+}
+
+#[test]
+fn colours_csv_and_stats() {
+    let crn = fixture("1CRN.cif.gz");
+    let (stats, atoms, verts, palette) = (
+        tmp("crn-stats.json"),
+        tmp("crn-atoms.csv"),
+        tmp("crn-verts.csv"),
+        tmp("palette.json"),
+    );
+    std::fs::write(
+        &palette,
+        r##"{"format":"eigenvista-atom-colors","version":1,"colors":[{"symbol":"C","color":"#ff0000"}]}"##,
+    )
+    .unwrap();
+    let o = run(&[
+        crn.to_str().unwrap(),
+        "-s",
+        "0.5",
+        "-o",
+        "-",
+        "--quiet",
+        "--vertex-colors",
+        "element",
+        "--palette",
+        palette.to_str().unwrap(),
+        "--stats",
+        stats.to_str().unwrap(),
+        "--atom-areas",
+        atoms.to_str().unwrap(),
+        "--vertex-data",
+        verts.to_str().unwrap(),
+        "--face-normals",
+    ]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    let text = String::from_utf8(o.stdout).unwrap();
+    let m = obj::parse(&text).unwrap();
+    let v: Vec<&str> = text.lines().filter(|l| l.starts_with("v ")).collect();
+    assert!(v.iter().all(|l| l.split_whitespace().count() == 7));
+    assert!(
+        v.iter().any(|l| l.ends_with(" 1.0000 0.0000 0.0000")),
+        "red carbon"
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&stats).unwrap()).unwrap();
+    assert_eq!(json["parameters"]["cavities"], "keep");
+    assert_eq!(json["parameters"]["normals"], "face-average");
+    assert_eq!(json["mesh"]["components"], 2);
+    assert_eq!(json["components"].as_array().unwrap().len(), 2);
+    assert!(json["timings_ms"]["total"].as_f64().unwrap() > 0.0);
+    let area = json["mesh"]["area"].as_f64().unwrap();
+    let atom_csv = std::fs::read_to_string(&atoms).unwrap();
+    assert_eq!(atom_csv.lines().count(), 1 + 327);
+    let sum: f64 = atom_csv
+        .lines()
+        .skip(1)
+        .map(|l| l.rsplit(',').next().unwrap().parse::<f64>().unwrap())
+        .sum();
+    assert!((sum - area).abs() < 0.05, "{sum} vs {area}");
+    let vert_csv = std::fs::read_to_string(&verts).unwrap();
+    assert_eq!(vert_csv.lines().count(), 1 + m.positions.len());
+    assert!(vert_csv.lines().nth(1).unwrap().split(',').count() == 14);
+}
+
+#[test]
+fn phase7_usage_and_input_errors() {
+    let crn = fixture("1CRN.pdb.gz");
+    let crn = crn.to_str().unwrap();
+    assert_eq!(code(&run(&[crn, "-o", "-", "--stats", "-"])), 2);
+    assert_eq!(
+        code(&run(&[crn, "-o", "-", "--no-normals", "--face-normals"])),
+        2
+    );
+    assert_eq!(
+        code(&run(&[crn, "-o", "-", "--palette", "x.json"])),
+        2,
+        "needs --vertex-colors"
+    );
+    assert_eq!(
+        code(&run(&[crn, "-o", "-", "--min-component-area", "-1"])),
+        2
+    );
+    let bad = tmp("bad-palette.json");
+    std::fs::write(&bad, r##"{"colors":[{"symbol":"Xx","color":"#000000"}]}"##).unwrap();
+    let o = run(&[
+        crn,
+        "-o",
+        "-",
+        "--vertex-colors",
+        "element",
+        "--palette",
+        bad.to_str().unwrap(),
+    ]);
+    assert_eq!(code(&o), 3, "{}", String::from_utf8_lossy(&o.stderr));
+}

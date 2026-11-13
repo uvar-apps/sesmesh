@@ -398,6 +398,7 @@ pub(crate) fn assemble(bricks: &[[i32; 3]], parts: &[BrickMesh]) -> Result<Mesh>
         ),
         vertex_atom: Vec::with_capacity(total),
         vertex_patch: Vec::with_capacity(total),
+        vertex_component: Vec::new(),
     };
     for (p, tris) in parts.iter().zip(resolved) {
         mesh.positions.extend_from_slice(&p.positions);

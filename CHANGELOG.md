@@ -121,8 +121,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
     offset by 10⁴ Å, 5 000 Å extents (automatic `f64` path); CI job summary
     with the SIMD level matrix; field benchmark at every level.
 
+- Phase 7 mesh features (T7.1–T7.5):
+  - Triangles grouped by component (`Component::first_triangle`,
+    `Mesh::vertex_component`).
+  - `CavityMode::{Keep, Remove, Only}`, `min_cavity_volume`,
+    `min_component_area` (components inside a removed cavity go with it),
+    `SurfaceStats::removed_components`.
+  - `NormalMode::{Analytic, FaceAverage, None}`; meshes without normals
+    validate and write without `vn`.
+  - `mesh::atom_areas`; `color` module (`ElementPalette` from the bundled
+    `atom-colors.json`, categorical and patch colours, `parse_hex`).
+  - OBJ vertex colours (`v x y z r g b`) and groups (`ObjOptions::{vertex_colors,
+    groups}`).
+  - CLI: `--cavities`, `--min-cavity-volume`, `--min-component-area`,
+    `--face-normals`, `--group-components`, `--vertex-colors
+    element|chain|patch|component`, `--palette`, `--vertex-data`,
+    `--atom-areas`, `--stats` (JSON).
+  - `docs/04-output-formats.md`: OBJ header, colours, CSV columns, JSON
+    statistics schema.
+
 ### Fixed
 
+- Validation ignored vertex positions when a mesh had no normals.
 - Meshes far from the origin (≈ 10⁴ Å) could contain zero-area triangles:
   vertices placed 10⁻⁴·h from a sample collapsed into one `f32` position.
   The edge clamp is now at least four `f32` ulps of the largest coordinate.

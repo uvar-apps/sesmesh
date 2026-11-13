@@ -35,20 +35,20 @@ any deviation from the plan.
   `main` (`git merge --ff-only`). Push only when asked: `origin` =
   https://github.com/uvar-apps/sesmesh (private); push `main` and the phase branches.
 - Never commit `out/` (review meshes: prototype files plus `*-sesmesh.obj` from the real CLI).
-- `atom-colors.json` (repo root, untracked, user-provided): 118 element colours,
-  `{"format":"eigenvista-atom-colors","version":1,"colors":[{"z","symbol","color":"#rrggbb"}]}`.
-  Use it as the default palette for `--vertex-colors element` (Phase 7, T7.5); ask before
-  committing it (e.g. as `crates/sesmesh/data/atom-colors.json` + `include_str!`).
+- `atom-colors.json` (user-provided, 118 element colours,
+  `{"format":"eigenvista-atom-colors","version":1,"colors":[{"z","symbol","color":"#rrggbb"}]}`)
+  is the default element palette: copied to `crates/sesmesh/data/atom-colors.json`, turned into
+  `color/element_table.rs` (a test keeps both in sync). The root copy stays untracked.
 - The user reviews meshes in a viewer; the crambin SES was confirmed "perfect" (T4.10).
 
 ## Repository state at handoff (2026-11-13)
 
-- `origin/main` = Phase 5 (`51ea399`); the first GitHub CI run on it passed on all jobs.
-- Branch `phase-6-simd`: Phase 6 and this handoff, committed locally (all local checks pass).
-  Not yet merged into `main` or pushed: fast-forward `main` and push when the user asks, then
-  check the CI run (the new "SIMD level matrix" step runs there for the first time).
-- `atom-colors.json` and `out/` are untracked on purpose.
-- Phases 0–6 done. Next: Phase 7 on a new branch `phase-7-mesh` from `main`.
+- `main` = `origin/main` = Phase 6 (`afa2369`); CI passed on all jobs (incl. the SIMD matrix).
+- Branch `phase-7-mesh`: Phase 7 committed locally (all local checks pass); not yet merged into
+  `main` or pushed: fast-forward `main` and push when the user asks, then check CI (first
+  `cargo deny` run with `serde_json`).
+- Root `atom-colors.json` and `out/` are untracked on purpose.
+- Phases 0–7 done. Next: Phase 8 on a new branch `phase-8-lod` from `main`.
 
 ## Layout (crates/sesmesh/src)
 
@@ -62,13 +62,18 @@ any deviation from the plan.
 - `mesh/` `Mesh`, `validate`, parallel `components` (lock-free union–find), packed edge keys
   (`mod.rs`); generated MC table (`mc_table.rs`, generator + exhaustive tests in `tables.rs`);
   per-brick MC, exact refinement, ulp-aware `edge_clamp`, parallel assembly (`extract.rs`)
-- `surface.rs` `SurfaceParams`, `compute_surface[_with]`, `SurfaceEngine`, stats ·
-  `control.rs` `Control`/`Progress`/`Stage` · `export/` OBJ writer + fixed-point formatter
+- `mesh/post.rs` grouping by component, cavity filtering + enclosure (ray parity), vertex
+  compaction, face-averaged normals, `atom_areas`
+- `surface.rs` `SurfaceParams` (incl. `CavityMode`, `NormalMode`, filters),
+  `compute_surface[_with]`, `SurfaceEngine`, stats · `control.rs` `Control`/`Progress`/`Stage` ·
+  `export/` OBJ writer (colours, groups) + fixed-point formatter · `color/` palettes
 - `par.rs` rayon facade (feature `parallel`) · `crates/sesmesh-testkit` brute-force oracle,
   analytic two-sphere references, cluster generators, minimal OBJ reader
 - `crates/sesmesh-cli/src/main.rs` CLI (`surface` default, `info`, `radii`; `--progress`,
-  `--simd`, `-j`, `--timings`), end-to-end tests in `crates/sesmesh-cli/tests/cli.rs`
-- Tests: unit tests next to the code; `crates/sesmesh/tests/{surface,determinism,structures}.rs`;
+  `--simd`, `-j`, `--timings`, `--cavities`, `--vertex-colors`, `--palette`, `--group-components`,
+  `--face-normals`, `--vertex-data`, `--atom-areas`, `--stats`), end-to-end tests in
+  `crates/sesmesh-cli/tests/cli.rs`. Output formats: `docs/04-output-formats.md`.
+- Tests: unit tests next to the code; `crates/sesmesh/tests/{surface,features,determinism,structures}.rs`;
   data-dependent tests skip when `tests/data/cache` is missing (the nightly workflow fetches it)
 
 ## Status
@@ -80,29 +85,24 @@ any deviation from the plan.
   matrix in the job summary, f64 refinement over per-sub-block candidate lists, default brick
   size 10, fix for f32 vertex collapse far from the origin, f64 path for > 2 000 Å extents.
   Profile and rejected experiments: D§7.5; x86 speed-ups still to measure (Phase 9).
+- Phase 7: components grouped (`Component::first_triangle`, `Mesh::vertex_component`), cavity
+  modes + filters (components inside removed cavities removed too), normal modes, per-atom areas,
+  OBJ groups + vertex colours, CSV side files, JSON stats (CLI-side `serde_json`, no library
+  `json` feature). Deferred: 2PTN cavity comparison with reference tools (Phase 9).
 - Accuracy: the inscribed MC mesh underestimates area (0.4–0.65 %) and volume (0.8–1.35 %) at
   0.25 Å for atom-sized spheres, O(h²) (D§15 "Measured", spec NFR-ACC note).
 - Performance: D§7.7 and D§11.1 (1AON at 0.5 Å ≈ 3.1 s, 4HHB at 0.25 Å ≈ 0.54 s, 10 cores).
 
-## Next: Phase 7 (plan §3, D§9, FR-SURF-4..7, FR-MESH-6, FR-OUT-2/5/6/7)
+## Next: Phase 8 (plan §3, FR-LOD, FR-OUT, FR-IN-8, FR-CLI-5)
 
-Already available: `mesh::components` (deterministic ids, area, signed volume, χ, genus,
-`is_cavity`), `SurfaceOutput::components`, `Mesh::vertex_atom` (input sphere index) and
-`vertex_patch`. To do:
-
-1. T7.1: reorder triangles so each component is contiguous (store triangle ranges); genus tests
-   (torus-shaped atom ring); multi-molecule inputs.
-2. T7.2: `CavityMode { Keep, Remove, Only }` + `min_cavity_volume` / `min_component_area` in
-   `SurfaceParams`; nested-component enclosure test (ray parity, D§9.2); CLI `--cavities`,
-   `--min-cavity-volume`, `--min-component-area`; compact vertices after removal.
-3. T7.3: per-atom area (each triangle's area split equally among its vertices' nearest atoms,
-   fixed-order sums, input atom order); `--atom-areas <csv>`.
-4. T7.4: normal modes analytic (default) / face-average / none (`--face-normals`).
-5. T7.5: OBJ `--group-components` (`g component_N`), `--vertex-colors
-   element|chain|patch|component` (`v x y z r g b`; element palette from `atom-colors.json`),
-   `--vertex-data <csv>`, JSON stats behind a `json` feature (`--stats [<json>]`, schema in
-   `docs/`). Element and chain colouring need atom records: the CLI maps `vertex_atom` through
-   the `AtomSet`.
+1. T8.1 `--density <v/Å²>`: spacing h ≈ √(1.5/density) (D§8.6), provisional constant.
+2. T8.2 memory estimate (≈ 3·A/h² triangles) + `--max-memory` (exit code 4).
+3. T8.3 Taubin smoothing + exact re-projection (`SesField` closest point, D§9.4) +
+   recomputed normals/attributes (`--smooth <iters>`).
+4. T8.4 decimation via `meshopt` behind a `decimate` feature (D§9.5), re-validate.
+5. T8.5 PLY (binary, with attributes) and MSMS `.vert/.face` writers.
+6. T8.6 biological assemblies (`pdbx_struct_assembly_gen`/`oper_list`, PDB BIOMT, `--assembly`).
+7. T8.7 batch mode (`--output-dir`, `--keep-going`), shell completions.
 
 ## Gotchas learned
 

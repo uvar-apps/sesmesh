@@ -27,6 +27,7 @@ fn octahedron() -> Mesh {
         triangles,
         vertex_atom: vec![0; n],
         vertex_patch: vec![PatchKind::Convex; n],
+        vertex_component: Vec::new(),
     }
 }
 

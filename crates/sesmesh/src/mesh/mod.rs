@@ -2,7 +2,10 @@
 //! measurements, connected components and validation (Design §9.1, §9.3).
 
 pub(crate) mod extract;
+pub(crate) mod post;
 mod tables;
+
+pub use post::atom_areas;
 
 use std::sync::atomic::{AtomicU32, Ordering};
 
@@ -50,6 +53,10 @@ pub struct Mesh {
     pub vertex_atom: Vec<u32>,
     /// Patch carrying each vertex.
     pub vertex_patch: Vec<PatchKind>,
+    /// Component of each vertex (index into
+    /// [`SurfaceOutput::components`](crate::SurfaceOutput::components);
+    /// empty for meshes not made by `compute_surface`).
+    pub vertex_component: Vec<u32>,
 }
 
 impl Mesh {
@@ -139,6 +146,11 @@ pub struct Component {
     pub volume: f64,
     /// Euler characteristic `V − E + F` (2 for a sphere-like component).
     pub euler: i64,
+    /// First triangle of the component when triangles are grouped by
+    /// component (as in [`compute_surface`](crate::compute_surface)
+    /// output: component `c` owns triangles
+    /// `first_triangle..first_triangle + triangles`); 0 otherwise.
+    pub first_triangle: usize,
 }
 
 impl Component {
@@ -217,6 +229,7 @@ pub(crate) fn components_with(mesh: &Mesh, edges: &Edges) -> (Vec<u32>, Vec<Comp
                 area: 0.0,
                 volume: 0.0,
                 euler: 0,
+                first_triangle: 0,
             });
         } else {
             id[v] = id[r];
@@ -402,8 +415,8 @@ pub struct Validation {
     pub duplicate_triangles: usize,
     /// Triangles referencing a vertex that does not exist.
     pub invalid_indices: usize,
-    /// Vertices with a non-finite coordinate or normal, or a normal that is
-    /// not of unit length.
+    /// Vertices with a non-finite coordinate, or (when the mesh has normals)
+    /// a non-finite or non-unit normal or a missing one.
     pub bad_vertices: usize,
 }
 
@@ -424,16 +437,26 @@ pub fn validate(mesh: &Mesh) -> Validation {
 /// indices are invalid).
 pub(crate) fn validate_with(mesh: &Mesh, edges: Option<Edges>) -> (Validation, Option<Edges>) {
     let n = mesh.positions.len();
-    let bad_vertices = mesh
+    // Normals are optional (empty); when present there is one unit normal
+    // per vertex.
+    let bad_positions = mesh
         .positions
         .iter()
-        .zip(&mesh.normals)
-        .filter(|(p, q)| {
-            let len2: f32 = q.iter().map(|c| c * c).sum();
-            !(p.iter().chain(q.iter()).all(|c| c.is_finite()) && (len2 - 1.0).abs() < 1e-3)
-        })
-        .count()
-        + n.abs_diff(mesh.normals.len());
+        .filter(|p| !p.iter().all(|c| c.is_finite()))
+        .count();
+    let bad_normals = if mesh.normals.is_empty() {
+        0
+    } else {
+        mesh.normals
+            .iter()
+            .filter(|q| {
+                let len2: f32 = q.iter().map(|c| c * c).sum();
+                !(q.iter().all(|c| c.is_finite()) && (len2 - 1.0).abs() < 1e-3)
+            })
+            .count()
+            + n.abs_diff(mesh.normals.len())
+    };
+    let bad_vertices = bad_positions + bad_normals;
     let invalid_indices = mesh
         .triangles
         .iter()

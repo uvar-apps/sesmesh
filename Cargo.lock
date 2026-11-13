@@ -881,6 +881,7 @@ dependencies = [
  "rayon",
  "rustc-hash",
  "serde",
+ "serde_json",
  "sesmesh-testkit",
  "thiserror",
  "toml",
@@ -892,6 +893,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "rayon",
+ "serde_json",
  "sesmesh",
  "sesmesh-testkit",
 ]

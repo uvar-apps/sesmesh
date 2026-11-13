@@ -18,13 +18,15 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
+use sesmesh::color::{self, ElementPalette};
 use sesmesh::export::obj::{ObjOptions, write_obj, write_obj_path};
 use sesmesh::io::{Format, ReadOptions};
 use sesmesh::radii::{BuiltinRadii, RadiusOptions, RadiusRules, RadiusSet};
 use sesmesh::structure::{AltLocPolicy, ChainIdKind, ModelChoice, WATER_RESIDUES};
 use sesmesh::{
-    AtomSet, Control, Diagnostics, Error, Progress, Quality, RefineMode, Selection, SimdLevel,
-    Sphere, Stage, Structure, SurfaceKind, SurfaceOutput, SurfaceParams, compute_surface_with,
+    AtomSet, CavityMode, Control, Diagnostics, Element, Error, NormalMode, Progress, Quality,
+    RefineMode, Selection, SimdLevel, Sphere, Stage, Structure, SurfaceKind, SurfaceOutput,
+    SurfaceParams, compute_surface_with, mesh,
 };
 
 /// Compute Solvent Excluded Surfaces (Connolly surfaces) of molecules and
@@ -124,6 +126,16 @@ struct SurfaceArgs {
     /// Probe radius (Å).
     #[arg(long, default_value_t = 1.4, help_heading = "Surface")]
     probe: f64,
+    /// Internal cavities: keep them (exact SES), remove them and anything
+    /// inside them (MSMS-like), or keep only them.
+    #[arg(long, value_enum, default_value_t = CavityArg::Keep, help_heading = "Surface")]
+    cavities: CavityArg,
+    /// Drop cavities smaller than this volume (Å³).
+    #[arg(long, default_value_t = 0.0, help_heading = "Surface")]
+    min_cavity_volume: f64,
+    /// Drop components with less area than this (Å²).
+    #[arg(long, default_value_t = 0.0, help_heading = "Surface")]
+    min_component_area: f64,
     /// Grid spacing (Å); overrides `--quality`.
     #[arg(short = 's', long, help_heading = "Resolution")]
     grid_spacing: Option<f64>,
@@ -146,8 +158,32 @@ struct SurfaceArgs {
     #[arg(long, default_value_t = 4, help_heading = "Output")]
     precision: usize,
     /// Omit vertex normals.
-    #[arg(long, help_heading = "Output")]
+    #[arg(long, help_heading = "Output", conflicts_with = "face_normals")]
     no_normals: bool,
+    /// Area-weighted face-averaged normals instead of the analytic ones.
+    #[arg(long, help_heading = "Output")]
+    face_normals: bool,
+    /// One OBJ group (`g component_N`) per connected component.
+    #[arg(long, help_heading = "Output")]
+    group_components: bool,
+    /// Per-vertex colours (`v x y z r g b`) by the nearest atom's element or
+    /// chain, the patch type, or the component.
+    #[arg(long, value_enum, help_heading = "Output")]
+    vertex_colors: Option<ColorArg>,
+    /// Element colours (JSON, `eigenvista-atom-colors` format) overriding
+    /// the built-in palette for `--vertex-colors element`.
+    #[arg(long, help_heading = "Output", requires = "vertex_colors")]
+    palette: Option<PathBuf>,
+    /// Write per-vertex attributes (nearest atom, patch, component) as CSV.
+    #[arg(long, help_heading = "Output")]
+    vertex_data: Option<PathBuf>,
+    /// Write the SES area of every selected atom as CSV.
+    #[arg(long, help_heading = "Output")]
+    atom_areas: Option<PathBuf>,
+    /// Write statistics (input, parameters, mesh, components, timings) as
+    /// JSON (`-`: standard output).
+    #[arg(long, help_heading = "Output")]
+    stats: Option<PathBuf>,
     /// Worker threads (default: all logical cores).
     #[arg(short = 'j', long, help_heading = "Performance")]
     threads: Option<usize>,
@@ -204,6 +240,21 @@ enum KindArg {
     Ses,
     Sas,
     Vdw,
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum CavityArg {
+    Keep,
+    Remove,
+    Only,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum ColorArg {
+    Element,
+    Chain,
+    Patch,
+    Component,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -412,6 +463,20 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
             RefineArg::Linear => RefineMode::Linear,
         })
         .with_brick_size(a.brick_size)
+        .with_cavities(match a.cavities {
+            CavityArg::Keep => CavityMode::Keep,
+            CavityArg::Remove => CavityMode::Remove,
+            CavityArg::Only => CavityMode::Only,
+        })
+        .with_min_cavity_volume(a.min_cavity_volume)
+        .with_min_component_area(a.min_component_area)
+        .with_normals(if a.no_normals {
+            NormalMode::None
+        } else if a.face_normals {
+            NormalMode::FaceAverage
+        } else {
+            NormalMode::Analytic
+        })
         .with_simd(match a.simd {
             SimdArg::Auto => SimdLevel::Auto,
             SimdArg::Scalar => SimdLevel::Scalar,
@@ -503,11 +568,47 @@ fn surface(a: &SurfaceArgs) -> CliResult<()> {
     options.normals = !a.no_normals;
     options.object_name = kind_name(out.stats.kind).to_string();
     options.comments = header(a, &structure, &atoms, &params, &out);
+    if a.group_components {
+        options.groups = out
+            .components
+            .iter()
+            .enumerate()
+            .map(|(c, comp)| {
+                let kind = if comp.is_cavity() {
+                    "cavity"
+                } else {
+                    "component"
+                };
+                (comp.first_triangle, format!("{kind}_{c}"))
+            })
+            .collect();
+    }
+    if let Some(scheme) = a.vertex_colors {
+        let palette = match &a.palette {
+            Some(path) => read_palette(path)?,
+            None => ElementPalette::default(),
+        };
+        options.vertex_colors = vertex_colors(scheme, &structure, &atoms, &out, &palette);
+    }
     let output = a
         .output
         .clone()
         .unwrap_or_else(|| default_output(&a.input.input));
     let to_stdout = output.as_os_str() == "-";
+    if to_stdout && a.stats.as_ref().is_some_and(|p| p.as_os_str() == "-") {
+        return Err(Failure::Usage(
+            "--stats - and -o - cannot both use standard output".into(),
+        ));
+    }
+    if let Some(path) = &a.vertex_data {
+        write_text(path, |w| write_vertex_data(w, &structure, &atoms, &out))?;
+    }
+    if let Some(path) = &a.atom_areas {
+        let areas = mesh::atom_areas(&out.mesh, atoms.len());
+        write_text(path, |w| {
+            write_atom_areas(w, &structure, &atoms, &radii, &areas)
+        })?;
+    }
     if to_stdout {
         let stdout = io::stdout().lock();
         let mut w = BufWriter::with_capacity(1 << 20, stdout);
@@ -518,6 +619,26 @@ fn surface(a: &SurfaceArgs) -> CliResult<()> {
         write_obj_path(&output, &out.mesh, &options)?;
     }
     let write_time = write_start.elapsed();
+    if let Some(path) = &a.stats {
+        let json = stats_json(
+            a,
+            &structure,
+            &atoms,
+            &params,
+            &out,
+            &diags,
+            read_time,
+            write_time,
+            start.elapsed(),
+        );
+        let text = serde_json::to_string_pretty(&json)
+            .map_err(|e| Failure::Runtime(format!("statistics: {e}")))?;
+        if path.as_os_str() == "-" {
+            println!("{text}");
+        } else {
+            write_text(path, |w| writeln!(w, "{text}"))?;
+        }
+    }
 
     if !a.quiet {
         print_warnings(&diags);
@@ -541,6 +662,13 @@ fn surface(a: &SurfaceArgs) -> CliResult<()> {
             s.area,
             s.volume,
         );
+        if s.removed_components > 0 {
+            eprintln!(
+                "sesmesh: removed {} component(s) (--cavities {}, filters)",
+                s.removed_components,
+                params.cavities.name()
+            );
+        }
         if a.timings {
             let t = &s.timings;
             eprintln!(
@@ -641,12 +769,18 @@ fn header(
             params.refine.name(),
         ),
         format!(
-            "vertices: {}  triangles: {}  components: {}  cavities: {}  euler: {}",
-            s.vertices, s.triangles, s.components, s.cavities, s.euler
+            "cavities: {}  min_cavity_volume: {}  min_component_area: {}  normals: {}",
+            params.cavities.name(),
+            params.min_cavity_volume,
+            params.min_component_area,
+            params.normals.name(),
+        ),
+        format!(
+            "vertices: {}  triangles: {}  components: {}  cavities: {}  removed: {}  euler: {}",
+            s.vertices, s.triangles, s.components, s.cavities, s.removed_components, s.euler
         ),
         format!("area_A2: {:.4}  volume_A3: {:.4}", s.area, s.volume),
-        "normals: analytic, pointing to the solvent; faces counter-clockwise seen from outside"
-            .to_string(),
+        "normals point to the solvent; faces counter-clockwise seen from outside".to_string(),
     ]
 }
 
@@ -773,7 +907,7 @@ fn summarize_model(out: &mut String, structure: &Structure, model: &sesmesh::Mod
         let symbol = atom.element.map_or("?", |e| e.symbol());
         *elements.entry(symbol).or_default() += 1;
         het += usize::from(atom.het);
-        hydrogens += usize::from(atom.element.is_some_and(sesmesh::Element::is_hydrogen));
+        hydrogens += usize::from(atom.element.is_some_and(Element::is_hydrogen));
         let res = structure.str(atom.res_name);
         waters += usize::from(WATER_RESIDUES.iter().any(|w| w.eq_ignore_ascii_case(res)));
         altloc += usize::from(atom.alt_loc.is_some());
@@ -795,6 +929,249 @@ fn summarize_model(out: &mut String, structure: &Structure, model: &sesmesh::Mod
         "elements: {}\nhetero atoms: {het}  hydrogens: {hydrogens}  water atoms: {waters}  alt-loc atoms: {altloc}\n",
         el.join(" ")
     ));
+}
+
+/// Writes a text file through a buffered writer.
+fn write_text(
+    path: &Path,
+    f: impl FnOnce(&mut BufWriter<std::fs::File>) -> io::Result<()>,
+) -> CliResult<()> {
+    let err = |e: io::Error| Failure::Runtime(format!("{}: {e}", path.display()));
+    let file = std::fs::File::create(path).map_err(err)?;
+    let mut w = BufWriter::new(file);
+    f(&mut w).and_then(|()| w.flush()).map_err(err)
+}
+
+/// Element palette from a JSON file in the `atom-colors.json` format
+/// (entries identified by `z` or `symbol`).
+fn read_palette(path: &Path) -> CliResult<ElementPalette> {
+    let bad = |m: String| Failure::Parse(format!("{}: {m}", path.display()));
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| Failure::Runtime(format!("{}: {e}", path.display())))?;
+    let json: serde_json::Value =
+        serde_json::from_str(&text).map_err(|e| bad(format!("invalid JSON: {e}")))?;
+    let entries = json["colors"]
+        .as_array()
+        .ok_or_else(|| bad("expected a \"colors\" array".into()))?;
+    let mut palette = ElementPalette::default();
+    for (i, e) in entries.iter().enumerate() {
+        let element = e["z"]
+            .as_u64()
+            .and_then(|z| u8::try_from(z).ok())
+            .and_then(Element::from_atomic_number)
+            .or_else(|| e["symbol"].as_str().and_then(Element::from_symbol))
+            .ok_or_else(|| bad(format!("entry {i}: unknown element")))?;
+        let rgb = e["color"]
+            .as_str()
+            .and_then(color::parse_hex)
+            .ok_or_else(|| bad(format!("entry {i}: expected \"color\": \"#rrggbb\"")))?;
+        palette.set(element, rgb);
+    }
+    Ok(palette)
+}
+
+/// Per-vertex colours for a scheme (FR-OUT-2).
+fn vertex_colors(
+    scheme: ColorArg,
+    structure: &Structure,
+    atoms: &AtomSet<'_>,
+    out: &SurfaceOutput,
+    palette: &ElementPalette,
+) -> Vec<[f32; 3]> {
+    let m = &out.mesh;
+    match scheme {
+        ColorArg::Element => {
+            let per_atom: Vec<[f32; 3]> = atoms.iter().map(|a| palette.color(a.element)).collect();
+            m.vertex_atom
+                .iter()
+                .map(|&i| per_atom[i as usize])
+                .collect()
+        }
+        ColorArg::Chain => {
+            let mut order: Vec<&str> = Vec::new();
+            let per_atom: Vec<[f32; 3]> = atoms
+                .iter()
+                .map(|a| {
+                    let chain = structure.str(a.chain);
+                    let k = order.iter().position(|c| *c == chain).unwrap_or_else(|| {
+                        order.push(chain);
+                        order.len() - 1
+                    });
+                    color::categorical(k)
+                })
+                .collect();
+            m.vertex_atom
+                .iter()
+                .map(|&i| per_atom[i as usize])
+                .collect()
+        }
+        ColorArg::Patch => m
+            .vertex_patch
+            .iter()
+            .map(|&p| color::patch_color(p))
+            .collect(),
+        ColorArg::Component => m
+            .vertex_component
+            .iter()
+            .map(|&c| color::categorical(c as usize))
+            .collect(),
+    }
+}
+
+/// Atom identification columns shared by the CSV outputs.
+fn atom_columns(structure: &Structure, a: &sesmesh::AtomRecord) -> String {
+    format!(
+        "{},{},{},{},{},{},{}",
+        a.serial,
+        csv_field(structure.str(a.chain)),
+        csv_field(structure.str(a.res_name)),
+        a.res_seq,
+        a.ins_code.map(String::from).unwrap_or_default(),
+        csv_field(structure.str(a.name)),
+        a.element.map_or("", |e| e.symbol()),
+    )
+}
+
+/// Quotes a CSV field when needed.
+fn csv_field(s: &str) -> String {
+    if s.contains([',', '"', '\n']) {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
+    }
+}
+
+fn write_vertex_data(
+    w: &mut impl Write,
+    structure: &Structure,
+    atoms: &AtomSet<'_>,
+    out: &SurfaceOutput,
+) -> io::Result<()> {
+    let records: Vec<&sesmesh::AtomRecord> = atoms.iter().collect();
+    writeln!(
+        w,
+        "vertex,x,y,z,atom,serial,chain,res_name,res_seq,ins_code,atom_name,element,patch,component"
+    )?;
+    let m = &out.mesh;
+    for v in 0..m.vertex_count() {
+        let p = m.positions[v];
+        let atom = m.vertex_atom[v] as usize;
+        writeln!(
+            w,
+            "{},{:.4},{:.4},{:.4},{},{},{},{}",
+            v + 1,
+            p[0],
+            p[1],
+            p[2],
+            atom,
+            atom_columns(structure, records[atom]),
+            m.vertex_patch[v].name(),
+            m.vertex_component.get(v).copied().unwrap_or(0),
+        )?;
+    }
+    Ok(())
+}
+
+fn write_atom_areas(
+    w: &mut impl Write,
+    structure: &Structure,
+    atoms: &AtomSet<'_>,
+    radii: &[f64],
+    areas: &[f64],
+) -> io::Result<()> {
+    writeln!(
+        w,
+        "atom,serial,chain,res_name,res_seq,ins_code,atom_name,element,radius,area"
+    )?;
+    for (i, a) in atoms.iter().enumerate() {
+        writeln!(
+            w,
+            "{i},{},{:.3},{:.4}",
+            atom_columns(structure, a),
+            radii[i],
+            areas[i]
+        )?;
+    }
+    Ok(())
+}
+
+/// Statistics document for `--stats` (FR-OUT-6).
+#[allow(clippy::too_many_arguments)]
+fn stats_json(
+    a: &SurfaceArgs,
+    structure: &Structure,
+    atoms: &AtomSet<'_>,
+    params: &SurfaceParams,
+    out: &SurfaceOutput,
+    diags: &Diagnostics,
+    read: Duration,
+    write: Duration,
+    total: Duration,
+) -> serde_json::Value {
+    let s = &out.stats;
+    let t = &s.timings;
+    let msf = |d: Duration| d.as_secs_f64() * 1e3;
+    serde_json::json!({
+        "sesmesh": sesmesh::VERSION,
+        "input": {
+            "path": a.input.input.display().to_string(),
+            "format": structure.source.format.name(),
+            "model": atoms.model().number,
+            "atoms_selected": atoms.len(),
+            "atoms_in_model": atoms.model().atoms.len(),
+        },
+        "parameters": {
+            "surface": kind_name(s.kind),
+            "probe_radius": params.effective_probe(),
+            "grid_spacing": s.spacing,
+            "radii": a.radius.radii,
+            "refine": params.refine.name(),
+            "cavities": params.cavities.name(),
+            "min_cavity_volume": params.min_cavity_volume,
+            "min_component_area": params.min_component_area,
+            "normals": params.normals.name(),
+            "brick_size": params.brick_size,
+            "simd": params.simd.name(),
+        },
+        "mesh": {
+            "vertices": s.vertices,
+            "triangles": s.triangles,
+            "area": s.area,
+            "volume": s.volume,
+            "euler": s.euler,
+            "components": s.components,
+            "cavities": s.cavities,
+            "removed_components": s.removed_components,
+        },
+        "components": out.components.iter().enumerate().map(|(i, c)| serde_json::json!({
+            "index": i,
+            "cavity": c.is_cavity(),
+            "vertices": c.vertices,
+            "triangles": c.triangles,
+            "first_triangle": c.first_triangle,
+            "area": c.area,
+            "volume": c.volume,
+            "euler": c.euler,
+            "genus": c.genus(),
+        })).collect::<Vec<_>>(),
+        "engine": {
+            "kernel": s.simd,
+            "touched_bricks": s.touched_bricks,
+            "surface_bricks": s.surface_bricks,
+            "refine_evaluations": s.refine_evaluations,
+        },
+        "timings_ms": {
+            "read": msf(read),
+            "geometry": msf(t.geometry),
+            "classify": msf(t.classify),
+            "mesh": msf(t.mesh),
+            "assemble": msf(t.assemble),
+            "measure": msf(t.measure),
+            "write": msf(write),
+            "total": msf(total),
+        },
+        "warnings": diags.warnings().iter().map(ToString::to_string).collect::<Vec<_>>(),
+    })
 }
 
 fn radii(a: &RadiiArgs) -> CliResult<()> {

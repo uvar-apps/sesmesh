@@ -15,10 +15,12 @@ molecular surface) meshing for molecular structures, written in Rust.
   (AVX2 / AVX-512 / NEON).
 * Ships as a reusable library crate plus a command-line tool.
 
-> **Status: v0.1 MVP + parallel and SIMD engine (Phases 0–6).** Structure files → closed, oriented SES /
-> SAS / vdW meshes with analytic normals → OBJ, from the library and the
-> `sesmesh` CLI. Cavity filtering, smoothing/decimation, PLY/MSMS output,
-> biological assemblies and batch mode follow (Phases 5–10, see the
+> **Status: Phases 0–7 done.** Structure files → closed, oriented SES / SAS /
+> vdW meshes with analytic normals → OBJ, from the library and the `sesmesh`
+> CLI, multi-threaded and SIMD-accelerated, with cavity handling, components,
+> vertex colours, per-atom areas and JSON statistics. Level-of-detail controls
+> (smoothing, decimation, density), PLY/MSMS output, biological assemblies and
+> batch mode follow (Phases 8–10, see the
 > [implementation plan](docs/03-implementation-plan.md)).
 
 ## Quick start
@@ -28,12 +30,14 @@ cargo build --release
 target/release/sesmesh 1crn.cif -o 1crn.obj            # SES, 0.5 Å grid
 target/release/sesmesh 4hhb.cif.gz -q high --timings    # 0.25 Å grid
 target/release/sesmesh ligand.xyz --radii alvarez --probe 1.2 -s 0.1 -o lig.obj
+target/release/sesmesh 1crn.cif --cavities remove --vertex-colors element --stats stats.json
 target/release/sesmesh info 1crn.pdb
 target/release/sesmesh radii --set protor
 ```
 
 Run `sesmesh surface --help` for all options (selection, radii, surface kind,
-resolution, output precision, threads). Exit codes: 0 success, 1 runtime
+cavities, resolution, normals, colours, side files, threads). Output formats
+are described in [docs/04-output-formats.md](docs/04-output-formats.md). Exit codes: 0 success, 1 runtime
 error, 2 usage error, 3 input parse error, 4 resource limit.
 
 As a library:
@@ -61,6 +65,8 @@ fn main() -> sesmesh::Result<()> {
 * [Design](docs/02-design.md): mathematics, architecture, algorithms
 * [Implementation plan](docs/03-implementation-plan.md): phases, tasks,
   milestones
+* [Output formats](docs/04-output-formats.md): OBJ, CSV side files, JSON
+  statistics
 
 ## Workspace layout
 

@@ -8,7 +8,7 @@ use crate::diag::Diagnostics;
 use crate::error::{Error, Result};
 use crate::field::{Engine, ScratchPool, SesField, SimdLevel, SurfaceKind};
 use crate::geom::Sphere;
-use crate::mesh::{self, Mesh, extract};
+use crate::mesh::{self, Mesh, extract, post};
 
 /// Resolution presets (Spec FR-LOD-2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -110,6 +110,55 @@ impl RefineMode {
     }
 }
 
+/// Which components to keep (Spec FR-SURF-4, Design §9.2).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum CavityMode {
+    /// Keep every component, including internal cavities (the exact SES).
+    /// Default.
+    #[default]
+    Keep,
+    /// Drop internal cavities and anything inside them (MSMS-like output).
+    Remove,
+    /// Keep internal cavities only.
+    Only,
+}
+
+impl CavityMode {
+    /// Lower-case name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Keep => "keep",
+            Self::Remove => "remove",
+            Self::Only => "only",
+        }
+    }
+}
+
+/// Which vertex normals the mesh carries (Spec FR-MESH-3).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub enum NormalMode {
+    /// Exact normals of the analytic surface (Design §8.2). Default.
+    #[default]
+    Analytic,
+    /// Area-weighted averages of the incident triangle normals.
+    FaceAverage,
+    /// No normals (`Mesh::normals` is empty).
+    None,
+}
+
+impl NormalMode {
+    /// Lower-case name.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Analytic => "analytic",
+            Self::FaceAverage => "face-average",
+            Self::None => "none",
+        }
+    }
+}
+
 /// Parameters of [`compute_surface`].
 ///
 /// ```
@@ -134,6 +183,14 @@ pub struct SurfaceParams {
     pub brick_size: usize,
     /// Kernel instruction set (expert). Default [`SimdLevel::Auto`].
     pub simd: SimdLevel,
+    /// Component selection. Default [`CavityMode::Keep`].
+    pub cavities: CavityMode,
+    /// Drop cavities with |volume| below this (Å³). Default 0.
+    pub min_cavity_volume: f64,
+    /// Drop components with area below this (Å²). Default 0.
+    pub min_component_area: f64,
+    /// Vertex normals. Default [`NormalMode::Analytic`].
+    pub normals: NormalMode,
 }
 
 impl Default for SurfaceParams {
@@ -152,6 +209,10 @@ impl SurfaceParams {
             refine: RefineMode::Exact,
             brick_size: 10,
             simd: SimdLevel::Auto,
+            cavities: CavityMode::Keep,
+            min_cavity_volume: 0.0,
+            min_component_area: 0.0,
+            normals: NormalMode::Analytic,
         }
     }
 
@@ -206,6 +267,34 @@ impl SurfaceParams {
         self
     }
 
+    /// Sets the component selection.
+    #[must_use]
+    pub fn with_cavities(mut self, mode: CavityMode) -> Self {
+        self.cavities = mode;
+        self
+    }
+
+    /// Drops cavities with |volume| below `volume` Å³.
+    #[must_use]
+    pub fn with_min_cavity_volume(mut self, volume: f64) -> Self {
+        self.min_cavity_volume = volume;
+        self
+    }
+
+    /// Drops components with area below `area` Å².
+    #[must_use]
+    pub fn with_min_component_area(mut self, area: f64) -> Self {
+        self.min_component_area = area;
+        self
+    }
+
+    /// Sets the vertex normal mode.
+    #[must_use]
+    pub fn with_normals(mut self, normals: NormalMode) -> Self {
+        self.normals = normals;
+        self
+    }
+
     /// Grid spacing in Å.
     pub fn spacing(&self) -> f64 {
         self.resolution.spacing()
@@ -236,6 +325,16 @@ impl SurfaceParams {
             return Err(Error::InvalidInput(format!(
                 "probe radius must be within 0..=100 Å, got {p}"
             )));
+        }
+        for (name, v) in [
+            ("minimum cavity volume", self.min_cavity_volume),
+            ("minimum component area", self.min_component_area),
+        ] {
+            if !(v.is_finite() && v >= 0.0) {
+                return Err(Error::InvalidInput(format!(
+                    "{name} must be finite and >= 0, got {v}"
+                )));
+            }
         }
         if !(2..=32).contains(&self.brick_size) {
             return Err(Error::InvalidInput(format!(
@@ -296,6 +395,8 @@ pub struct SurfaceStats {
     pub components: usize,
     /// Components that are internal cavities (negative volume).
     pub cavities: usize,
+    /// Components dropped by the cavity mode and filters.
+    pub removed_components: usize,
     /// Euler characteristic of the whole mesh.
     pub euler: i64,
     /// Exact field evaluations spent on vertex placement.
@@ -419,6 +520,40 @@ impl SurfaceEngine {
     }
 }
 
+/// Applies the cavity mode and filters (Design §9.2); returns the number of
+/// removed components.
+fn select_components(
+    mesh: &mut Mesh,
+    vertex_component: &mut Vec<u32>,
+    components: &mut Vec<mesh::Component>,
+    params: &SurfaceParams,
+) -> usize {
+    let mut keep: Vec<bool> = components
+        .iter()
+        .map(|c| {
+            let by_mode = match params.cavities {
+                CavityMode::Keep => true,
+                CavityMode::Remove => !c.is_cavity(),
+                CavityMode::Only => c.is_cavity(),
+            };
+            by_mode
+                && !(c.is_cavity() && -c.volume < params.min_cavity_volume)
+                && c.area >= params.min_component_area
+        })
+        .collect();
+    // Whatever lies inside a removed cavity goes with it.
+    let removed: Vec<bool> = keep.iter().map(|k| !k).collect();
+    if removed.iter().any(|&r| r) {
+        let inner = post::enclosed_by(mesh, vertex_component, components, &removed);
+        for (k, i) in keep.iter_mut().zip(inner) {
+            *k &= !i;
+        }
+    }
+    let n = keep.iter().filter(|k| !**k).count();
+    post::retain_components(mesh, vertex_component, components, &keep);
+    n
+}
+
 fn run(
     spheres: &[Sphere],
     params: &SurfaceParams,
@@ -472,8 +607,18 @@ fn run(
         }
     };
     control.check()?;
-    let (_, components) = mesh::components_with(&mesh, &edges);
+    let (mut vertex_component, mut components) = mesh::components_with(&mesh, &edges);
     drop(edges);
+    let mut mesh = mesh;
+    post::group_by_component(&mut mesh, &vertex_component, &mut components);
+    let removed_components =
+        select_components(&mut mesh, &mut vertex_component, &mut components, params);
+    match params.normals {
+        NormalMode::Analytic => {}
+        NormalMode::FaceAverage => post::face_average_normals(&mut mesh),
+        NormalMode::None => mesh.normals = Vec::new(),
+    }
+    mesh.vertex_component = vertex_component;
     control.report(Stage::Measure, 1, 1);
     lap(&mut timings.measure);
 
@@ -489,6 +634,7 @@ fn run(
         volume: components.iter().map(|c| c.volume).sum(),
         components: components.len(),
         cavities: components.iter().filter(|c| c.is_cavity()).count(),
+        removed_components,
         euler: components.iter().map(|c| c.euler).sum(),
         refine_evaluations,
         simd: engine.simd_name(),
