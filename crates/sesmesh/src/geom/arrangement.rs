@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The SAS arrangement (Design §6): spatially ordered spheres, neighbour
 //! lists, intersection circles with their exposed arcs and blocker lists,
 //! exposed triple points (probe positions touching three atoms), and sphere

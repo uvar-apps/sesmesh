@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! XYZ and extended XYZ reader (Spec FR-IN-3/4, Design §5.5).
 //!
 //! Each frame is `N`, a comment line, then `N` lines `species x y z [...]`.

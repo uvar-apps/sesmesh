@@ -42,6 +42,11 @@ website. Default meshes are byte-identical to 1.0.0.
 
 ### Changed
 
+- Authorship and copyright: every source file starts with a header
+  naming the project, `Copyright (c) 2026 Ugo Varetto` and the licence
+  (`SPDX-License-Identifier: MIT OR Apache-2.0`); the Cargo `authors`, the
+  MIT licence files, the README, the crate documentation, the CLI manual page
+  (`sesmesh man`) and the website name Ugo Varetto.
 - Lower peak memory, output unchanged (byte-identical meshes): the
   arrangement is built in waves (only an eighth of the spheres' per-chunk
   arrays beside the concatenated ones) and keeps no exposed arcs; brick

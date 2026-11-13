@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! End-to-end surface computation and OBJ formatting (Plan T4.7, T4.6):
 //! arrangement, classification, sampling, Marching Cubes with exact
 //! refinement, assembly and validation. Inputs from

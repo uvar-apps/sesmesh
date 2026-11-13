@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Public API guarantees (Plan T10.3): thread safety of the main types.
 
 use sesmesh::export::obj::ObjOptions;

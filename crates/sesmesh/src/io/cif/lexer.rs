@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Zero-copy CIF 1.1 tokenizer (Design §5.4).
 //!
 //! Recognizes data blocks, `loop_`, save frames, `global_`/`stop_`, tags,

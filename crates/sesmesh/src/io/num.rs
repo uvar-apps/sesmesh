@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Number parsing on raw bytes, shared by all readers.
 
 /// Parses a finite `f64`, ignoring surrounding ASCII whitespace.

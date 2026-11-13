@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Development automation for the sesmesh workspace.
 //!
 //! Run through the Cargo alias: `cargo xtask <command>`.

@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Biological assemblies (Spec FR-IN-8, Plan T8.6): mmCIF
 //! `pdbx_struct_assembly_gen` + `pdbx_struct_oper_list`, PDB
 //! `REMARK 350 BIOMT`. An assembly is expanded into one model per input

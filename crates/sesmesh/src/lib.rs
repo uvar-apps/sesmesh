@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! # sesmesh
 //!
 //! Solvent Excluded Surface (SES, also called the Connolly or molecular
@@ -98,6 +102,11 @@
 //! Semantic versioning. Public structs and enums that may grow are
 //! `#[non_exhaustive]`: build option structs from their constructors or
 //! `Default` and assign fields; match enums with a wildcard arm.
+//!
+//! ## Licence
+//!
+//! Copyright (c) 2026 Ugo Varetto. Licensed under either of the Apache
+//! License, Version 2.0 or the MIT licence, at your option.
 
 // The library reports through return values, never by printing
 // (Spec FR-DIAG-1).

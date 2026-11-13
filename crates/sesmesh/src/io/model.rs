@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Shared model bookkeeping for formats with MODEL/ENDMDL-style records.
 
 use crate::structure::{AtomRecord, Model};

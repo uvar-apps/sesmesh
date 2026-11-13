@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! PQR reader (Spec FR-IN-5, Design §5.5): whitespace-delimited
 //! `ATOM/HETATM serial name resName [chain] resSeq x y z charge radius`, as
 //! written by PDB2PQR and read by APBS. `MODEL`/`ENDMDL`/`END` are handled as

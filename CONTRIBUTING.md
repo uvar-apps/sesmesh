@@ -60,3 +60,15 @@ cargo deny check
 * **Test data**: see [tests/data/README.md](tests/data/README.md). Tests that
   need downloaded files must skip cleanly when the cache is empty.
 * Licensing: contributions are dual-licensed MIT OR Apache-2.0 (see README).
+* **File headers**: every source file (Rust, Python, shell, JavaScript, CSS,
+  HTML, TOML, workflow YAML) starts with the project header, after a shebang
+  if there is one and before any `#![…]` attribute:
+
+  ```rust
+  // sesmesh — Solvent Excluded Surface meshes for molecules
+  // Copyright (c) 2026 Ugo Varetto
+  // SPDX-License-Identifier: MIT OR Apache-2.0
+  ```
+
+  Generated files get it from their generator (`mesh/tables.rs` writes it
+  into `mc_table.rs`).

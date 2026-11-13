@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Line iteration with 1-based line numbers and CRLF handling.
 
 /// Iterator over `(line number, line)` with `\n` / `\r\n` stripped.

@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Hybrid-36 decoding of PDB atom serials and residue numbers beyond the
 //! decimal field width (R. W. Grosse-Kunstleve, <https://cci.lbl.gov/hybrid_36/>).
 //!

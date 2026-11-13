@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Vertex colour palettes for mesh output (Spec FR-OUT-2).
 //!
 //! Colours are linear `[r, g, b]` in `0..=1`. The default element palette is

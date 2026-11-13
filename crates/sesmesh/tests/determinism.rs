@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Determinism suite (Plan T5.5, NFR-DET): byte-identical OBJ output for
 //! 1/2/4/8/16 threads and repeated runs, on real structures.
 

@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Parallel iteration facade (Design §11.1): rayon with the `parallel`
 //! feature, plain sequential iteration otherwise. Every helper returns results
 //! in index order, so output never depends on scheduling.

@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! End-to-end surface tests against analytic references (Plan T4.2–T4.5,
 //! T4.9): mesh invariants, vertex and normal accuracy, convergence.
 

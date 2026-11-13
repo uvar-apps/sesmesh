@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! MSMS `.vert` / `.face` output (Spec FR-OUT-4, Design §10.2), the text
 //! format of M. Sanner's MSMS, read by many docking and electrostatics
 //! tools.

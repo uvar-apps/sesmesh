@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Integration tests for the structure layer (Plan Phase 1) on vendored
 //! fixtures and, when present, the downloaded benchmark set.
 //!

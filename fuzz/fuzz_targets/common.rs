@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 // Shared by the format fuzz targets: parse, then run selection and radius
 // assignment on whatever parsed. Every outcome must be Ok or Err, never a
 // panic.

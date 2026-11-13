@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! End-to-end tests of the `sesmesh` binary (Plan T4.8).
 
 use std::path::{Path, PathBuf};

@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 // @generated from `crates/sesmesh/data/atom-colors.json` (the user-provided
 // `eigenvista-atom-colors` v1 palette); `color::tests::table_matches_json`
 // keeps them in sync. Regenerate rather than edit by hand.

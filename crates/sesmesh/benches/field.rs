@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Field sampling on surface bricks (Plan T3.9, T6.7): arrangement + brick
 //! classification + SIMD kernel, multi-threaded, at every instruction set
 //! the CPU supports. Inputs from

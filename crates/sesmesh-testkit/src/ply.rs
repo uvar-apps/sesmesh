@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Minimal binary little-endian PLY reader for round-trip tests: `vertex`
 //! scalar properties and a `face` list property (`uchar` count, `uint` or
 //! `int` indices).

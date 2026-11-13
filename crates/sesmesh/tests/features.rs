@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Phase 7 mesh features (Plan T7.1–T7.5): components, cavity modes and
 //! filters, per-atom areas, normal modes, OBJ groups and colours.
 

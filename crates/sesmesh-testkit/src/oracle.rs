@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Brute-force reference for the SES field and the SAS arrangement.
 //!
 //! Implements Design §2 directly: with expanded radii `R_i = r_i + r_p` and

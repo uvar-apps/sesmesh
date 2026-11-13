@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! The surface field (Design §2) and its sampling on a sparse brick lattice
 //! with SIMD kernels and multi-threading (Design §7).
 //!

@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Mesh post-processing (Design §9): grouping triangles by component,
 //! sub-grid fragments (§9.1), cavity handling and component filters (§9.2),
 //! face-averaged normals and per-atom areas (§9.6).

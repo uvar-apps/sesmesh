@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
 """Composes site/img/og.png (1200 × 630 social preview) from a transparent
 render (site/render.html …&w=1200&h=630&format=png) and the site's style.
 

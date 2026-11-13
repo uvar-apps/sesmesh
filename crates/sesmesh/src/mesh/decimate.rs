@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Mesh decimation (Spec FR-LOD-4, Design §9.5): quadric-error-metric
 //! *half-edge* collapses (Garland–Heckbert error, collapse of one endpoint
 //! onto the other). No new positions are created, so every retained vertex

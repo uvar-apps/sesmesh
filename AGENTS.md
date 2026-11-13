@@ -24,6 +24,12 @@ SESMESH_BLESS=1 cargo test -p sesmesh mc_table   # regenerate mesh/mc_table.rs (
 target/release/sesmesh data/1crn.cif -q high --timings   # CLI smoke run (writes 1crn.obj)
 ```
 
+Every source file starts with the header `// sesmesh — Solvent Excluded Surface meshes for
+molecules` / `// Copyright (c) 2026 Ugo Varetto` / `// SPDX-License-Identifier: MIT OR
+Apache-2.0` (comment syntax of the language; after a shebang, before `#![…]`; generators emit
+it, see `CONTRIBUTING.md`). Author everywhere: Ugo Varetto (Cargo `authors`, licences, README,
+site footer).
+
 MSRV 1.89, edition 2024, `unsafe_code = "forbid"`, `missing_docs = "deny"`, the library never
 prints, output must not depend on thread count (byte-identical OBJ is tested), no third-party
 types in the public API, public option structs are `#[non_exhaustive]` (outside the crate build

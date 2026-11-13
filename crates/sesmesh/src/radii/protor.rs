@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! ProtOr united-atom radii (J. Tsai, R. Taylor, C. Chothia, M. Gerstein,
 //! *J. Mol. Biol.* 290, 253 (1999)) for standard amino acids, nucleotides and
 //! a few common modified residues.

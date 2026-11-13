@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Development-only support crate for sesmesh tests and benchmarks.
 //!
 //! * [`oracle`] — brute-force evaluation of the SES/SAS/vdW fields and of the

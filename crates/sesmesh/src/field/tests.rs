@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Phase 3 verification: the point field and the sampled lattice against the
 //! brute-force oracle, classification soundness, brick-seam consistency,
 //! SIMD level and thread-count independence.

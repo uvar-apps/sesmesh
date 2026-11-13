@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! SAS arrangement construction (Plan T2.9). Inputs: `tests/data/cache/`
 //! (`cargo xtask fetch --set small --set bench`), default selection, Bondi
 //! radii, probe 1.4 Å. Missing files are skipped.

@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Triangle meshes: the [`Mesh`] type, isosurface extraction (Design §8),
 //! measurements, connected components and validation (Design §9.1, §9.3).
 

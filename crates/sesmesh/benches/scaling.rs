@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Thread scaling of `compute_surface` (Plan T5.7): 1, 2, 4, 8 threads and
 //! all cores, on 4HHB at 0.5 Å (`tests/data/cache`, from `cargo xtask fetch
 //! --set bench`), falling back to the 2PTN fixture.

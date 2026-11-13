@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! PDB reader: wwPDB format v3.3 fixed-column `ATOM`/`HETATM` records plus
 //! `MODEL`/`ENDMDL`/`END` (Spec FR-IN-1, Design §5.3).
 //!

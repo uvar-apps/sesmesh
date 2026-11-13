@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! `sesmesh` command-line tool (Spec FR-CLI, Design §14).
 //!
 //! ```text
@@ -39,6 +43,7 @@ use sesmesh::{
 #[command(
     name = "sesmesh",
     version,
+    author,
     about = "Compute Solvent Excluded Surfaces (Connolly surfaces) of molecules as triangle meshes (OBJ, PLY, MSMS)",
     after_help = "`sesmesh <INPUTS>...` is short for `sesmesh surface <INPUTS>...`. Manual: docs/cli.md"
 )]

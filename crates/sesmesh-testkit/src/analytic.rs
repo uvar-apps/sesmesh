@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Reference SES area and volume for one and two spheres (Design §15).
 //!
 //! Two spheres give an axially symmetric SES: two spherical zones joined by

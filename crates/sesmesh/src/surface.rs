@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Surface computation parameters and the main entry point
 //! [`compute_surface`] (Design §3.3, §4.2, §13).
 

@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Exact `f64` evaluation of the surface field at arbitrary points (Design
 //! §2.3, §7.6): the public [`SesField`] and the evaluator used for brick
 //! classification and, later, vertex refinement.

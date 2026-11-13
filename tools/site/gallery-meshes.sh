@@ -1,4 +1,8 @@
 #!/bin/sh
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
 # Builds the meshes behind site/img/gallery/*.webp into target/site-work/
 # (needs `cargo build --release -p sesmesh-cli` and the structures from
 # `cargo xtask fetch --set small --set bench`). Render them with

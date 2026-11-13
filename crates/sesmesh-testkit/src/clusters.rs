@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Deterministic sphere clusters for tests: random (seeded) and symmetric
 //! configurations that stress degenerate geometry, plus `proptest`
 //! strategies.

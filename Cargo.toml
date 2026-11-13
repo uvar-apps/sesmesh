@@ -1,3 +1,7 @@
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
 [workspace]
 resolver = "3"
 members = [
@@ -20,7 +24,7 @@ edition = "2024"
 # See docs/03-implementation-plan.md §2. Checked by the `msrv` CI job.
 rust-version = "1.89"
 license = "MIT OR Apache-2.0"
-authors = ["sesmesh contributors"]
+authors = ["Ugo Varetto"]
 repository = "https://github.com/uvar-apps/sesmesh"
 # Only `sesmesh` and `sesmesh-cli` are publishable (Plan T10.4); `cargo
 # publish` is run by hand or by the release workflow, never implicitly.

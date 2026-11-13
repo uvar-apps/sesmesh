@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Mesh output formats (Design §10): Wavefront OBJ ([`obj`]), binary PLY
 //! ([`ply`]) and MSMS `.vert`/`.face` ([`msms`]).
 

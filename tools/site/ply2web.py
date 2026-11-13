@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
 """Convert a sesmesh binary PLY (with vertex colours) into the compact,
 gzip-compressed mesh format read by site/assets/viewer.js.
 

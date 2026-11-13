@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Binary PLY output (Spec FR-OUT-3, Design §10.2): little-endian, with
 //! normals, optional colours and the per-vertex attributes.
 //!

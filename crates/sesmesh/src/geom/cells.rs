@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Uniform cell lists in CSR form (Design §6.2) and Morton ordering.
 
 use super::vec::Vec3;

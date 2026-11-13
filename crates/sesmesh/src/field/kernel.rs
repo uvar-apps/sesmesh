@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Per-brick candidate gathering and the SIMD field kernel (Design §7.4–7.5).
 //!
 //! Lanes are samples. Kernels are generic over [`fearless_simd::Simd`] and

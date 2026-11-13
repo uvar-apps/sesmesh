@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Minimal Wavefront OBJ reader for round-trip tests (`v`, `vn`, `f` with
 //! `a`, `a//n` or `a/t/n` indices; everything else ignored).
 

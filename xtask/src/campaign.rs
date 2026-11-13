@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Phase 9 campaigns: sweep sampling, accuracy study, robustness sweep.
 
 use std::fmt::Write as _;

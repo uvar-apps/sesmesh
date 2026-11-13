@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 #![no_main]
 // Biological assembly parsing and expansion (mmCIF pdbx_struct_*, PDB
 // REMARK 350, operator expressions): Ok or Err, never a panic or an

@@ -1,3 +1,7 @@
+// sesmesh — Solvent Excluded Surface meshes for molecules
+// Copyright (c) 2026 Ugo Varetto
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 //! Parser throughput (Plan T1.11). Inputs come from `tests/data/cache/`
 //! (`cargo xtask fetch --set bench`) and `data/`; missing files are skipped.
 //! Set `SESMESH_BENCH_LARGE=1` to include 3J3Q (2.44 M atoms, ~200 MB mmCIF).
