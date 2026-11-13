@@ -164,6 +164,9 @@ tick them in #19. Summary:
   (`--save-baseline` / `--baseline`), repeat runs. Single-thread runs are steadier.
 - zsh does not word-split `$var`; use `${=var}` in loops. Foreground `sleep` is blocked; run
   long jobs in the background.
+- The nightly fuzz jobs must pass `cargo fuzz run --target x86_64-unknown-linux-gnu`: the
+  prebuilt cargo-fuzz from `taiki-e/install-action` is a musl build and defaults to the musl
+  target, where AddressSanitizer fails ("sanitizer is incompatible with statically linked libc").
 - CI's clippy job uses the latest stable Rust: keep the local `stable` toolchain current, or new
   lints break `main` (Phase 8: `needless_range_loop` on 1.100, unseen on 1.99).
 - Clippy here is strict (pedantic subset): `is_multiple_of`, method paths instead of closures,
