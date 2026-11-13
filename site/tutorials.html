@@ -15,7 +15,7 @@
 <body>
 
 <header class="top">
-  <a class="brand" href="./">sesmesh <small>1.0.0</small></a>
+  <a class="brand" href="./">sesmesh <small>1.1.0</small></a>
   <ul class="nav">
     <li><a href="./">Home</a></li>
     <li><a href="cli.html">CLI</a></li>
@@ -33,7 +33,7 @@
   <div class="wrap pagehead">
     <span class="label inv">Learn · four walkthroughs</span>
     <h1>Tuto<span class="knock">rials</span></h1>
-    <p class="lede">Four short, complete walkthroughs with real inputs from the PDB and the output they produce. Commands assume <code>sesmesh</code> 1.0 on your <code>PATH</code> (<code>cargo install sesmesh-cli</code>), plus <code>curl</code> and <code>jq</code>.</p>
+    <p class="lede">Four short, complete walkthroughs with real inputs from the PDB and the output they produce. Commands assume <code>sesmesh</code> 1.1 on your <code>PATH</code> (<code>cargo install sesmesh-cli</code>), plus <code>curl</code> and <code>jq</code>.</p>
   </div>
 </section>
 
@@ -115,14 +115,16 @@ for (chain, name, seq), a in sorted(area.items(), key=lambda kv: -kv[1])[:10]:
 <pre><code><span class="p">$ </span>curl -LO https://files.rcsb.org/download/1K4R.cif.gz
 <span class="p">$ </span>sesmesh info 1K4R.cif.gz
 <span class="c">chains: 3 (A:3028 B:3028 C:3028)</span>
-<span class="c">assemblies: 1 (60 copies), 2 (1 copy), 3 (5 copies), 4 (6 copies), 5 (1 copy)</span></code></pre></div></li><li><h3>Mesh 545 040 atoms</h3><p>The full dengue virus capsid at 1 Å: about 10 s and 9.9 million triangles on a 10-core laptop, peak memory ≈ 1.7 GB.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<span class="c">assemblies: 1 (60 copies), 2 (1 copy), 3 (5 copies), 4 (6 copies), 5 (1 copy)</span></code></pre></div></li><li><h3>Mesh 545 040 atoms</h3><p>The full dengue virus capsid at 1 Å: about 10 s and 9.9 million triangles on a 10-core laptop, in under 2 GB of memory.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
 <pre><code><span class="p">$ </span>sesmesh 1K4R.cif.gz --assembly 1 -q draft --progress --timings -o capsid.ply
 <span class="c">sesmesh: 4937664 vertices, 9883296 triangles, 1123 component(s) (1098 cavities), ...</span></code></pre></div></li><li><h3>Make it viewer-friendly</h3><p>Cap the triangle count and colour by chain; decimation keeps the surface exact where it keeps vertices.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
 <pre><code><span class="p">$ </span>sesmesh 1K4R.cif.gz --assembly 1 -q draft --max-triangles 1500000 \
-<span class="c">    --vertex-colors chain -o capsid-1.5M.ply</span></code></pre></div></li><li><h3>Set a memory budget</h3><p>With <code>--max-memory</code> alone, inputs whose estimate exceeds the limit stop with exit code 4. Add <code>--auto-coarsen</code> to grow the spacing until the estimate fits; the spacing used is printed and stored in the file header.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<span class="c">    --vertex-colors chain -o capsid-1.5M.ply</span></code></pre></div></li><li><h3>Set a memory budget</h3><p>Before any mesh exists, sesmesh estimates the peak memory of the whole run. With <code>--max-memory</code> alone, inputs whose estimate exceeds the limit stop with exit code 4. Add <code>--auto-coarsen</code> to grow the spacing until the estimate fits; the spacing used and the estimate are printed, and the statistics JSON records them (<code>engine.estimated_memory</code>, <code>engine.estimated_triangles</code>).</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
 <pre><code><span class="p">$ </span>sesmesh 1K4R.cif.gz --assembly 1 -q high --max-memory 1G --auto-coarsen \
 <span class="c">    --max-triangles 1500000 -o capsid.ply</span>
-<span class="c">sesmesh: ... 545040 atoms (model 1), ses surface, probe 1.40 Å, grid 1.918 Å</span></code></pre></div><div class="note hot">The limit applies to the <i>estimate</i> (150 bytes per triangle + 800 bytes per atom). The measured peak of this run was 1.46 GB — leave headroom.</div></li><li><h3>Stop any time</h3><p>Ctrl-C cancels within about 100 ms and exits with code 130.</p></li></ol>
+<span class="c">sesmesh: ... 545040 atoms (model 1), ses surface, probe 1.40 Å, grid 2.402 Å</span>
+<span class="c">sesmesh: estimated peak memory 1008.2 MiB (limit 1024.0 MiB, about 1837964 triangles before decimation)</span>
+<span class="c">sesmesh: 745560 vertices, 1500000 triangles, 979 component(s) (810 cavities), ...</span></code></pre></div><div class="note">The estimate is deliberately conservative: this run peaked at about 0.65 GB against an estimate of 1008 MiB. The grid chosen and the estimate are the same on every run and for any thread count.</div></li><li><h3>Stop any time</h3><p>Ctrl-C cancels within about 100 ms and exits with code 130.</p></li></ol>
     </section>
 
     <section id="rust">

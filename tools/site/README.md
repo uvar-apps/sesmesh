@@ -8,7 +8,7 @@ and the two fonts load from jsDelivr and Google Fonts.
 | Path | Content |
 |---|---|
 | `site/index.html` | Home: hero with the live 3D viewer, features, CLI/library teaser, how it works, documentation links |
-| `site/cli.html`, `site/library.html` | Guides (every Rust snippet on the library page compiles against 1.0.0) |
+| `site/cli.html`, `site/library.html` | Guides (every Rust snippet on the library page compiles against 1.1.0) |
 | `site/tutorials.html` | Four walkthroughs with real inputs and outputs |
 | `site/gallery.html` | Live viewer + figures with the command behind each |
 | `site/render.html` | Still renderer for the display meshes (not linked from the menu) |

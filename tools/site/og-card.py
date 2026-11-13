@@ -31,8 +31,9 @@ for color, frac in CPK:
 d.line([0, H - 28, W, H - 28], fill=INK, width=4)
 big = ImageFont.truetype(DISPLAY, 150)
 mono = ImageFont.truetype(MONO, 24)
-d.rectangle([40, 40, 470, 82], fill=INK)
-d.text((54, 47), "RUST LIBRARY + CLI · 1.0", font=mono, fill=PAPER)
+label = "RUST LIBRARY + CLI"  # no version: the card outlives releases
+d.rectangle([40, 40, 68 + round(d.textlength(label, font=mono)), 82], fill=INK)
+d.text((54, 47), label, font=mono, fill=PAPER)
 d.text((40, 100), "SESMESH", font=big, fill=INK)
 for i, line in enumerate(["Solvent Excluded", "Surface meshes.", "Exact. Watertight.", "Deterministic."]):
     d.text((44, 270 + 40 * i), line, font=mono, fill=INK)

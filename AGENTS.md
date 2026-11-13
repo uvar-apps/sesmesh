@@ -90,7 +90,7 @@ any deviation from the plan.
 - Website: `site/` (static HTML/CSS/JS, brutalist style, deployed by `.github/workflows/pages.yml`
   from `main`; Pages source must be "GitHub Actions"), helper scripts and instructions in
   `tools/site/README.md` (`ply2web.py` display meshes, `gallery-meshes.sh`, `render.html` +
-  `capture.py` on port 8777, `og-card.py`). Library-page snippets were compiled against 1.0.0;
+  `capture.py` on port 8777, `og-card.py`). Library-page snippets were compiled against 1.1.0;
   re-check them when the API changes.
 - Docs: `docs/cli.md` (CLI manual), `docs/api-review.md` (API checklist, semver policy),
   `docs/release.md` (release process, v1.0 status), `.github/workflows/release.yml`
