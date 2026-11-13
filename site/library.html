@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Library guide — sesmesh</title>
+<meta name="description" content="Using the sesmesh Rust crate: reading structures, parameters, meshes and components, engines for trajectories, exact field queries, threads and errors.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&amp;family=Fragment+Mono:ital@0;1&amp;display=swap">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="./">sesmesh <small>1.0.0</small></a>
+  <ul class="nav">
+    <li><a href="./">Home</a></li>
+    <li><a href="cli.html">CLI</a></li>
+    <li><a href="library.html" aria-current="page">Library</a></li>
+    <li><a href="tutorials.html">Tutorials</a></li>
+    <li><a href="gallery.html">Gallery</a></li>
+    <li class="push"><a href="https://docs.rs/sesmesh">API docs ↗</a></li>
+    <li><a href="https://github.com/uvar-apps/sesmesh">GitHub ↗</a></li>
+  </ul>
+  <button class="theme-toggle" type="button" aria-label="Switch colour theme">Dark</button>
+</header>
+<div class="cpk" aria-hidden="true"></div>
+<main>
+<section>
+  <div class="wrap pagehead">
+    <span class="label inv">Guide · Rust crate</span>
+    <h1>The <span class="knock">Library</span></h1>
+    <p class="lede">The engine behind the CLI as a crate: <code>sesmesh = "1"</code>. Every snippet on this page compiles against 1.0.0; the <a href="https://docs.rs/sesmesh">API reference</a> documents every public item.</p>
+  </div>
+</section>
+
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page">
+    <b>On this page</b>
+    <ol>
+      <li><a href="#add">Add the crate</a></li>
+      <li><a href="#quick">Quick start</a></li>
+      <li><a href="#file">From a file</a></li>
+      <li><a href="#params">Parameters</a></li>
+      <li><a href="#output">What you get back</a></li>
+      <li><a href="#engine">Engines</a></li>
+      <li><a href="#field">Field queries</a></li>
+      <li><a href="#threads">Threads</a></li>
+      <li><a href="#errors">Errors</a></li>
+      <li><a href="#cite">Cite</a></li>
+    </ol>
+  </nav>
+  <div class="doc-body">
+
+    <section id="add">
+      <span class="label">01</span>
+      <h2>Add the crate</h2>
+
+      <div class="code"><div class="code-head"><span>TOML</span><button type="button">Copy</button></div>
+<pre><code>[dependencies]
+sesmesh = "1"
+
+# single-threaded, no gzip or TOML radii (e.g. for WASM):
+# sesmesh = { version = "1", default-features = false }</code></pre></div>
+      <div class="table-wrap"><table>
+        <tr><th>Feature</th><th>Default</th><th>Adds</th></tr>
+        <tr><td><code>parallel</code></td><td>on</td><td>rayon: bricks and stages on every core of the current pool</td></tr>
+        <tr><td><code>gzip</code></td><td>on</td><td>gzip-compressed input and output (<code>.gz</code>)</td></tr>
+        <tr><td><code>radii-file</code></td><td>on</td><td>radius rules from TOML files</td></tr>
+      </table></div>
+      <p>MSRV 1.89. Semantic versioning from 1.0; option structs are <code>#[non_exhaustive]</code>:
+        build them from their constructors or <code>Default</code> and assign fields.</p>
+    </section>
+
+    <section id="quick">
+      <span class="label">02</span>
+      <h2>Quick start</h2>
+
+      <p>Spheres in, a validated mesh and its statistics out:</p>
+      <div class="code"><div class="code-head"><span>Rust</span><button type="button">Copy</button></div>
+<pre><code><span class="k">use</span> sesmesh::{compute_surface, mesh, Sphere, SurfaceParams};
+
+<span class="k">let</span> atoms = [Sphere::new([<span class="n">0.0</span>, <span class="n">0.0</span>, <span class="n">0.0</span>], <span class="n">1.7</span>), Sphere::new([<span class="n">3.0</span>, <span class="n">0.0</span>, <span class="n">0.0</span>], <span class="n">1.7</span>)];
+<span class="k">let</span> out = compute_surface(&amp;atoms, &amp;SurfaceParams::ses(<span class="n">1.4</span>).with_spacing(<span class="n">0.3</span>))?;
+assert!(mesh::validate(&amp;out.mesh).is_ok()); <span class="c">// closed, oriented, manifold</span>
+assert_eq!(out.stats.components, <span class="n">1</span>);</code></pre></div>
+      <p><code>Sphere</code> is a centre and a radius in Å; radius 0 means “ignore”.
+        <code>compute_surface</code> returns a <code>SurfaceOutput</code> with the mesh, its
+        components, statistics and diagnostics.</p>
+    </section>
+
+    <section id="file">
+      <span class="label">03</span>
+      <h2>From a file</h2>
+
+      <p>Read, select atoms, assign radii, mesh, write. Selection follows the CLI defaults (first
+        model, no waters or hydrogens, highest-occupancy alt-locs).</p>
+      <div class="code"><div class="code-head"><span>Rust</span><button type="button">Copy</button></div>
+<pre><code><span class="k">use</span> sesmesh::export::ply::{PlyOptions, write_ply_path};
+<span class="k">use</span> sesmesh::io::{ReadOptions, read_path};
+<span class="k">use</span> sesmesh::radii::{RadiusOptions, assign};
+<span class="k">use</span> sesmesh::{Diagnostics, Quality, Selection, Sphere, SurfaceParams, compute_surface};
+
+<span class="k">fn</span> ma<span class="k">in</span>() -&gt; sesmesh::Result&lt;()&gt; {
+    <span class="k">let</span> structure = read_path(<span class="s">"4hhb.cif.gz"</span>, &amp;ReadOptions::default())?;
+    <span class="k">let</span> <span class="k">mut</span> diags = Diagnostics::new();
+    <span class="k">let</span> atoms = structure.select(&amp;Selection::default(), &amp;<span class="k">mut</span> diags)?;
+    <span class="k">let</span> radii = assign(&amp;atoms, &amp;RadiusOptions::default(), &amp;<span class="k">mut</span> diags)?;
+    <span class="k">let</span> spheres = Sphere::from_atoms(&amp;atoms, &amp;radii)?;
+
+    <span class="k">let</span> params = SurfaceParams::ses(<span class="n">1.4</span>).with_quality(Quality::High);
+    <span class="k">let</span> out = compute_surface(&amp;spheres, &amp;params)?;
+    <span class="k">for</span> c <span class="k">in</span> &amp;out.components {
+        <span class="k">let</span> kind = <span class="k">if</span> c.is_cavity() { <span class="s">"cavity"</span> } <span class="k">else</span> { <span class="s">"surface"</span> };
+        println!(<span class="s">"{kind}: {} triangles, {:.1} Å², {:.1} Å³"</span>, c.triangles, c.area, c.volume);
+    }
+    write_ply_path(<span class="s">"4hhb.ply"</span>, &amp;out.mesh, &amp;PlyOptions::default())?;
+    <span class="k">Ok</span>(())
+}</code></pre></div>
+      <p>Readers: <code>io::read_path</code>, <code>io::read_bytes</code> (PDB, mmCIF, XYZ, PQR,
+        gzip detected by magic bytes); biological assemblies with
+        <code>ReadOptions::assembly</code>. Radius sets: Bondi (default), Alvarez, ProtOr,
+        uniform, or custom rules (<code>radii::RadiusOptions</code>).</p>
+    </section>
+
+    <section id="params">
+      <span class="label">04</span>
+      <h2>Parameters</h2>
+
+      <div class="code"><div class="code-head"><span>Rust</span><button type="button">Copy</button></div>
+<pre><code><span class="k">use</span> sesmesh::mesh::Decimation;
+<span class="k">use</span> sesmesh::{CavityMode, NormalMode, SurfaceParams};
+
+<span class="k">let</span> params = SurfaceParams::ses(<span class="n">1.4</span>)
+    .with_spacing(<span class="n">0.25</span>)                    <span class="c">// grid spacing in Å</span>
+    .with_cavities(CavityMode::Re<span class="k">move</span>)     <span class="c">// drop internal cavities</span>
+    .with_smoothing(<span class="n">2</span>)                     <span class="c">// Taubin rounds + exact re-projection</span>
+    .with_decimation(Decimation::ratio(<span class="n">0.25</span>).with_max_error(<span class="n">0.05</span>))
+    .with_max_memory(<span class="n">4</span> &lt;&lt; <span class="n">30</span>)              <span class="c">// 4 GiB estimate limit …</span>
+    .with_auto_coarsen(<span class="k">true</span>)               <span class="c">// … coarsen instead of failing</span>
+    .with_normals(NormalMode::Analytic);</code></pre></div>
+      <div class="table-wrap"><table>
+        <tr><th>Builder</th><th>Sets</th></tr>
+        <tr><td><code>SurfaceParams::ses(r)</code>, <code>::sas(r)</code>, <code>::vdw()</code></td><td>Surface kind and probe radius</td></tr>
+        <tr><td><code>with_spacing(h)</code>, <code>with_quality(Quality::High)</code>, <code>with_density(d)</code></td><td>Resolution: spacing in Å, preset, or vertices per Å²</td></tr>
+        <tr><td><code>with_cavities(CavityMode::…)</code></td><td><code>Keep</code> (exact SES), <code>Remove</code>, <code>Only</code>; plus <code>with_min_cavity_volume</code>, <code>with_min_component_area</code></td></tr>
+        <tr><td><code>with_smoothing(n)</code></td><td>Taubin rounds, then exact re-projection</td></tr>
+        <tr><td><code>with_decimation(Decimation::…)</code></td><td><code>ratio</code>, <code>with_max_triangles</code>, <code>with_max_error</code> (Å)</td></tr>
+        <tr><td><code>with_max_memory(bytes)</code>, <code>with_auto_coarsen(true)</code></td><td>Memory guard: refuse, or coarsen until the estimate fits</td></tr>
+        <tr><td><code>with_normals(NormalMode::…)</code></td><td><code>Analytic</code>, <code>FaceAverage</code>, <code>None</code></td></tr>
+        <tr><td><code>with_refine</code>, <code>with_simd</code>, <code>with_brick_size</code></td><td>Vertex placement, kernel instruction set, brick edge</td></tr>
+      </table></div>
+    </section>
+
+    <section id="output">
+      <span class="label">05</span>
+      <h2>What you get back</h2>
+
+      <div class="table-wrap"><table>
+        <tr><th>Field</th><th>Content</th></tr>
+        <tr><td><code>out.mesh.positions</code>, <code>.normals</code></td><td><code>Vec&lt;[f32; 3]&gt;</code>: vertices on the surface, unit normals into the solvent</td></tr>
+        <tr><td><code>out.mesh.triangles</code></td><td><code>Vec&lt;[u32; 3]&gt;</code>, counter-clockwise seen from outside, grouped by component</td></tr>
+        <tr><td><code>out.mesh.vertex_atom</code>, <code>.vertex_patch</code>, <code>.vertex_component</code></td><td>Nearest input sphere, patch (<code>PatchKind</code>: convex, saddle, concave), component index</td></tr>
+        <tr><td><code>out.components</code></td><td>Per component: vertices, triangles, area, signed volume (cavities negative), Euler characteristic, first triangle</td></tr>
+        <tr><td><code>out.stats</code></td><td>Totals, spacing used, decimation, refine evaluations, SIMD kernel, stage timings</td></tr>
+      </table></div>
+      <p>Per-vertex colours and per-atom areas, the way the CLI computes them:</p>
+      <div class="code"><div class="code-head"><span>Rust</span><button type="button">Copy</button></div>
+<pre><code><span class="k">let</span> structure = read_path(<span class="s">"1crn.cif"</span>, &amp;ReadOptions::default())?;
+<span class="k">let</span> <span class="k">mut</span> diags = Diagnostics::new();
+<span class="k">let</span> atoms = structure.select(&amp;Selection::default(), &amp;<span class="k">mut</span> diags)?;
+<span class="k">let</span> radii = assign(&amp;atoms, &amp;RadiusOptions::default(), &amp;<span class="k">mut</span> diags)?;
+<span class="k">let</span> out = compute_surface(&amp;Sphere::from_atoms(&amp;atoms, &amp;radii)?, &amp;SurfaceParams::default())?;
+
+<span class="c">// Colour each vertex by the element of its nearest atom.</span>
+<span class="k">let</span> palette = ElementPalette::default();
+<span class="k">let</span> elements: Vec&lt;_&gt; = atoms.iter().map(|a| a.element).collect();
+<span class="k">let</span> <span class="k">mut</span> options = PlyOptions::default();
+options.vertex_colors = out
+    .mesh
+    .vertex_atom
+    .iter()
+    .map(|&amp;i| palette.color(elements[i <span class="k">as</span> usize]))
+    .collect();
+write_ply_path(<span class="s">"1crn.ply"</span>, &amp;out.mesh, &amp;options)?;
+
+<span class="c">// SES area per atom (Å²), from the triangles nearest to it.</span>
+<span class="k">let</span> are<span class="k">as</span> = mesh::atom_are<span class="k">as</span>(&amp;out.mesh, atoms.len());
+<span class="k">let</span> exposed = are<span class="k">as</span>.iter().filter(|&amp;&amp;a| a &gt; <span class="n">1.0</span>).count();
+println!(<span class="s">"{exposed} of {} atoms expose more than 1 Å²"</span>, atoms.len());
+assert!(mesh::validate(&amp;out.mesh).is_ok());</code></pre></div>
+    </section>
+
+    <section id="engine">
+      <span class="label">06</span>
+      <h2>Engines &amp; trajectories</h2>
+
+      <p><code>SurfaceEngine</code> validates parameters once and keeps per-thread buffers between
+        calls; <code>Control</code> adds cancellation (an <code>AtomicBool</code>, honoured within
+        about 100 ms) and progress callbacks per stage.</p>
+      <div class="code"><div class="code-head"><span>Rust</span><button type="button">Copy</button></div>
+<pre><code><span class="k">use</span> std::sync::atomic::AtomicBool;
+
+<span class="k">use</span> sesmesh::{Control, Progress, Sphere, Stage, SurfaceEngine, SurfaceParams};
+
+<span class="k">fn</span> ma<span class="k">in</span>() -&gt; sesmesh::Result&lt;()&gt; {
+    <span class="c">// Parameters are validated once; per-thread buffers are kept between</span>
+    <span class="c">// frames.</span>
+    <span class="k">let</span> <span class="k">mut</span> engine = SurfaceEngine::new(SurfaceParams::ses(<span class="n">1.4</span>).with_spacing(<span class="n">0.4</span>))?;
+    <span class="k">let</span> cancel = AtomicBool::new(<span class="k">false</span>);
+    <span class="k">let</span> progress = |p: Progress| {
+        <span class="k">if</span> p.stage == Stage::Mesh &amp;&amp; p.done == p.total {
+            eprint!(<span class="s">"."</span>);
+        }
+    };
+    <span class="k">let</span> control = Control::new().with_cancel(&amp;cancel).with_progress(&amp;progress);
+    <span class="k">for</span> frame <span class="k">in</span> <span class="n">0</span>..<span class="n">10</span> {
+        <span class="c">// Two atoms moving apart: one component, then two.</span>
+        <span class="k">let</span> d = <span class="n">2.5</span> + <span class="n">0.6</span> * f64::from(frame);
+        <span class="k">let</span> spheres = [Sphere::new([<span class="n">0.0</span>; <span class="n">3</span>], <span class="n">1.7</span>), Sphere::new([d, <span class="n">0.0</span>, <span class="n">0.0</span>], <span class="n">1.7</span>)];
+        <span class="k">let</span> out = engine.compute_with(&amp;spheres, &amp;control)?;
+        println!(
+            <span class="s">"frame {frame}: distance {d:.1} Å → {} component(s), area {:.2} Å²"</span>,
+            out.stats.components, out.stats.area
+        );
+    }
+    eprintln!();
+    <span class="k">Ok</span>(())
+}</code></pre></div>
+    </section>
+
+    <section id="field">
+      <span class="label">07</span>
+      <h2>Field queries</h2>
+
+      <p><code>SesField</code> answers point queries on the exact surface function: signed
+        distance (negative inside), the closest surface point, the normal and the patch with its
+        atoms — useful for docking scores, probes or your own mesher.</p>
+      <div class="code"><div class="code-head"><span>Rust</span><button type="button">Copy</button></div>
+<pre><code><span class="k">use</span> sesmesh::field::Patch;
+<span class="k">use</span> sesmesh::{SesField, Sphere, SurfaceKind};
+
+<span class="k">fn</span> ma<span class="k">in</span>() -&gt; sesmesh::Result&lt;()&gt; {
+    <span class="k">let</span> spheres = [
+        Sphere::new([<span class="n">0.0</span>, <span class="n">0.0</span>, <span class="n">0.0</span>], <span class="n">1.7</span>),
+        Sphere::new([<span class="n">3.0</span>, <span class="n">0.0</span>, <span class="n">0.0</span>], <span class="n">1.7</span>),
+    ];
+    <span class="k">let</span> field = SesField::new(&amp;spheres, <span class="n">1.4</span>, SurfaceKind::Ses)?;
+    <span class="c">// Negative inside the molecule, 0 on the SES, positive in the solvent.</span>
+    <span class="k">for</span> point <span class="k">in</span> [
+        [-<span class="n">1.7</span>, <span class="n">0.0</span>, <span class="n">0.0</span>],
+        [<span class="n">1.5</span>, <span class="n">1.0</span>, <span class="n">0.0</span>],
+        [<span class="n">1.5</span>, <span class="n">1.5</span>, <span class="n">0.0</span>],
+        [<span class="n">0.0</span>, <span class="n">3.0</span>, <span class="n">0.0</span>],
+    ] {
+        <span class="k">let</span> s = field.sample(point);
+        <span class="k">let</span> patch = <span class="k">match</span> s.patch {
+            Patch::Convex { atom } =&gt; format!(<span class="s">"convex (atom {atom})"</span>),
+            Patch::Saddle { atoms } =&gt; format!(<span class="s">"saddle (atoms {atoms:?})"</span>),
+            Patch::Concave { atoms } =&gt; format!(<span class="s">"concave (atoms {atoms:?})"</span>),
+            _ =&gt; <span class="s">"solvent"</span>.to_string(),
+        };
+        println!(
+            <span class="s">"{point:?}: F = {:+.4} Å, {patch}, normal {:?}"</span>,
+            s.value,
+            s.normal.map(|n| n.map(|c| (c * <span class="n">1000.0</span>).round() / <span class="n">1000.0</span>))
+        );
+    }
+    <span class="k">Ok</span>(())
+}</code></pre></div>
+    </section>
+
+    <section id="threads">
+      <span class="label">08</span>
+      <h2>Threads &amp; determinism</h2>
+
+      <p>sesmesh runs in the current rayon pool. The result is bit-identical for any pool size,
+        so you can trade cores for latency without changing a single byte of output.</p>
+      <div class="code"><div class="code-head"><span>Rust</span><button type="button">Copy</button></div>
+<pre><code><span class="k">let</span> spheres = [Sphere::new([<span class="n">0.0</span>; <span class="n">3</span>], <span class="n">1.7</span>), Sphere::new([<span class="n">3.0</span>, <span class="n">0.0</span>, <span class="n">0.0</span>], <span class="n">1.7</span>)];
+<span class="k">let</span> params = SurfaceParams::ses(<span class="n">1.4</span>).with_spacing(<span class="n">0.3</span>);
+<span class="c">// sesmesh runs in the current rayon pool: limit it to four threads.</span>
+<span class="k">let</span> pool = rayon::ThreadPoolBuilder::new().num_threads(<span class="n">4</span>).build()?;
+<span class="k">let</span> out = pool.install(|| compute_surface(&amp;spheres, &amp;params))?;
+println!(<span class="s">"{} triangles"</span>, out.stats.triangles);</code></pre></div>
+    </section>
+
+    <section id="errors">
+      <span class="label">09</span>
+      <h2>Errors &amp; warnings</h2>
+
+      <p>Every fallible call returns <code>sesmesh::Result</code>. <code>Error</code> separates I/O,
+        parse errors (with line and column), invalid input, empty selections, resource limits,
+        cancellation and internal invariants. Non-fatal problems — unknown elements, missing
+        radii, discarded alt-locs — are collected in <code>Diagnostics</code>. The library never
+        prints.</p>
+      <div class="code"><div class="code-head"><span>Rust</span><button type="button">Copy</button></div>
+<pre><code><span class="k">match</span> read_path(<span class="s">"broken.pdb"</span>, &amp;ReadOptions::default()) {
+    <span class="k">Ok</span>(structure) =&gt; {
+        <span class="k">let</span> <span class="k">mut</span> diags = Diagnostics::new();
+        <span class="k">let</span> _ = structure.select(&amp;Selection::default(), &amp;<span class="k">mut</span> diags);
+        <span class="k">for</span> w <span class="k">in</span> diags.warnings() {
+            eprintln!(<span class="s">"warning: {w}"</span>); <span class="c">// e.g. unknown elements, alt-locs</span>
+        }
+    }
+    <span class="k">Err</span>(Error::Parse { line, message, .. }) =&gt; eprintln!(<span class="s">"line {line:?}: {message}"</span>),
+    <span class="k">Err</span>(e) =&gt; eprintln!(<span class="s">"error: {e}"</span>),
+}</code></pre></div>
+    </section>
+
+    <section id="cite">
+      <span class="label">10</span>
+      <h2>Cite</h2>
+
+      <p>If sesmesh helps your work, please cite the methods it implements:</p>
+      <ol class="mute" style="max-width:76ch;font-size:13.5px">
+        <li>C. Quan, B. Stamm, “Mathematical analysis and calculation of molecular surfaces,” <i>J. Comput. Phys.</i> 322:760–782, 2016. <a href="https://doi.org/10.1016/j.jcp.2016.07.007">doi:10.1016/j.jcp.2016.07.007</a></li>
+        <li>M. L. Connolly, “Analytical molecular surface calculation,” <i>J. Appl. Cryst.</i> 16(5):548–558, 1983. <a href="https://doi.org/10.1107/S0021889883010985">doi:10.1107/S0021889883010985</a></li>
+        <li>W. E. Lorensen, H. E. Cline, “Marching cubes: a high resolution 3D surface construction algorithm,” <i>Comput. Graph.</i> 21(4):163–169, 1987. <a href="https://doi.org/10.1145/37402.37422">doi:10.1145/37402.37422</a></li>
+        <li>W. Schroeder, R. Maynard, B. Geveci, “Flying edges: a high-performance scalable isocontouring algorithm,” <i>IEEE LDAV</i> 2015. <a href="https://doi.org/10.1109/LDAV.2015.7348069">doi:10.1109/LDAV.2015.7348069</a></li>
+        <li>G. Taubin, “A signal processing approach to fair surface design,” <i>SIGGRAPH ’95</i>, 351–358, 1995.</li>
+        <li>M. Garland, P. S. Heckbert, “Surface simplification using quadric error metrics,” <i>SIGGRAPH ’97</i>, 209–216, 1997. <a href="https://doi.org/10.1145/258734.258849">doi:10.1145/258734.258849</a></li>
+        <li>B. Lee, F. M. Richards, “The interpretation of protein structures: estimation of static accessibility,” <i>J. Mol. Biol.</i> 55(3):379–400, 1971.</li>
+      </ol>
+      <p>Full reference list: <a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/01-product-specification.md#12-references">specification §12</a>.</p>
+      <a class="btn" href="https://docs.rs/sesmesh">API reference on docs.rs ↗</a>
+    </section>
+
+  </div>
+</div>
+</main>
+<footer class="wrap foot">
+  <p class="eof" aria-hidden="true"># EOF</p>
+  <div class="foot-grid">
+    <div><b>Guides</b><ul><li><a href="cli.html">CLI guide</a></li><li><a href="library.html">Library guide</a></li><li><a href="tutorials.html">Tutorials</a></li></ul></div>
+    <div><b>Reference</b><ul><li><a href="https://docs.rs/sesmesh">API reference</a></li><li><a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md">CLI manual</a></li><li><a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/04-output-formats.md">Output formats</a></li></ul></div>
+    <div><b>Project</b><ul><li><a href="https://github.com/uvar-apps/sesmesh">GitHub</a></li><li><a href="https://github.com/uvar-apps/sesmesh/releases">Releases</a></li><li><a href="https://crates.io/crates/sesmesh">crates.io</a></li></ul></div>
+    <div><b>Licence</b><ul><li>MIT OR Apache-2.0</li><li>© sesmesh contributors</li></ul></div>
+  </div>
+</footer>
+</body>
+</html>

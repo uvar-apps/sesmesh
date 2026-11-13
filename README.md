@@ -91,6 +91,8 @@ fn main() -> sesmesh::Result<()> {
 
 ## Documentation
 
+* **Website: <https://uvar-apps.github.io/sesmesh/>** — CLI and library
+  guides, tutorials, gallery, live 3D viewer (source in `site/`)
 * [Product specification](https://github.com/uvar-apps/sesmesh/blob/main/docs/01-product-specification.md): requirements,
   literature survey, references
 * [Design](https://github.com/uvar-apps/sesmesh/blob/main/docs/02-design.md): mathematics, architecture, algorithms
@@ -116,6 +118,7 @@ fn main() -> sesmesh::Result<()> {
 | `xtask` | Development automation (`cargo xtask ...`) |
 | `tests/data` | Test fixtures, download sets and checksums ([README](https://github.com/uvar-apps/sesmesh/blob/main/tests/data/README.md)) |
 | `docs` | Specification, design and plan |
+| `site` | Project website (GitHub Pages; [tools/site/README.md](https://github.com/uvar-apps/sesmesh/blob/main/tools/site/README.md)) |
 
 ## Building
 

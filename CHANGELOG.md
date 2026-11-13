@@ -24,6 +24,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   with the flag); the statistics JSON gains `parameters.drop_fragments` and
   `mesh.removed_fragments`. Meshes stay closed and manifold; the output stays
   deterministic.
+- Project website in `site/`, published to GitHub Pages by
+  `.github/workflows/pages.yml`: home page with a live WebGL viewer, CLI and
+  library guides, four tutorials, a gallery of rendered surfaces; helper
+  scripts in `tools/site/` (display-mesh converter, gallery meshes, still
+  renderer capture server, social card).
 
 ### Fixed
 

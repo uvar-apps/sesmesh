@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CLI guide — sesmesh</title>
+<meta name="description" content="The sesmesh command-line tool: inputs, selection, radii, surfaces, resolution, decimation, output formats, cavities, large structures, batch mode and exit codes.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Fragment+Mono:ital@0;1&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="./">sesmesh <small>1.0.0</small></a>
+  <ul class="nav">
+    <li><a href="./">Home</a></li>
+    <li><a href="cli.html" aria-current="page">CLI</a></li>
+    <li><a href="library.html">Library</a></li>
+    <li><a href="tutorials.html">Tutorials</a></li>
+    <li><a href="gallery.html">Gallery</a></li>
+    <li class="push"><a href="https://docs.rs/sesmesh">API docs ↗</a></li>
+    <li><a href="https://github.com/uvar-apps/sesmesh">GitHub ↗</a></li>
+  </ul>
+  <button class="theme-toggle" type="button" aria-label="Switch colour theme">Dark</button>
+</header>
+<div class="cpk" aria-hidden="true"></div>
+
+<main>
+<section>
+  <div class="wrap pagehead">
+    <span class="label inv">Guide · command line</span>
+    <h1>The <span class="knock">CLI</span></h1>
+    <p class="lede">One binary, <code>sesmesh</code>. Give it structures, get meshes. This page
+      walks through the option groups with working examples; the
+      <a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md">CLI manual</a>
+      lists every option, and <code>sesmesh surface --help</code> prints them.</p>
+  </div>
+</section>
+
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page">
+    <b>On this page</b>
+    <ol>
+      <li><a href="#install">Install</a></li>
+      <li><a href="#first">First mesh</a></li>
+      <li><a href="#inputs">Inputs &amp; selection</a></li>
+      <li><a href="#surface">Surface &amp; radii</a></li>
+      <li><a href="#resolution">Resolution</a></li>
+      <li><a href="#lod">Smoothing &amp; decimation</a></li>
+      <li><a href="#output">Output</a></li>
+      <li><a href="#cavities">Cavities</a></li>
+      <li><a href="#big">Large structures</a></li>
+      <li><a href="#batch">Batch mode</a></li>
+      <li><a href="#exit">Exit codes</a></li>
+    </ol>
+  </nav>
+
+  <div class="doc-body">
+
+    <section id="install">
+      <span class="label">01</span>
+      <h2>Install</h2>
+      <p>With a Rust toolchain (1.89 or newer):</p>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>cargo install sesmesh-cli</code></pre></div>
+      <p>Or download a prebuilt binary for macOS arm64, Linux x86-64 / arm64 or Windows x86-64
+        from the <a href="https://github.com/uvar-apps/sesmesh/releases">GitHub releases</a> and check
+        it against <code>SHA256SUMS</code>. Each archive also holds the manual page and shell
+        completions; with <code>cargo install</code>, generate them:</p>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh completions zsh &gt; ~/.zfunc/_sesmesh      <span class="c"># bash, zsh, fish, powershell, elvish</span>
+<span class="p">$ </span>sesmesh man &gt; ~/.local/share/man/man1/sesmesh.1</code></pre></div>
+    </section>
+
+    <section id="first">
+      <span class="label">02</span>
+      <h2>First mesh</h2>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 1crn.cif
+sesmesh: 1crn.cif: 327 atoms (model 1), ses surface, probe 1.40 Å, grid 0.500 Å
+sesmesh: 13812 vertices, 27616 triangles, 2 component(s) (1 cavity), area 2301.63 Å², volume 4655.90 Å³
+sesmesh: wrote 1crn.obj in 0.02 s</code></pre></div>
+      <p>The default is the <b>SES</b> with a 1.4 Å probe on a 0.5 Å grid, written as OBJ with
+        normals next to the input (<code>1crn.obj</code>). <code>sesmesh 1crn.cif</code> is short for
+        <code>sesmesh surface 1crn.cif</code>; the other commands are <code>info</code> (models,
+        chains, element counts, assemblies, radius coverage) and <code>radii</code> (print a radius
+        table).</p>
+      <div class="note">Every mesh is closed, consistently oriented (normals into the solvent,
+        faces counter-clockwise seen from outside) and edge-manifold, with each vertex on the exact
+        surface. Output is byte-identical for any number of threads.</div>
+    </section>
+
+    <section id="inputs">
+      <span class="label">03</span>
+      <h2>Inputs &amp; selection</h2>
+      <p>PDB (fixed columns, hybrid-36), PDBx/mmCIF, XYZ / extended XYZ and PQR, optionally
+        gzip-compressed; the format comes from the file name, then the content
+        (<code>--format</code> overrides). By default the first model is used, waters and
+        hydrogens are dropped, and for alternate locations the highest-occupancy conformer is kept.</p>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="c"># chains A and B only, ligands removed</span>
+<span class="p">$ </span>sesmesh 4hhb.cif.gz --chains A,B --no-hetatm
+<span class="c"># model 3 of an NMR ensemble; frame 120 of an XYZ trajectory</span>
+<span class="p">$ </span>sesmesh ensemble.pdb --model 3
+<span class="p">$ </span>sesmesh traj.xyz --frame 120
+<span class="c"># the biological assembly instead of the deposited chains</span>
+<span class="p">$ </span>sesmesh info 1k4r.cif.gz                 <span class="c"># lists assemblies and their copy counts</span>
+<span class="p">$ </span>sesmesh 1k4r.cif.gz --assembly 1 -q draft  <span class="c"># 60-copy capsid, 545 040 atoms</span></code></pre></div>
+      <div class="table-wrap"><table>
+        <tr><th>Option</th><th>Effect</th></tr>
+        <tr><td><code>--model N</code> / <code>--frame I</code></td><td>Model number, or 0-based model position (trajectories)</td></tr>
+        <tr><td><code>--block NAME</code></td><td>mmCIF data block</td></tr>
+        <tr><td><code>--assembly ID</code></td><td>Expand a biological assembly (mmCIF <code>pdbx_struct_*</code>, PDB REMARK 350)</td></tr>
+        <tr><td><code>--altloc highest|first|all|A</code></td><td>Alternate locations</td></tr>
+        <tr><td><code>--hydrogens</code>, <code>--waters</code>, <code>--no-hetatm</code></td><td>Keep hydrogens, keep waters, drop hetero atoms</td></tr>
+        <tr><td><code>--chains A,B</code> + <code>--chain-ids auth|label</code></td><td>Keep chains, by author or label IDs</td></tr>
+        <tr><td><code>--exclude-resn SO4,GOL</code></td><td>Drop residues by name</td></tr>
+      </table></div>
+    </section>
+
+    <section id="surface">
+      <span class="label">04</span>
+      <h2>Surface &amp; radii</h2>
+      <p>Three surfaces from the same machinery: the <b>SES</b> (where a probe sphere cannot
+        reach), the <b>SAS</b> (traced by the probe centre) and the <b>vdW</b> surface (union of the
+        atom spheres).</p>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 1crn.cif --surface sas -o 1crn-sas.obj
+<span class="p">$ </span>sesmesh 1crn.cif --surface vdw -o 1crn-vdw.obj
+<span class="p">$ </span>sesmesh ligand.xyz --probe 1.2 --radii alvarez
+<span class="p">$ </span>sesmesh model.pqr                         <span class="c"># PQR radii are used as given</span>
+<span class="p">$ </span>sesmesh 1crn.cif --radii file:my-radii.toml --strict-radii</code></pre></div>
+      <p>Radius sets: <code>bondi</code> (default, with Mantina's extension), <code>alvarez</code>,
+        <code>protor</code> (united-atom protein radii), <code>uniform:&lt;r&gt;</code>, or rules from a
+        TOML file. Atoms a set does not cover get <code>--unknown-radius</code> (1.8 Å) and a
+        warning; <code>--strict-radii</code> makes that an error. <code>sesmesh radii --set protor</code>
+        prints a table.</p>
+    </section>
+
+    <section id="resolution">
+      <span class="label">05</span>
+      <h2>Resolution</h2>
+      <p>The grid spacing <i>h</i> sets the detail. Errors fall as <i>h</i>², triangle counts
+        grow as 1/<i>h</i>². Mean errors below are measured on 53 PDB entries against each
+        entry's <i>h</i> → 0 limit (<a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/validation-report.md">validation report</a>).</p>
+      <div class="table-wrap"><table>
+        <tr><th>Preset <code>-q</code></th><th>Spacing</th><th>Area error</th><th>Volume error</th><th>Triangles per Å²</th></tr>
+        <tr><td><code>draft</code></td><td>1.0 Å</td><td>−2.7 %</td><td>−0.34 %</td><td>3</td></tr>
+        <tr><td><code>low</code></td><td>0.7 Å</td><td>−1.5 %</td><td>−0.16 %</td><td>6</td></tr>
+        <tr><td><code>medium</code> (default)</td><td>0.5 Å</td><td>−0.82 %</td><td>−0.08 %</td><td>12</td></tr>
+        <tr><td><code>high</code></td><td>0.25 Å</td><td>−0.20 %</td><td>−0.02 %</td><td>48</td></tr>
+        <tr><td><code>ultra</code></td><td>0.1 Å</td><td>≈ −0.03 % (h² law)</td><td>—</td><td>300</td></tr>
+      </table></div>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 4hhb.cif.gz -q high          <span class="c"># preset</span>
+<span class="p">$ </span>sesmesh 4hhb.cif.gz -s 0.3           <span class="c"># any spacing in Å</span>
+<span class="p">$ </span>sesmesh 4hhb.cif.gz --density 10     <span class="c"># ≈ 10 vertices per Å², MSMS-like</span></code></pre></div>
+      <p><code>--refine linear</code> interpolates vertices instead of solving them onto the
+        surface: faster, less exact.</p>
+    </section>
+
+    <section id="lod">
+      <span class="label">06</span>
+      <h2>Smoothing &amp; decimation</h2>
+      <p><code>--smooth N</code> runs N rounds of Taubin smoothing for better-shaped triangles, then
+        projects every vertex back onto the exact surface. Decimation collapses edges by quadric
+        error; it only ever removes vertices, so the ones that stay keep their exact positions,
+        analytic normals and atoms, and the mesh stays closed and manifold.</p>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="c"># fine grid, then keep a quarter of the triangles</span>
+<span class="p">$ </span>sesmesh 1aon.cif.gz -q high --decimate 0.25 -o groel.ply
+<span class="c"># at most 200 000 triangles, never moving the surface by more than 0.05 Å</span>
+<span class="p">$ </span>sesmesh 1aon.cif.gz -q high --max-triangles 200000 --decimate-error 0.05
+<span class="c"># smoother triangles on a coarse grid</span>
+<span class="p">$ </span>sesmesh 1crn.cif -q low --smooth 3</code></pre></div>
+      <div class="note">A fine grid decimated keeps small features (narrow grooves, pocket mouths) far
+        better than a coarse grid with the same number of triangles.</div>
+    </section>
+
+    <section id="output">
+      <span class="label">07</span>
+      <h2>Output</h2>
+      <p>The format follows the <code>-o</code> extension: <code>.obj</code> (default),
+        <code>.ply</code> (binary PLY), <code>.vert</code>/<code>.face</code> (MSMS). A
+        <code>.gz</code> suffix compresses any of them; <code>-o -</code> writes to standard output.</p>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 4hhb.cif.gz -o hb.ply.gz --vertex-colors chain
+<span class="p">$ </span>sesmesh 4hhb.cif.gz -o hb.vert          <span class="c"># writes hb.vert and hb.face</span>
+<span class="p">$ </span>sesmesh 1crn.cif --vertex-colors element --palette atom-colors.json
+<span class="p">$ </span>sesmesh 1crn.cif --group-components --vertex-colors patch
+<span class="p">$ </span>sesmesh 1crn.cif --atom-areas areas.csv --vertex-data verts.csv --stats stats.json
+<span class="p">$ </span>sesmesh 1crn.cif --stats - -o /dev/null | jq .mesh   <span class="c"># numbers only</span></code></pre></div>
+      <div class="table-wrap"><table>
+        <tr><th>Option</th><th>Effect</th></tr>
+        <tr><td><code>--vertex-colors element|chain|patch|component</code></td><td>Per-vertex RGB (OBJ <code>v x y z r g b</code>, PLY uchar)</td></tr>
+        <tr><td><code>--palette FILE</code></td><td>Element colours (JSON, <code>atom-colors.json</code> format)</td></tr>
+        <tr><td><code>--group-components</code></td><td>OBJ groups <code>component_N</code> / <code>cavity_N</code></td></tr>
+        <tr><td><code>--no-normals</code>, <code>--face-normals</code></td><td>Omit normals, or area-weighted face normals instead of analytic ones</td></tr>
+        <tr><td><code>--precision N</code></td><td>OBJ decimals (default 4)</td></tr>
+        <tr><td><code>--atom-areas</code>, <code>--vertex-data</code></td><td>CSV: SES area per atom; nearest atom, patch, component per vertex</td></tr>
+        <tr><td><code>--stats FILE|-</code></td><td>JSON: input, parameters, mesh, components, timings</td></tr>
+      </table></div>
+      <p>Layouts of every file: <a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/04-output-formats.md">output formats</a>.</p>
+    </section>
+
+    <section id="cavities">
+      <span class="label">08</span>
+      <h2>Cavities</h2>
+      <p>The exact SES includes closed internal cavities (negative signed volume). Keep them
+        (default), remove them together with anything inside them (what MSMS reports), or keep
+        only them to study packing defects and pockets.</p>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 1aon.cif.gz --cavities remove
+<span class="p">$ </span>sesmesh 1aon.cif.gz --cavities only --min-cavity-volume 10 -o pockets.obj
+<span class="p">$ </span>sesmesh 2ptn.pdb --min-component-area 5</code></pre></div>
+    </section>
+
+    <section id="big">
+      <span class="label">09</span>
+      <h2>Large structures</h2>
+      <p>Memory grows with surface area: about 150 bytes per triangle and 800 bytes per atom at
+        peak. Set a limit to refuse inputs that will not fit — or to coarsen the grid until they
+        do.</p>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 3j3q.cif.gz -q draft --progress --timings     <span class="c"># 2.44 M atoms</span>
+<span class="p">$ </span>sesmesh 3j3q.cif.gz -q high --max-memory 8G           <span class="c"># exit code 4 if too big</span>
+<span class="p">$ </span>sesmesh 3j3q.cif.gz -q high --max-memory 8G --auto-coarsen
+<span class="p">$ </span>sesmesh 4v6x.cif.gz -j 4 --simd scalar                <span class="c"># threads, kernel</span></code></pre></div>
+      <p>Ctrl-C stops a run within about 100 ms (exit code 130). <code>-j</code> sets the worker
+        threads; <code>--simd</code> forces a kernel (<code>auto</code> picks the best the CPU
+        supports).</p>
+    </section>
+
+    <section id="batch">
+      <span class="label">10</span>
+      <h2>Batch mode</h2>
+      <p>Several inputs write <code>&lt;stem&gt;.&lt;ext&gt;</code> into <code>--output-dir</code>;
+        side files go to directories of the same name.</p>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh pdb/*.cif.gz --output-dir meshes --output-format ply \
+      --keep-going --stats stats --atom-areas areas</code></pre></div>
+      <div class="note hot">In batch mode <code>-o</code> is a usage error; use
+        <code>--output-dir</code> and <code>--output-format</code> instead. Missing directories are
+        created. Without <code>--keep-going</code> the batch stops at the first failure.</div>
+    </section>
+
+    <section id="exit">
+      <span class="label">11</span>
+      <h2>Exit codes</h2>
+      <div class="table-wrap"><table>
+        <tr><th>Code</th><th>Meaning</th></tr>
+        <tr><td>0</td><td>Success (also when a reader closes standard output early)</td></tr>
+        <tr><td>1</td><td>Runtime error: I/O, empty selection, invalid input data, batch failure</td></tr>
+        <tr><td>2</td><td>Usage error: unknown option, invalid value, conflicting options</td></tr>
+        <tr><td>3</td><td>Parse error: malformed file, unknown format, invalid palette</td></tr>
+        <tr><td>4</td><td>Resource limit: <code>--max-memory</code>, decompression or assembly size</td></tr>
+        <tr><td>130</td><td>Interrupted (Ctrl-C)</td></tr>
+      </table></div>
+      <a class="btn" href="https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md">Full CLI manual ↗</a>
+    </section>
+
+  </div>
+</div>
+</main>
+
+<footer class="wrap foot">
+  <p class="eof" aria-hidden="true"># EOF</p>
+  <div class="foot-grid">
+    <div><b>Next</b><ul><li><a href="tutorials.html">Tutorials</a></li><li><a href="library.html">Library guide</a></li></ul></div>
+    <div><b>Reference</b><ul><li><a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md">CLI manual</a></li><li><a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/04-output-formats.md">Output formats</a></li></ul></div>
+    <div><b>Project</b><ul><li><a href="https://github.com/uvar-apps/sesmesh">GitHub</a></li><li><a href="https://github.com/uvar-apps/sesmesh/releases">Releases</a></li></ul></div>
+    <div><b>Licence</b><ul><li>MIT OR Apache-2.0</li><li>© sesmesh contributors</li></ul></div>
+  </div>
+</footer>
+</body>
+</html>

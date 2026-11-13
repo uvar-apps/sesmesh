@@ -1,0 +1,50 @@
+name: pages
+
+# Publishes the website in site/ to GitHub Pages
+# (https://uvar-apps.github.io/sesmesh/). One-time setup: repository
+# Settings → Pages → Build and deployment → Source: "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "site/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy site/
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: check internal links and images
+        run: |
+          cd site
+          status=0
+          for page in *.html; do
+            for ref in $(grep -oE '(href|src)="[^"]*"' "$page" | sed -E 's/^(href|src)="//; s/"$//' \
+                | grep -vE '^(https?:|mailto:|data:|#|/)' | sed -E 's/[?#].*$//' | sort -u); do
+              [ -z "$ref" ] || [ "$ref" = "./" ] && continue
+              if [ ! -e "$ref" ]; then echo "::error file=site/$page::missing $ref"; status=1; fi
+            done
+          done
+          exit $status
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v5

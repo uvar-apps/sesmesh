@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Render — sesmesh</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<style>
+  body { margin: 0; background: #ecebe4; font: 13px/1.5 ui-monospace, Menlo, monospace; color: #0d0d0c; }
+  header { padding: 10px 14px; border-bottom: 3px solid #0d0d0c; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+  canvas { display: block; max-width: 100%; height: auto; background-image: radial-gradient(rgba(13,13,12,.18) 1px, transparent 1.3px); background-size: 22px 22px; }
+  a, button { font: inherit; color: inherit; border: 2px solid #0d0d0c; background: #fff; padding: 4px 10px; cursor: pointer; text-decoration: none; }
+  #status { margin-left: auto; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<!--
+  Still renderer for sesmesh display meshes (tools/site/README.md).
+  Query parameters:
+    src=URL        mesh (.sesm.gz from tools/site/ply2web.py); default models/1crn.sesm.gz
+    w=, h=         output size in pixels (default 1600 × 1200)
+    az=, el=       camera azimuth / elevation in degrees (default 35 / 18)
+    zoom=          > 1 moves closer (default 1)
+    wire=1         draw the triangle edges over the surface; wire=2 edges only
+    flat=1         flat shading (shows facets)
+    format=webp|png (default webp), name=file name for download/save
+    save=1         POST the image to /__save?name=… (tools/site/capture.py)
+-->
+<header>
+  <b>sesmesh render</b>
+  <a id="download" download>Download</a>
+  <span id="status">loading …</span>
+</header>
+<canvas id="c"></canvas>
+<script type="module">
+import * as THREE from "three";
+import { parseSesm } from "./assets/viewer.js";
+
+const q = new URLSearchParams(location.search);
+const num = (k, d) => (q.has(k) ? Number(q.get(k)) : d);
+const src = q.get("src") || "models/1crn.sesm.gz";
+const W = num("w", 1600), H = num("h", 1200);
+const az = num("az", 35), el = num("el", 18), zoom = num("zoom", 1);
+const wire = num("wire", 0), flat = num("flat", 0) === 1;
+const format = q.get("format") === "png" ? "png" : "webp";
+const name = q.get("name") || src.split("/").pop().replace(/\.sesm(\.gz)?$/, "") + "." + format;
+const status = document.getElementById("status");
+
+async function bytes(url) {
+  let buf = await (await fetch(url)).arrayBuffer();
+  const h = new Uint8Array(buf, 0, 2);
+  if (h[0] === 0x1f && h[1] === 0x8b) {
+    buf = await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+  }
+  return buf;
+}
+
+const canvas = document.getElementById("c");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(W, H, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.setClearColor(0x000000, 0);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(28, W / H, 0.1, 5000);
+scene.add(camera);
+camera.add(new THREE.HemisphereLight(0xffffff, 0x2a2a26, 0.95));
+const key = new THREE.DirectionalLight(0xffffff, 2.6);
+key.position.set(-0.6, 0.9, 1.0);
+camera.add(key);
+const rim = new THREE.DirectionalLight(0xffffff, 0.9);
+rim.position.set(0.8, -0.4, -1.0);
+camera.add(rim);
+
+try {
+  const { geometry, triangles } = parseSesm(await bytes(src));
+  if (wire !== 2) {
+    scene.add(new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 0.6, metalness: 0, flatShading: flat,
+      polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1,
+    })));
+  }
+  if (wire) {
+    scene.add(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({
+      color: 0x0d0d0c, wireframe: true, transparent: wire === 1, opacity: wire === 1 ? 0.45 : 1,
+    })));
+  }
+  const r = geometry.boundingSphere.radius;
+  const fov = (camera.fov * Math.PI) / 180;
+  const fit = Math.min(fov, 2 * Math.atan(Math.tan(fov / 2) * camera.aspect));
+  const dist = (r / Math.sin(fit / 2)) * 1.04 / zoom;
+  const a = (az * Math.PI) / 180, e = (el * Math.PI) / 180;
+  camera.position.set(dist * Math.cos(e) * Math.sin(a), dist * Math.sin(e), dist * Math.cos(e) * Math.cos(a));
+  camera.near = Math.max(dist / 100, 0.05);
+  camera.far = dist * 10;
+  camera.updateProjectionMatrix();
+  camera.lookAt(0, 0, 0);
+  renderer.render(scene, camera);
+
+  const type = format === "png" ? "image/png" : "image/webp";
+  const blob = await new Promise((ok) => canvas.toBlob(ok, type, 0.9));
+  const link = document.getElementById("download");
+  link.href = URL.createObjectURL(blob);
+  link.download = name;
+  status.textContent = `${triangles.toLocaleString()} triangles · ${W}×${H} · ${Math.round(blob.size / 1024)} KB`;
+  if (q.get("save") === "1") {
+    const res = await fetch(`/__save?name=${encodeURIComponent(name)}`, { method: "POST", body: blob });
+    status.textContent += res.ok ? " · saved " + name : " · save failed " + res.status;
+    document.title = res.ok ? "saved " + name : "save failed";
+  } else {
+    document.title = "rendered " + name;
+  }
+} catch (err) {
+  status.textContent = "error: " + err.message;
+  document.title = "error";
+}
+</script>
+</body>
+</html>

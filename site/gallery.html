@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gallery — sesmesh</title>
+<meta name="description" content="Surfaces computed by sesmesh: crambin, haemoglobin, GroEL–GroES and its cavities, a 545 040-atom virus capsid; SES, SAS and vdW; decimation.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&amp;family=Fragment+Mono:ital@0;1&amp;display=swap">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="assets/viewer.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="./">sesmesh <small>1.0.0</small></a>
+  <ul class="nav">
+    <li><a href="./">Home</a></li>
+    <li><a href="cli.html">CLI</a></li>
+    <li><a href="library.html">Library</a></li>
+    <li><a href="tutorials.html">Tutorials</a></li>
+    <li><a href="gallery.html" aria-current="page">Gallery</a></li>
+    <li class="push"><a href="https://docs.rs/sesmesh">API docs ↗</a></li>
+    <li><a href="https://github.com/uvar-apps/sesmesh">GitHub ↗</a></li>
+  </ul>
+  <button class="theme-toggle" type="button" aria-label="Switch colour theme">Dark</button>
+</header>
+<div class="cpk" aria-hidden="true"></div>
+<main>
+<section>
+  <div class="wrap pagehead">
+    <span class="label inv">Gallery · real output</span>
+    <h1>Gal<span class="knock">lery</span></h1>
+    <p class="lede">Surfaces straight from <code>sesmesh</code>, with the command that made each one. Explore three of them in 3D, then browse the stills.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap sec" style="padding-bottom:40px">
+    <span class="label inv">Live · WebGL</span>
+    <h2 style="margin-bottom:22px">Turn it<br>around.</h2>
+    <div class="viewer" data-viewer="4hhb" style="border:var(--rule) solid var(--ink);box-shadow:var(--shadow);min-height:620px">
+      <div class="viewer-bar">
+        <span class="live">Live</span>
+        <span data-caption>4HHB haemoglobin</span>
+        <span class="mute">drag · click then scroll to zoom · double-click to reset</span>
+      </div>
+      <div class="viewer-stage"><div class="viewer-msg">Loading …</div><div class="viewer-axes">display copy: 16-bit positions, 8-bit normals</div></div>
+      <div class="viewer-ctl">
+        <button type="button" data-model="1crn">1CRN</button>
+        <button type="button" data-model="4hhb">4HHB</button>
+        <button type="button" data-model="1aon">1AON</button>
+        <button type="button" data-toggle="wire" aria-pressed="false">Wire</button>
+        <button type="button" data-toggle="spin" aria-pressed="true">Spin</button>
+        <button type="button" data-reset>Reset</button>
+        <span class="readout"></span>
+      </div>
+    </div>
+  </div>
+</section>
+<section>
+  <div class="wrap sec" style="padding-top:40px">
+    <span class="label inv">Stills · rendered from sesmesh output</span>
+    <h2>Figures.</h2>
+    <div class="gallery">
+    <figure class="fig w8">
+      <div class="frame"><img src="img/gallery/1crn-element.webp" width="2000" height="1125" loading="lazy" alt="Crambin: 1crn-element">
+        <div class="slot">MISSING IMAGE<br>img/gallery/1crn-element.webp</div></div>
+      <figcaption><span class="num mute">FIG. 01</span><b>Crambin</b>SES at 0.25 Å, coloured by the element of the nearest atom (C grey, O red, N blue, S yellow). 111 076 triangles, area 2310 Å².<code>$ sesmesh 1crn.cif -q high --vertex-colors element</code></figcaption>
+    </figure>
+    <figure class="fig w4">
+      <div class="frame"><img src="img/gallery/1crn-patch.webp" width="1600" height="1200" loading="lazy" alt="Patch types: 1crn-patch">
+        <div class="slot">MISSING IMAGE<br>img/gallery/1crn-patch.webp</div></div>
+      <figcaption><span class="num mute">FIG. 02</span><b>Patch types</b>The three kinds of SES patch: <span style="background:#8cb5eb;color:#0d0d0c;padding:0 3px">convex</span> (atom contact), <span style="background:#66c266;color:#0d0d0c;padding:0 3px">saddle</span> (probe rolling along two atoms), <span style="background:#f59940;color:#0d0d0c;padding:0 3px">concave</span> (probe touching three).<code>$ sesmesh 1crn.cif -q high --vertex-colors patch</code></figcaption>
+    </figure>
+    <figure class="fig w6">
+      <div class="frame"><img src="img/gallery/1crn-vdw.webp" width="1600" height="1200" loading="lazy" alt="van der Waals: 1crn-vdw">
+        <div class="slot">MISSING IMAGE<br>img/gallery/1crn-vdw.webp</div></div>
+      <figcaption><span class="num mute">FIG. 03</span><b>van der Waals</b>The union of the atom spheres: every crease between atoms stays sharp. 198 268 triangles at 0.25 Å.<code>$ sesmesh 1crn.cif -q high --surface vdw --vertex-colors element</code></figcaption>
+    </figure>
+    <figure class="fig w6">
+      <div class="frame"><img src="img/gallery/1crn-sas.webp" width="1600" height="1200" loading="lazy" alt="Solvent accessible: 1crn-sas">
+        <div class="slot">MISSING IMAGE<br>img/gallery/1crn-sas.webp</div></div>
+      <figcaption><span class="num mute">FIG. 04</span><b>Solvent accessible</b>Traced by the probe centre: atom radii grown by 1.4 Å. The SES lies between this and the vdW surface.<code>$ sesmesh 1crn.cif -q high --surface sas --vertex-colors element</code></figcaption>
+    </figure>
+    <figure class="fig w6">
+      <div class="frame"><img src="img/gallery/1crn-coarse.webp" width="1600" height="1200" loading="lazy" alt="Coarse grid · 13 996 triangles: 1crn-coarse">
+        <div class="slot">MISSING IMAGE<br>img/gallery/1crn-coarse.webp</div></div>
+      <figcaption><span class="num mute">FIG. 05</span><b>Coarse grid · 13 996 triangles</b>A 0.7 Å grid: uniform Marching Cubes triangles everywhere, flat areas and tight grooves alike.<code>$ sesmesh 1crn.cif -s 0.7 --vertex-colors element</code></figcaption>
+    </figure>
+    <figure class="fig w6">
+      <div class="frame"><img src="img/gallery/1crn-decimated.webp" width="1600" height="1200" loading="lazy" alt="Fine grid, decimated · 13 996 triangles: 1crn-decimated">
+        <div class="slot">MISSING IMAGE<br>img/gallery/1crn-decimated.webp</div></div>
+      <figcaption><span class="num mute">FIG. 06</span><b>Fine grid, decimated · 13 996 triangles</b>Same triangle budget from a 0.25 Å grid: large triangles where the surface is flat, small ones where it bends — every vertex still on the exact surface.<code>$ sesmesh 1crn.cif -q high --max-triangles 13996 --vertex-colors element</code></figcaption>
+    </figure>
+    <figure class="fig w4">
+      <div class="frame"><img src="img/gallery/4hhb-chain.webp" width="1600" height="1200" loading="lazy" alt="Haemoglobin: 4hhb-chain">
+        <div class="slot">MISSING IMAGE<br>img/gallery/4hhb-chain.webp</div></div>
+      <figcaption><span class="num mute">FIG. 07</span><b>Haemoglobin</b>Four chains, 4 558 atoms, 0.25 Å grid decimated to 641 472 triangles.<code>$ sesmesh 4HHB.cif.gz -q high --vertex-colors chain --decimate 0.5</code></figcaption>
+    </figure>
+    <figure class="fig w4">
+      <div class="frame"><img src="img/gallery/1aon-chain.webp" width="1600" height="1200" loading="lazy" alt="GroEL–GroES: 1aon-chain">
+        <div class="slot">MISSING IMAGE<br>img/gallery/1aon-chain.webp</div></div>
+      <figcaption><span class="num mute">FIG. 08</span><b>GroEL–GroES</b>21 chains, 58 870 atoms at 0.5 Å, decimated to 1.5 M triangles.<code>$ sesmesh 1AON.cif.gz -s 0.5 --vertex-colors chain --max-triangles 1500000</code></figcaption>
+    </figure>
+    <figure class="fig w4">
+      <div class="frame"><img src="img/gallery/1aon-cavities.webp" width="1600" height="1200" loading="lazy" alt="GroEL–GroES cavities: 1aon-cavities">
+        <div class="slot">MISSING IMAGE<br>img/gallery/1aon-cavities.webp</div></div>
+      <figcaption><span class="num mute">FIG. 09</span><b>GroEL–GroES cavities</b>Only the 285 internal cavities larger than 5 Å³, one colour each — the same view as the complex beside it.<code>$ sesmesh 1AON.cif.gz -q high --cavities only --min-cavity-volume 5 --vertex-colors component</code></figcaption>
+    </figure>
+    <figure class="fig w12">
+      <div class="frame"><img src="img/gallery/1k4r-capsid.webp" width="2400" height="1350" loading="lazy" alt="Dengue virus capsid · 545 040 atoms: 1k4r-capsid">
+        <div class="slot">MISSING IMAGE<br>img/gallery/1k4r-capsid.webp</div></div>
+      <figcaption><span class="num mute">FIG. 10</span><b>Dengue virus capsid · 545 040 atoms</b>Assembly 1 of 1K4R: 60 copies of three envelope chains, built from the file's operators and meshed at 1 Å in about 10 s, then decimated from 9.9 M to 3 M triangles for this picture.<code>$ sesmesh 1K4R.cif.gz --assembly 1 -q draft --vertex-colors chain --max-triangles 3000000</code></figcaption>
+    </figure>
+    </div>
+    <p class="mute" style="margin-top:22px">Every picture is a mesh written by the command under it, rendered by <a href="render.html">render.html</a> in this site (WebGL, no post-processing). Scripts: <code>tools/site/</code> in the repository.</p>
+  </div>
+</section></main>
+<footer class="wrap foot">
+  <p class="eof" aria-hidden="true"># EOF</p>
+  <div class="foot-grid">
+    <div><b>Guides</b><ul><li><a href="cli.html">CLI guide</a></li><li><a href="library.html">Library guide</a></li><li><a href="tutorials.html">Tutorials</a></li></ul></div>
+    <div><b>Reference</b><ul><li><a href="https://docs.rs/sesmesh">API reference</a></li><li><a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md">CLI manual</a></li><li><a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/04-output-formats.md">Output formats</a></li></ul></div>
+    <div><b>Project</b><ul><li><a href="https://github.com/uvar-apps/sesmesh">GitHub</a></li><li><a href="https://github.com/uvar-apps/sesmesh/releases">Releases</a></li><li><a href="https://crates.io/crates/sesmesh">crates.io</a></li></ul></div>
+    <div><b>Licence</b><ul><li>MIT OR Apache-2.0</li><li>© sesmesh contributors</li></ul></div>
+  </div>
+</footer>
+</body>
+</html>
