@@ -14,8 +14,13 @@ private (`publish = false`).
 | Zero robustness failures; ≥ 24 CPU-hours fuzzing per parser | Sweep 200/200 ok; fuzz campaign open (#22) |
 | API docs, examples, CLI manual, changelog; crates published | Done except publishing |
 
-Until these are closed, releases are `0.x` (e.g. `0.9.0` as a release
-candidate).
+Until these are closed, releases are `0.x`.
+
+## Releases
+
+| Version | Date | Notes |
+|---|---|---|
+| 0.9.0 | 2026-11-13 | First public release (release candidate for 1.0): crates `sesmesh` and `sesmesh-cli` on crates.io, binaries on the GitHub release `v0.9.0`. |
 
 ## Checklist
 

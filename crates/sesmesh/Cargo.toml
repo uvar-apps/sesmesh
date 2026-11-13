@@ -12,6 +12,9 @@ authors.workspace = true
 repository.workspace = true
 documentation = "https://docs.rs/sesmesh"
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = ["parallel", "gzip", "radii-file"]
 # Multi-threading with rayon (Design §11.1).

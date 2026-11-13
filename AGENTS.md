@@ -46,12 +46,14 @@ any deviation from the plan.
 
 ## Repository state at handoff (2026-11-13)
 
-- `main` = `origin/main` = Phase 9 plus the Rust 1.100 clippy fix (`55b8d22`); CI green.
+- Release **0.9.0** (2026-11-13): tag `v0.9.0`, crates `sesmesh` and `sesmesh-cli` on crates.io
+  (owner: the user's crates.io account), GitHub release with tier-1 binaries. `main` =
+  `origin/main` = the release commit.
+- The crates.io token lives in the user's `~/.cargo/credentials.toml` (never read or print it).
+  Next releases follow `docs/release.md` (bump `[workspace.package] version` and the `sesmesh`
+  workspace dependency, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).
 - Root `atom-colors.json` and `out/` are untracked on purpose.
-- Branch `phase-10-release`: Phase 10 committed locally; not yet merged into `main` or pushed:
-  fast-forward `main` and push when the user asks.
-- Phases 0–10 done except the release itself: v1.0 criteria open (docs/release.md: #1, #3, #4,
-  #5, #20, #22). Versioning, tagging and `cargo publish` are the user's decisions.
+- Open v1.0 items: #1, #3, #4, #5, #20, #22 (tracking issue #19).
 
 ## Layout (crates/sesmesh/src)
 

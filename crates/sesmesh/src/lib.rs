@@ -34,8 +34,10 @@
 //! # Ok::<(), sesmesh::Error>(())
 //! ```
 //!
-//! More in `crates/sesmesh/examples/` (file → OBJ, spheres → mesh,
-//! trajectories with [`SurfaceEngine`], custom radii, field queries).
+//! More in the [examples](https://github.com/uvar-apps/sesmesh/tree/main/crates/sesmesh/examples)
+//! (file → OBJ, spheres → mesh, trajectories with [`SurfaceEngine`], custom
+//! radii, field queries) and the
+//! [CLI manual](https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md).
 //!
 //! ## Concepts
 //!
@@ -54,7 +56,7 @@
 //!   vertex density ([`SurfaceParams::with_density`]: about `1.5 / h²`
 //!   vertices per Å²). Error decreases as `h²`: area −0.2 % and volume
 //!   −0.02 % on average at 0.25 Å on a 53-entry protein corpus
-//!   (`docs/validation-report.md`). [`SurfaceParams::with_smoothing`]
+//!   ([validation report](https://github.com/uvar-apps/sesmesh/blob/main/docs/validation-report.md)). [`SurfaceParams::with_smoothing`]
 //!   improves triangle shapes while keeping vertices on the surface.
 //! * **Components and cavities**: [`SurfaceOutput::components`] lists the
 //!   closed components (area, signed volume, Euler characteristic, genus);

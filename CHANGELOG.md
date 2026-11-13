@@ -6,6 +6,11 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-13
+
+First public release (release candidate for 1.0; the open v1.0 criteria are
+listed in `docs/release.md` and GitHub issue #19).
+
 ### Added
 
 - Product specification, design document and implementation plan (`docs/`).
@@ -184,3 +189,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   The edge clamp is now at least four `f32` ulps of the largest coordinate.
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by
   fuzzing: a count of 377 777 773 requested 36 GB).
+
+[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/uvar-apps/sesmesh/releases/tag/v0.9.0

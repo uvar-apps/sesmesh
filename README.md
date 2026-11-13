@@ -1,45 +1,69 @@
 # sesmesh
 
+[![crates.io](https://img.shields.io/crates/v/sesmesh.svg)](https://crates.io/crates/sesmesh)
+[![docs.rs](https://docs.rs/sesmesh/badge.svg)](https://docs.rs/sesmesh)
+[![CI](https://github.com/uvar-apps/sesmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/uvar-apps/sesmesh/actions/workflows/ci.yml)
+
 Fast, accurate **Solvent Excluded Surface** (SES, also called the Connolly or
 molecular surface) meshing for molecular structures, written in Rust.
 
-* Reads PDB, PDBx/mmCIF and XYZ files (optionally gzip-compressed).
+* Reads PDB, PDBx/mmCIF, XYZ / extended XYZ and PQR files (optionally
+  gzip-compressed), including biological assemblies.
 * Computes the SES exactly via its implicit distance representation, sampled
-  on a sparse, narrow-band brick grid. SAS and van der Waals surfaces are also
-  supported.
-* Writes closed, consistently oriented triangle meshes with analytic normals
-  (Wavefront OBJ, later also PLY and MSMS formats).
-* Lets you control resolution and level of detail (grid spacing, presets,
-  decimation).
+  on a sparse, narrow-band brick grid; SAS and van der Waals surfaces too.
+* Writes closed, consistently oriented, edge-manifold triangle meshes with
+  vertices on the exact surface and analytic normals: Wavefront OBJ, binary
+  PLY, MSMS `.vert`/`.face`; per-vertex colours, components, cavities,
+  per-atom areas, JSON statistics.
+* Controls resolution and level of detail: grid spacing, quality presets,
+  vertex density, smoothing with exact re-projection.
 * Multi-threaded (rayon) and SIMD-accelerated with runtime CPU dispatch
-  (AVX2 / AVX-512 / NEON).
-* Ships as a reusable library crate plus a command-line tool.
+  (AVX-512 / AVX2 / SSE4.2 / NEON); output identical for any thread count.
+* Ships as a reusable library crate ([`sesmesh`](https://crates.io/crates/sesmesh))
+  plus a command-line tool ([`sesmesh-cli`](https://crates.io/crates/sesmesh-cli)).
 
-> **Status: Phases 0–9 done (decimation and cross-tool references pending).** Structure files → closed, oriented SES / SAS /
-> vdW meshes with analytic normals → OBJ, from the library and the `sesmesh`
-> CLI, multi-threaded and SIMD-accelerated, with cavity handling, components,
-> vertex colours, per-atom areas, JSON statistics, density and smoothing
-> controls, PLY/MSMS output, biological assemblies and batch mode. Decimation,
-> the validation campaign and the release follow (Phases 8–10, see the
-> [implementation plan](docs/03-implementation-plan.md)).
+> **Status: 0.9.0, release candidate for 1.0.** The remaining v1.0 items
+> (decimation, performance targets on the reference machines, the long
+> fuzzing campaign, cross-tool references) are tracked in
+> [issue #19](https://github.com/uvar-apps/sesmesh/issues/19) and
+> [docs/release.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/release.md).
+
+## Install
+
+Command-line tool (binary `sesmesh`):
+
+```bash
+cargo install sesmesh-cli
+```
+
+Prebuilt binaries for macOS arm64, Linux x86-64 / arm64 and Windows x86-64 are
+attached to the [GitHub releases](https://github.com/uvar-apps/sesmesh/releases).
+
+Library:
+
+```toml
+[dependencies]
+sesmesh = "0.9"
+```
+
+Rust 1.89 or newer.
 
 ## Quick start
 
 ```bash
-cargo build --release
-target/release/sesmesh 1crn.cif -o 1crn.obj            # SES, 0.5 Å grid
-target/release/sesmesh 4hhb.cif.gz -q high --timings    # 0.25 Å grid
-target/release/sesmesh ligand.xyz --radii alvarez --probe 1.2 -s 0.1 -o lig.obj
-target/release/sesmesh 1crn.cif --cavities remove --vertex-colors element --stats stats.json
-target/release/sesmesh 1k4r.cif.gz --assembly 1 -q draft -o capsid.ply    # 545k-atom capsid
-target/release/sesmesh *.cif.gz --output-dir meshes --keep-going           # batch
-target/release/sesmesh info 1crn.pdb
-target/release/sesmesh radii --set protor
+sesmesh 1crn.cif -o 1crn.obj                  # SES, 0.5 Å grid
+sesmesh 4hhb.cif.gz -q high --timings         # 0.25 Å grid
+sesmesh ligand.xyz --radii alvarez --probe 1.2 -s 0.1 -o lig.obj
+sesmesh 1crn.cif --cavities remove --vertex-colors element --stats stats.json
+sesmesh 1k4r.cif.gz --assembly 1 -q draft -o capsid.ply   # 545k-atom capsid
+sesmesh *.cif.gz --output-dir meshes --keep-going          # batch
+sesmesh info 1crn.pdb
+sesmesh radii --set protor
 ```
 
 Run `sesmesh surface --help` for all options (selection, radii, surface kind,
 cavities, resolution, normals, colours, side files, threads). Output formats
-are described in [docs/04-output-formats.md](docs/04-output-formats.md). Exit codes: 0 success, 1 runtime
+are described in [docs/04-output-formats.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/04-output-formats.md). Exit codes: 0 success, 1 runtime
 error, 2 usage error, 3 input parse error, 4 resource limit.
 
 As a library:
@@ -62,20 +86,20 @@ fn main() -> sesmesh::Result<()> {
 
 ## Documentation
 
-* [Product specification](docs/01-product-specification.md): requirements,
+* [Product specification](https://github.com/uvar-apps/sesmesh/blob/main/docs/01-product-specification.md): requirements,
   literature survey, references
-* [Design](docs/02-design.md): mathematics, architecture, algorithms
-* [Implementation plan](docs/03-implementation-plan.md): phases, tasks,
+* [Design](https://github.com/uvar-apps/sesmesh/blob/main/docs/02-design.md): mathematics, architecture, algorithms
+* [Implementation plan](https://github.com/uvar-apps/sesmesh/blob/main/docs/03-implementation-plan.md): phases, tasks,
   milestones
-* [Output formats](docs/04-output-formats.md): OBJ, CSV side files, JSON
+* [Output formats](https://github.com/uvar-apps/sesmesh/blob/main/docs/04-output-formats.md): OBJ, CSV side files, JSON
   statistics
-* [Validation report](docs/validation-report.md): accuracy, robustness,
+* [Validation report](https://github.com/uvar-apps/sesmesh/blob/main/docs/validation-report.md): accuracy, robustness,
   large inputs, performance
-* [CLI manual](docs/cli.md): every option, examples, exit codes
+* [CLI manual](https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md): every option, examples, exit codes
 * Library: crate documentation (`cargo doc --open -p sesmesh`) and
-  [examples](crates/sesmesh/examples/)
-* [API review](docs/api-review.md) (semver policy) and
-  [release process](docs/release.md)
+  [examples](https://github.com/uvar-apps/sesmesh/blob/main/crates/sesmesh/examples/)
+* [API review](https://github.com/uvar-apps/sesmesh/blob/main/docs/api-review.md) (semver policy) and
+  [release process](https://github.com/uvar-apps/sesmesh/blob/main/docs/release.md)
 
 ## Workspace layout
 
@@ -85,7 +109,7 @@ fn main() -> sesmesh::Result<()> {
 | `crates/sesmesh-cli` | `sesmesh` command-line tool |
 | `crates/sesmesh-testkit` | Test oracles and analytic references (development only) |
 | `xtask` | Development automation (`cargo xtask ...`) |
-| `tests/data` | Test fixtures, download sets and checksums ([README](tests/data/README.md)) |
+| `tests/data` | Test fixtures, download sets and checksums ([README](https://github.com/uvar-apps/sesmesh/blob/main/tests/data/README.md)) |
 | `docs` | Specification, design and plan |
 
 ## Building
@@ -143,14 +167,14 @@ If you use sesmesh in published work, please cite the methods above:
 
 Radius sets: Bondi (1964) with Mantina et al. (2009), Alvarez (2013), and
 ProtOr (Tsai et al. 1999, classification from FreeSASA). The full reference
-list is in the [specification](docs/01-product-specification.md#12-references).
+list is in the [specification](https://github.com/uvar-apps/sesmesh/blob/main/docs/01-product-specification.md#12-references).
 
 ## Licence
 
 Licensed under either of
 
-* Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
-* MIT licence ([LICENSE-MIT](LICENSE-MIT))
+* Apache License, Version 2.0 ([LICENSE-APACHE](https://github.com/uvar-apps/sesmesh/blob/main/LICENSE-APACHE))
+* MIT licence ([LICENSE-MIT](https://github.com/uvar-apps/sesmesh/blob/main/LICENSE-MIT))
 
 at your option.
 
