@@ -11,7 +11,7 @@ use sesmesh_testkit::clusters::{
 use sesmesh_testkit::oracle::Oracle;
 
 use super::kernel::Engine;
-use super::lattice::{pack, touched_bricks};
+use super::lattice::{pack, touched_bricks, unpack};
 use super::*;
 use crate::geom::Vec3;
 
@@ -139,11 +139,8 @@ fn check_classification(
     let (_, surface) = engine.surface_bricks().map_err(|e| e.to_string())?;
     let o = oracle_for(c, kind);
     let surface: Vec<u64> = surface.iter().map(|k| pack(*k)).collect();
-    for key in touched
-        .iter()
-        .filter(|k| surface.binary_search(&pack(**k)).is_err())
-    {
-        let mut signs = brick_samples(&engine, *key)
+    for key in touched.iter().filter(|k| surface.binary_search(k).is_err()) {
+        let mut signs = brick_samples(&engine, unpack(*key))
             .into_iter()
             .map(|idx| oracle_value(&o, kind, engine.lattice.point(idx).to_array()) < 0.0);
         let first = signs.next().expect("non-empty brick");

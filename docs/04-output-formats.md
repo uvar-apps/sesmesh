@@ -141,7 +141,8 @@ column sums to the total area of the written mesh.
                   "triangles": 108654, "first_triangle": 0, "area": 2269.4,
                   "volume": 4687.6, "euler": 2, "genus": 0}, "..."],
   "engine": {"kernel": "neon", "touched_bricks": 1100, "surface_bricks": 900,
-             "refine_evaluations": 120000},
+             "refine_evaluations": 120000, "estimated_triangles": null,
+             "estimated_memory": null},
   "timings_ms": {"read": 1.0, "geometry": 2.8, "classify": 1.9, "mesh": 44.4,
                  "assemble": 1.0, "measure": 6.3, "write": 4.6, "total": 62.2},
   "warnings": []
@@ -151,6 +152,9 @@ column sums to the total area of the written mesh.
 * With decimation, `parameters.decimation` is
   `{"ratio": 0.25, "max_triangles": null, "max_error": null}` and
   `mesh.triangles_before_decimation` the triangle count before it.
+* With `--max-memory`, `engine.estimated_triangles` and
+  `engine.estimated_memory` (bytes) are the memory guard's estimate at the
+  grid spacing used (`null` without a limit).
 * `volume` is signed: outer components count positive, cavities negative; the
   mesh total is their sum.
 * `genus` is `(2 − euler) / 2` per closed component (tunnels through the

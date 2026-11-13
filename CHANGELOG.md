@@ -6,6 +6,49 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `SurfaceStats::estimated_triangles` and `SurfaceStats::estimated_memory`:
+  the memory guard's estimate at the spacing used (with `max_memory`). The
+  CLI prints it with `--max-memory` and records it in the statistics JSON
+  (`engine.estimated_triangles`, `engine.estimated_memory`).
+
+### Fixed
+
+- The memory guard (`--max-memory`, `--auto-coarsen`) underestimated the
+  peak: its triangle count (0.7 · brick side² of surface per surface brick)
+  was 1.1–2.5× low at spacings of 0.5 Å and coarser, where a brick holds
+  several surface sheets; its costs ignored the arrangement's build
+  transient, decimation and the classification of a fine grid. A 1 GiB
+  auto-coarsened run of the 1K4R capsid with `--max-triangles 1500000`
+  peaked at 1.46 GB (now 0.65 GB at 2.40 Å), `-q ultra --max-memory 1G
+  --auto-coarsen` at 2.40 GB (now 0.63 GB at 2.08 Å). The guard now counts the Marching Cubes triangles of up to 512
+  sampled bricks (exact below that, else a two-standard-error upper bound),
+  predicts a grid finer than 0.5 Å from a 0.5 Å pilot classification
+  (never classifying a grid that would not fit), checks the spacing finally
+  used on its own sample, refuses inputs whose atoms alone exceed the limit
+  before building anything, and costs the estimate at 16 MiB + 1 200 bytes
+  per sphere + 150 bytes per triangle (+ 50 each for decimation and
+  smoothing) + 100 bytes per touched brick, an upper bound of the measured
+  peak RSS (estimate 1.15–1.7× the peak on the test runs, Design §8.6,
+  validation report §5). `estimate_memory` uses the same costs and a
+  brick-side-dependent triangle envelope.
+
+### Changed
+
+- Lower peak memory, output unchanged (byte-identical meshes): the
+  arrangement is built in waves (only an eighth of the spheres' per-chunk
+  arrays beside the concatenated ones) and keeps no exposed arcs; brick
+  classification deduplicates keys as it goes and keeps them packed; the
+  field is freed after meshing unless smoothing needs it; decimation keeps
+  vertex–triangle incidence in two flat corner arrays instead of one vector
+  per vertex, takes the triangles instead of copying them and reads f32
+  positions in place; smoothing builds its adjacency from one directed edge
+  per triangle side. Peak RSS (same session): 1K4R capsid at 1 Å 1.68 →
+  1.54 GB, decimated to 1.5 M triangles 4.04 → 1.97 GB (and faster); 1AON
+  at 0.25 Å decimated to 2 M triangles 5.23 → 2.85 GB, smoothed at 0.5 Å
+  0.89 → 0.68 GB; 3J3Q at 1 Å 5.03 → 4.36–4.86 GB.
+
 ## [1.0.0] - 2026-11-13
 
 First stable release. The v1.0 criteria of the specification (§6.2) are met

@@ -982,6 +982,14 @@ fn surface_one(a: &SurfaceArgs, params: &SurfaceParams, job: &Job) -> CliResult<
             params.effective_probe(),
             s.spacing,
         );
+        if let (Some(bytes), Some(limit)) = (s.estimated_memory, params.max_memory) {
+            eprintln!(
+                "sesmesh: estimated peak memory {:.1} MiB (limit {:.1} MiB, about {} triangles before decimation)",
+                bytes as f64 / f64::from(1 << 20),
+                limit as f64 / f64::from(1 << 20),
+                s.estimated_triangles.unwrap_or(0),
+            );
+        }
         eprintln!(
             "sesmesh: {} vertices, {} triangles, {} component(s) ({} cavit{}), area {:.2} Å², volume {:.2} Å³",
             s.vertices,
@@ -1526,6 +1534,8 @@ fn stats_json(
             "touched_bricks": s.touched_bricks,
             "surface_bricks": s.surface_bricks,
             "refine_evaluations": s.refine_evaluations,
+            "estimated_triangles": s.estimated_triangles,
+            "estimated_memory": s.estimated_memory,
         },
         "timings_ms": {
             "read": msf(read),

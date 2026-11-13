@@ -184,14 +184,19 @@ impl SesField {
             kind
         };
         let mut arr = match kind {
-            SurfaceKind::Ses => Arrangement::build_with(spheres, probe_radius, true, control)?,
-            SurfaceKind::Sas => Arrangement::build_with(spheres, probe_radius, false, control)?,
-            SurfaceKind::Vdw => Arrangement::build_with(spheres, 0.0, false, control)?,
+            SurfaceKind::Ses => {
+                Arrangement::build_with(spheres, probe_radius, true, false, control)?
+            }
+            SurfaceKind::Sas => {
+                Arrangement::build_with(spheres, probe_radius, false, false, control)?
+            }
+            SurfaceKind::Vdw => Arrangement::build_with(spheres, 0.0, false, false, control)?,
         };
-        // The evaluator needs neither the arcs nor the neighbour rows of
-        // spheres that are not exposed (every reader filters on
-        // `Status::Exposed` first): release them (issue #21).
-        arr.arcs = Vec::new();
+        // The evaluator needs neither the arcs (not built: `with_arcs` is
+        // false) nor the neighbour rows of spheres that are not exposed
+        // (every reader filters on `Status::Exposed` first): release them
+        // (issue #21).
+        debug_assert!(arr.arcs.is_empty());
         let status = &arr.status;
         arr.neighbors.retain_rows(|i| status[i] == Status::Exposed);
         let cell = (2.0 * arr.max_expanded).max(1e-6);

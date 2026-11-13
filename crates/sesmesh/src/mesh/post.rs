@@ -248,14 +248,16 @@ pub(crate) fn smooth_and_project(
     if iterations == 0 || mesh.positions.is_empty() {
         return;
     }
-    // Vertex adjacency (CSR, sorted, deduplicated).
+    // Vertex adjacency (CSR, sorted, deduplicated). The mesh is a validated
+    // closed, consistently oriented edge-manifold, so the directed edges
+    // `(a, b)` of its triangles already contain both directions of every
+    // edge: one entry per triangle edge suffices (half the memory).
     let n = mesh.positions.len();
-    let mut pairs: Vec<u64> = Vec::with_capacity(6 * mesh.triangles.len());
+    let mut pairs: Vec<u64> = Vec::with_capacity(3 * mesh.triangles.len());
     for t in &mesh.triangles {
         for k in 0..3 {
             let (a, b) = (t[k], t[(k + 1) % 3]);
             pairs.push((u64::from(a) << 32) | u64::from(b));
-            pairs.push((u64::from(b) << 32) | u64::from(a));
         }
     }
     crate::par::sort_unstable(&mut pairs);

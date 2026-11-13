@@ -760,6 +760,39 @@ reference ⇒ ≲ 100 B per triangle before final compaction (NFR-MEM).
   on the existing field and the bricks re-classified; at most four attempts
   and $h \le 10$ Å, else `ResourceLimit`. `SurfaceStats::spacing` reports the
   spacing used (4HHB at 0.25 Å under a 40 MB limit: 0.696 Å).
+* *As built (after 1.0, memory-guard fix; validation report §5):* the
+  per-brick area was the weak point: at $Bh \ge 5$ Å a surface brick holds
+  several surface sheets, and the estimate was 1.1–2.5× low (1AON at 2 Å:
+  102 k estimated, 251 k real; 1K4R capsid at 2 Å: 1.06 M vs 2.33 M), so a
+  1 GiB auto-coarsened capsid run peaked at 1.46 GB. The guard now counts
+  triangles directly: the Marching Cubes cases (`extract::brick_triangles`,
+  the cell pass without vertices) of every surface brick when there are at
+  most 512, else of every $k$-th brick in key order ($k = \lceil n/512
+  \rceil$), extrapolated as $n(\bar t + 2 s_t/\sqrt{m})$ (sample mean and
+  standard deviation over $m$ sampled bricks). Measured: exact below 512
+  bricks, else 3–14 % high. Costs (§11.3): $16\,\text{MiB} + 1200\,N +
+  (150 + 50_{\text{decimation}} + 50_{\text{smoothing}})\,T + 100\,X$ bytes
+  ($N$ spheres, $T$ triangles before decimation, $X$ touched bricks of the
+  finest classification performed, whose transient the allocator keeps).
+  A fine grid is itself expensive to classify (capsid at 0.1 Å: 17 M
+  touched bricks), so the guard first classifies a pilot grid of brick side
+  5 Å ($h_p = \max(h, 5\,\text{Å}/B)$), samples it and predicts the
+  requested $h$ with $T \propto h^{-2}$ (× 1.1: triangles fall slightly
+  faster than $h^{-2}$, measured ≤ 8 % from 2 to 0.25 Å) and $X \propto
+  h^{-3}$ (measured 1.2–1.4× high). The requested grid is classified and
+  decided on its own sample when its classification fits and the
+  prediction is within twice the limit; otherwise (auto-coarsening) the
+  smallest spacing whose prediction fits is found by bisection, classified
+  and checked on its own sample. If that still does not fit, coarsening
+  continues with $h \leftarrow 1.05\,h\sqrt{(E - A)/(L - A)}$ ($A$ the
+  part independent of $h$), at most four times. The spheres alone are
+  checked before the arrangement is built. Typically two classifications
+  (pilot and final) instead of one per attempt.
+  `SurfaceStats::estimated_triangles` / `estimated_memory` report the
+  estimate. The public closed-form `estimate_memory` keeps its
+  signature with the same costs and a brick-side-dependent triangle
+  envelope $2.1\,B^2 \max(1, (Bh/2.5\,\text{Å})^{0.6})$ per surface brick
+  (measured $1.1$–$5.2\,B^2$).
 
 ---
 
@@ -1032,7 +1065,50 @@ for atom data; well within the 16 GB target.
 * Peak RSS: 1K4R capsid at 1 Å 2.42 → 1.74 GB, 3J3Q at 1 Å 7.89 → 7.16 GB
   (≈ 147 B per triangle), 1AON at 0.25 Å 2.38 → 2.14 GB.
 * Budget revised (Spec §5.2, #21): 150 B per triangle + 800 B per atom,
-  the same costs `estimate_memory` uses.
+  the same costs `estimate_memory` used then.
+
+*As built (after 1.0, memory-guard fix):* peak RSS per stage was measured
+with a counting global allocator (`malloc_size` of every block) and
+`getrusage` at each `Progress` stage change. macOS keeps freed small and
+medium blocks resident, so a stage's freed memory raises the peak of later
+stages that allocate large blocks: peak RSS ≈ the arrangement build's peak
+plus the triangle-dependent part. Reductions (meshes byte-identical):
+
+* Arrangement build in waves (128 chunks of a quarter of `par::chunk_len`,
+  an eighth of the spheres): each wave's `Part`s are appended to growing
+  arrays (shrunk to fit at the end) and freed, instead of all parts beside
+  exact-capacity copies; no exposed arcs are stored for the field
+  (`with_arcs = false`). Build heap peak 1 529 → 1 222 B per atom on the
+  capsid (1AON 1 605 → 1 164), RSS after the build 783 → 498 MB.
+* Brick classification: `touched_bricks` deduplicates each chunk's keys
+  whenever its buffer doubles (a sphere touches hundreds of bricks at
+  0.1 Å) and returns the packed keys, which `surface_bricks` unpacks on the
+  fly instead of a second `[i32; 3]` copy. Capsid at 0.1 Å: RSS after
+  classification 1.44 → 1.07 GB; at 0.25 Å heap peak 674 → 441 MB.
+* The guard's brick sample uses the engine's `ScratchPool`
+  (`Engine::map_bricks_pooled`), whose buffers the meshing then reuses.
+* The field is dropped after meshing unless smoothing needs it (then after
+  smoothing), so assembly, validation and decimation run without it.
+* Decimation: vertex → triangle incidence as corner lists (`head` per
+  vertex, `next` per triangle corner, dead corners unlinked on merge) instead
+  of `Vec<Vec<u32>>` (≈ 5 M small vectors on the capsid, which also
+  fragmented the allocator), triangles moved instead of cloned, f64
+  positions converted on the fly, one candidate buffer of $3T/2$ entries for
+  all passes: capsid at 1 Å decimated to 1.5 M triangles, heap 2.05 →
+  1.24 GB, RSS 3.40 → 1.97 GB, 61 → 51 s.
+* Smoothing adjacency from the $3T$ directed edges (a closed, consistently
+  oriented mesh holds both directions of each edge), not $6T$.
+* Guard costs from these measurements (10 threads): per sphere ≤ 930 B
+  of RSS after the build (structure included) plus the evaluators'
+  per-thread sphere maps (`local_of`, 4 B per sphere and thread) →
+  1 200 B; per triangle ≤ 113 B above that (≤ 154 decimating, ≤ 185
+  smoothing) → 150 B (+ 50, + 50); per touched brick of the finest
+  classification ≤ 91 B → 100 B; 16 MiB fixed (an empty run's RSS is
+  6–20 MB: binary, thread stacks, per-thread allocator regions). The thread
+  count is not an input of the estimate (the auto-coarsened spacing, hence
+  the mesh, must not depend on it); far more threads than 10 add about
+  4 B per sphere each. Estimate ÷ measured peak on the guard's test runs
+  (validation report §5): 1.15–1.7.
 
 ---
 

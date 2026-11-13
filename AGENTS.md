@@ -122,6 +122,12 @@ any deviation from the plan.
 - v1.0 development: decimation (crambin 0.25 Å 111 k → 28 k triangles in ≈ 120 ms; 1AON
   0.25 Å ≈ 6.5 s), auto-coarsen, gzip PLY/MSMS, completions + man page, Ctrl-C, memory
   (field ≈ 560 B/atom, 1K4R capsid 1 Å peak 2.42 → 1.74 GB).
+- After 1.0 (unreleased): memory guard fixed (Design §8.6/§11.3 "after 1.0"): triangles
+  counted by MC cases on ≤ 512 sampled bricks, 0.5 Å pilot classification for finer grids,
+  costs 16 MiB + 1 200 B/sphere + 150 B/triangle (+50 decimation, +50 smoothing) + 100 B per
+  touched brick; lower transients (arrangement waves, packed touched keys, field freed before
+  assembly, decimation corner lists). Measure memory with a counting global allocator in a
+  scratch crate outside the workspace (`malloc_size` + `getrusage` per `Progress` stage).
 - Phase 9 (docs/validation-report.md): 53-entry accuracy study (area −0.20 %, volume −0.02 % at
   0.25 Å vs h → 0 extrapolation), density constant 1.4999 ± 0.0025, 200/200 sweep ok, large
   inputs (3J3Q 1 Å: 48.7 M triangles, 70 s, 5.3 GB). Open: cross-tool references (#5, #6), NFR-ACC
