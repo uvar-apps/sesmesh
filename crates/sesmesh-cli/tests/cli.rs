@@ -399,6 +399,80 @@ fn batch_mode_keep_going_and_formats() {
 }
 
 #[test]
+fn missing_output_directories_are_created() {
+    let root = tmp("new-dirs");
+    let _ = std::fs::remove_dir_all(&root);
+    let inputs = [fixture("1CRN.cif.gz"), fixture("1L2Y.pdb.gz")];
+    let sub = |name: &str| root.join("batch").join(name);
+    let (meshes, stats, areas, verts) = (
+        sub("out/meshes"),
+        sub("stats"),
+        sub("side/areas"),
+        sub("verts"),
+    );
+    let o = run(&[
+        inputs[0].to_str().unwrap(),
+        inputs[1].to_str().unwrap(),
+        "--output-dir",
+        meshes.to_str().unwrap(),
+        "--output-format",
+        "ply",
+        "-q",
+        "draft",
+        "--stats",
+        stats.to_str().unwrap(),
+        "--atom-areas",
+        areas.to_str().unwrap(),
+        "--vertex-data",
+        verts.to_str().unwrap(),
+    ]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    for stem in ["1CRN", "1L2Y"] {
+        for path in [
+            meshes.join(format!("{stem}.ply")),
+            stats.join(format!("{stem}.stats.json")),
+            areas.join(format!("{stem}.atoms.csv")),
+            verts.join(format!("{stem}.vertices.csv")),
+        ] {
+            assert!(path.is_file(), "{} missing", path.display());
+        }
+    }
+
+    // One input: the parents of -o and of the side files are created.
+    let single = root.join("single");
+    let output = single.join("new/dir/x.obj");
+    let stats = single.join("stats/x.json");
+    let areas = single.join("areas/deeper/x.csv");
+    let o = run(&[
+        inputs[0].to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+        "-q",
+        "draft",
+        "--stats",
+        stats.to_str().unwrap(),
+        "--atom-areas",
+        areas.to_str().unwrap(),
+    ]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    let m = obj::parse(&std::fs::read_to_string(&output).unwrap()).unwrap();
+    assert_closed(&m);
+    assert!(stats.is_file() && areas.is_file());
+
+    // A directory that cannot be created is a runtime error (exit 1).
+    let blocker = root.join("file");
+    std::fs::write(&blocker, "").unwrap();
+    let o = run(&[
+        inputs[0].to_str().unwrap(),
+        "-o",
+        blocker.join("x.obj").to_str().unwrap(),
+        "-q",
+        "draft",
+    ]);
+    assert_eq!(code(&o), 1, "{}", String::from_utf8_lossy(&o.stderr));
+}
+
+#[test]
 fn msms_density_smoothing_memory() {
     let crn = fixture("1CRN.cif.gz");
     let crn = crn.to_str().unwrap();

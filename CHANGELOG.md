@@ -6,6 +6,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- CLI: missing output directories are created instead of failing every input
+  with "No such file or directory": `--output-dir`, the batch side-file
+  directories (`--stats`, `--atom-areas`, `--vertex-data` with several
+  inputs) and, for a single input, the parent directories of `-o` and of the
+  side files (not for `-`).
+
 ## [1.0.0] - 2026-11-13
 
 First stable release. The v1.0 criteria of the specification (§6.2) are met

@@ -216,7 +216,8 @@ struct SurfaceArgs {
     output_format: Option<OutputFormat>,
     /// Directory for outputs named after the inputs (default: current
     /// directory). With several inputs, `--stats`, `--atom-areas` and
-    /// `--vertex-data` also name directories.
+    /// `--vertex-data` also name directories. Missing directories, and the
+    /// parents of output files, are created.
     #[arg(long, help_heading = "Output")]
     output_dir: Option<PathBuf>,
     /// Batch mode: continue with the next input after a failure.
@@ -763,11 +764,22 @@ fn jobs(a: &SurfaceArgs) -> CliResult<Vec<Job>> {
             ));
         }
     }
-    let dir = a.output_dir.clone().unwrap_or_default();
-    if let Some(d) = &a.output_dir {
-        std::fs::create_dir_all(d)
-            .map_err(|e| Failure::Runtime(format!("{}: {e}", d.display())))?;
+    // Missing directories are created before any input is read, so an
+    // unwritable location fails before the computation: `--output-dir`, the
+    // batch side-file directories, and the parents of single-input files.
+    let mut dirs: Vec<&Path> = a.output_dir.iter().map(PathBuf::as_path).collect();
+    let files = [&a.stats, &a.vertex_data, &a.atom_areas];
+    let files = files.into_iter().flatten().filter(|p| p.as_os_str() != "-");
+    if batch {
+        dirs.extend(files.map(PathBuf::as_path));
+    } else {
+        let output = a.output.iter().filter(|p| p.as_os_str() != "-");
+        dirs.extend(output.chain(files).filter_map(|p| p.parent()));
     }
+    for d in dirs {
+        create_dir(d)?;
+    }
+    let dir = a.output_dir.clone().unwrap_or_default();
     Ok(a.inputs
         .iter()
         .map(|input| {
@@ -1288,6 +1300,15 @@ fn summarize_model(out: &mut String, structure: &Structure, model: &sesmesh::Mod
         "elements: {}\nhetero atoms: {het}  hydrogens: {hydrogens}  water atoms: {waters}  alt-loc atoms: {altloc}\n",
         el.join(" ")
     ));
+}
+
+/// Creates `dir` and its missing parents (nothing to do for an existing
+/// directory or the empty parent of a bare file name).
+fn create_dir(dir: &Path) -> CliResult<()> {
+    if dir.as_os_str().is_empty() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(dir).map_err(|e| Failure::Runtime(format!("{}: {e}", dir.display())))
 }
 
 /// Writes a text file through a buffered writer.

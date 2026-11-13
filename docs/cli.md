@@ -120,7 +120,7 @@ small features better than a coarse grid with the same triangle count.
 |---|---|---|
 | `-o, --output PATH` | `<input stem>.<ext>` in `--output-dir` | Output file; `-` for standard output (OBJ, PLY); a `.gz` suffix compresses any format |
 | `--output-format obj\|ply\|msms` | from the `-o` extension (without `.gz`) | `.ply` → PLY, `.vert`/`.face` → MSMS, otherwise OBJ |
-| `--output-dir DIR` | current directory | Output directory for default names (batch mode) |
+| `--output-dir DIR` | current directory | Output directory for default names (batch mode); created if missing |
 | `--precision N` | 4 | Decimals in OBJ (0–9) |
 | `--no-normals` | off | Omit normals |
 | `--face-normals` | off | Area-weighted face-averaged normals instead of the analytic ones |
@@ -138,6 +138,11 @@ error, and `--stats` / `--atom-areas` / `--vertex-data` name directories
 (`<stem>.stats.json`, `<stem>.atoms.csv`, `<stem>.vertices.csv`). Without
 `--keep-going` the batch stops at the first failing input; with it, every
 input is tried and the summary reports "N of M inputs failed".
+
+Missing directories are created (with their parents) before the first input
+is read: `--output-dir` and the side-file directories of a batch, and for a
+single input the parent directories of `-o` and of the side files (not for
+`-`). A directory that cannot be created is a runtime error (exit code 1).
 
 ## Performance and diagnostics
 
