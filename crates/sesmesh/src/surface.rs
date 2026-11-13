@@ -510,6 +510,12 @@ pub struct SurfaceStats {
     pub refine_evaluations: u64,
     /// Kernel instruction set used.
     pub simd: &'static str,
+    /// With [`SurfaceParams::max_memory`]: the memory guard's triangle
+    /// estimate at the spacing used (before decimation), else `None`.
+    pub estimated_triangles: Option<u64>,
+    /// With [`SurfaceParams::max_memory`]: the memory guard's peak-memory
+    /// estimate in bytes (at most the limit), else `None`.
+    pub estimated_memory: Option<u64>,
     /// Stage timings.
     pub timings: Timings,
 }
@@ -627,13 +633,211 @@ impl SurfaceEngine {
     }
 }
 
-/// Estimated triangle count and peak bytes for `surface_bricks` bricks and
-/// `spheres` input spheres (Design §8.4, §8.6): area ≤ 0.7·(B·h)² per
-/// surface brick (measured 0.38–0.68 on 1CRN, 4HHB, 1AON), `2 · 1.5 / h²`
-/// triangles per Å², and peak memory of 150 bytes per triangle plus 800 bytes
-/// per sphere (the Spec NFR-MEM budget; measured 110–150 B per triangle on
-/// 1AON, 4V6X, 3J3Q and ≈ 700 B per atom for the SAS arrangement and
-/// structure data, docs/validation-report.md).
+/// Peak-memory model of the memory guard (Design §8.6, §11.3), an upper
+/// bound of the peak RSS measured on 1CRN, 4HHB, 1AON, the 1K4R capsid and
+/// 3J3Q at 0.1–4 Å with 10 threads (docs/validation-report.md §5): a fixed
+/// part (program, thread stacks and allocator regions), bytes per input
+/// sphere (structure data and the SAS arrangement, whose build transient
+/// stays resident in the allocator, measured ≤ 930; the field evaluators'
+/// per-thread sphere maps, 4 bytes per sphere and thread) and bytes per
+/// triangle before decimation (brick meshes, assembly, validation; measured
+/// ≤ 113 above the per-sphere part). The thread count is deliberately not
+/// an input: the spacing auto-coarsening picks must not depend on it.
+const PEAK_FIXED: u64 = 16 << 20;
+/// See [`PEAK_FIXED`].
+const PEAK_PER_SPHERE: u64 = 1_200;
+/// See [`PEAK_FIXED`].
+const PEAK_PER_TRIANGLE: u64 = 150;
+/// Extra bytes per triangle (before decimation) when decimating: corner
+/// lists, quadrics and the candidate list of `mesh::decimate` (measured
+/// ≤ 154 in all).
+const PEAK_PER_TRIANGLE_DECIMATION: u64 = 50;
+/// Extra bytes per triangle when smoothing: the field stays alive and the
+/// smoothing adjacency and positions are added (measured ≤ 185 in all).
+const PEAK_PER_TRIANGLE_SMOOTHING: u64 = 50;
+
+/// Estimated peak bytes for `triangles` (before decimation) and `spheres`
+/// input spheres with `params`' post-processing.
+fn peak_bytes(triangles: u64, spheres: usize, params: &SurfaceParams) -> u64 {
+    let mut per_triangle = PEAK_PER_TRIANGLE;
+    if params.decimation.is_some() {
+        per_triangle += PEAK_PER_TRIANGLE_DECIMATION;
+    }
+    if params.smoothing > 0 {
+        per_triangle += PEAK_PER_TRIANGLE_SMOOTHING;
+    }
+    PEAK_FIXED + spheres as u64 * PEAK_PER_SPHERE + triangles * per_triangle
+}
+
+/// Surface bricks counted by [`estimate_triangles`] at most.
+const SAMPLE_BRICKS: usize = 512;
+
+/// Triangles the mesh of `bricks` will have: the Marching Cubes cases of
+/// every brick (exact) up to [`SAMPLE_BRICKS`] bricks, else of every k-th
+/// brick in key order, extrapolated with a two-standard-error margin. Only
+/// the sampled bricks' fields are evaluated; deterministic.
+fn estimate_triangles(engine: &Engine, bricks: &[[i32; 3]], pool: &ScratchPool) -> u64 {
+    if bricks.is_empty() {
+        return 0;
+    }
+    let stride = bricks.len().div_ceil(SAMPLE_BRICKS);
+    let sample: Vec<[i32; 3]> = bricks.iter().step_by(stride).copied().collect();
+    let b = engine.lattice.b as usize;
+    let counts = engine.map_bricks_pooled(&sample, pool, |_, values| {
+        extract::brick_triangles(b, values) as f64
+    });
+    let total: f64 = counts.iter().sum();
+    if stride == 1 {
+        return total as u64;
+    }
+    let n = counts.len() as f64;
+    let mean = total / n;
+    let variance = counts.iter().map(|c| (c - mean).powi(2)).sum::<f64>() / (n - 1.0);
+    ((mean + 2.0 * (variance / n).sqrt()) * bricks.len() as f64).ceil() as u64
+}
+
+/// Brick side (Å) of the memory guard's pilot classification: a finer
+/// requested grid is first estimated on this one, so that it is never
+/// classified when it would not fit.
+const PILOT_SIDE: f64 = 5.0;
+/// Margin on triangle counts extrapolated from the pilot to a finer grid
+/// (`T ∝ 1/h²`; measured up to 8 % low from 2 Å to 0.25 Å, ≤ 1 % from
+/// 0.5 Å).
+const EXTRAPOLATION_MARGIN: f64 = 1.1;
+/// Peak bytes per touched brick of the finest classification performed
+/// (key arrays, surface-brick list, allocator retention; measured ≤ 91).
+/// Touched bricks scale as `1/h³` from the pilot (measured 1.2–1.4× high).
+const PEAK_PER_TOUCHED_BRICK: u64 = 100;
+
+/// Result of [`fit_memory`].
+struct Fit {
+    spacing: f64,
+    touched: usize,
+    bricks: Vec<[i32; 3]>,
+    /// Triangles (before decimation) and peak bytes.
+    estimate: (u64, u64),
+}
+
+/// The memory guard (Design §8.6): the spacing at which the estimated peak
+/// fits `limit` (the requested one, or a coarser one with `auto_coarsen`),
+/// with the engine and surface bricks there, or [`Error::ResourceLimit`].
+/// A requested grid finer than the pilot ([`PILOT_SIDE`]) is first
+/// predicted from the pilot classification; it is classified only if that
+/// classification itself fits and the prediction is within twice the limit
+/// (else the smallest fitting spacing up to 10 Å is chosen on the
+/// prediction). The estimate at the spacing finally used always comes from
+/// its own brick sample and includes the finest classification performed.
+fn fit_memory(
+    mut engine: Engine,
+    spheres: usize,
+    params: &SurfaceParams,
+    limit: u64,
+    control: &Control<'_>,
+    pool: &ScratchPool,
+) -> Result<(Engine, Fit)> {
+    let rebuild = |engine: Engine, h: f64| -> Result<(Engine, usize, Vec<[i32; 3]>)> {
+        let engine = Engine::new(engine.field, h, params.brick_size, params.simd)?;
+        let (touched, bricks) = engine.surface_bricks()?;
+        control.check()?;
+        Ok((engine, touched, bricks))
+    };
+    let bytes = |triangles: f64, touched: f64| {
+        peak_bytes(triangles as u64, spheres, params)
+            + (touched * PEAK_PER_TOUCHED_BRICK as f64) as u64
+    };
+    let refuse = |bytes: u64, triangles: u64, h: f64| Error::ResourceLimit {
+        what: format!(
+            "estimated peak memory ({bytes} bytes for about {triangles} triangles at {h} Å)"
+        ),
+        limit,
+    };
+    let requested = params.spacing();
+    let pilot = requested.max(PILOT_SIDE / params.brick_size as f64);
+    let (mut touched, mut bricks);
+    (engine, touched, bricks) = rebuild(engine, pilot)?;
+    let pilot_touched = touched as f64;
+    let pilot_triangles = estimate_triangles(&engine, &bricks, pool);
+    control.check()?;
+    // Predicted at spacing h from the pilot (exact sample at the pilot):
+    // triangles, peak bytes, and the bytes of classifying at h.
+    let predict = |h: f64| {
+        let s = pilot / h;
+        let margin = if h < pilot { EXTRAPOLATION_MARGIN } else { 1.0 };
+        let triangles = pilot_triangles as f64 * s * s * margin;
+        let touched = pilot_touched * (s * s * s).max(1.0);
+        (triangles, bytes(triangles, touched), bytes(0.0, touched))
+    };
+    let mut h = requested;
+    let (triangles, predicted, classifying) = predict(h);
+    // Decide on the requested grid's own sample when classifying it is safe
+    // and it may fit; else on the (more conservative) prediction.
+    if predicted > limit && (classifying > limit || predicted / 2 > limit) {
+        if !params.auto_coarsen || h >= 10.0 {
+            return Err(refuse(predicted, triangles as u64, h));
+        }
+        let (triangles, coarsest, _) = predict(10.0);
+        if coarsest > limit {
+            return Err(refuse(coarsest, triangles as u64, 10.0));
+        }
+        // Smallest spacing that fits (the prediction decreases with h).
+        let (mut lo, mut hi) = (h, 10.0);
+        for _ in 0..40 {
+            let mid = 0.5 * (lo + hi);
+            if predict(mid).1 > limit {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        h = hi;
+    }
+    // Classify at h and check its own estimate; coarsen further if needed.
+    let mut finest_touched = pilot_touched;
+    let (mut current, mut triangles) = (pilot, pilot_triangles);
+    let mut attempts = 0;
+    loop {
+        if h != current {
+            (engine, touched, bricks) = rebuild(engine, h)?;
+            finest_touched = finest_touched.max(touched as f64);
+            (current, triangles) = (h, estimate_triangles(&engine, &bricks, pool));
+            control.check()?;
+        }
+        let used = bytes(triangles as f64, finest_touched);
+        if used <= limit {
+            let fit = Fit {
+                spacing: h,
+                touched,
+                bricks,
+                estimate: (triangles, used),
+            };
+            return Ok((engine, fit));
+        }
+        let fixed = bytes(0.0, finest_touched);
+        if !params.auto_coarsen || attempts == 4 || limit <= fixed || h >= 10.0 {
+            return Err(refuse(used, triangles, h));
+        }
+        // Triangles scale as 1/h²: one corrected pass usually suffices.
+        let factor = ((used - fixed) as f64 / (limit - fixed) as f64).sqrt();
+        h = (h * factor * 1.05).min(10.0);
+        attempts += 1;
+    }
+}
+
+/// Estimated triangle count and peak bytes (without decimation) for
+/// `surface_bricks` surface bricks of `brick_size` cells at `spacing` and
+/// `spheres` input spheres, a closed-form version of the memory guard's
+/// estimate (Design §8.6, §11.3).
+///
+/// Triangles per surface brick grow with the brick side `s = brick_size ·
+/// spacing` (more surface sheets per brick): `2.1 · brick_size² ·
+/// max(1, (s / 2.5 Å)^0.6)`, an upper envelope of 1CRN, 4HHB, 1AON and the
+/// 1K4R capsid at 0.25–3 Å (measured 1.1–5.2 · brick_size²). Peak bytes:
+/// 16 MiB + 1 200 per sphere + 150 per triangle, an upper bound of the
+/// measured peak RSS (docs/validation-report.md §5); decimation and
+/// smoothing add 50 bytes per triangle each.
+/// The guard itself ([`SurfaceParams::with_max_memory`]) counts the
+/// triangles of a sample of the bricks instead
+/// ([`SurfaceStats::estimated_memory`]).
 pub fn estimate_memory(
     surface_bricks: usize,
     brick_size: usize,
@@ -641,11 +845,11 @@ pub fn estimate_memory(
     spheres: usize,
 ) -> (u64, u64) {
     let side = brick_size as f64 * spacing;
-    let area = surface_bricks as f64 * 0.7 * side * side;
-    let triangles = 2.0 * VERTICES_PER_AREA_H2 * area / (spacing * spacing);
+    let per_brick = 2.1 * (brick_size * brick_size) as f64 * (side / 2.5).powf(0.6).max(1.0);
+    let triangles = (surface_bricks as f64 * per_brick) as u64;
     (
-        triangles as u64,
-        (triangles * 150.0 + spheres as f64 * 800.0) as u64,
+        triangles,
+        peak_bytes(triangles, spheres, &SurfaceParams::default()),
     )
 }
 
@@ -708,6 +912,19 @@ fn run(
         clock = now;
     };
 
+    if let Some(limit) = params.max_memory {
+        // The spheres alone may exceed the limit: refuse before building.
+        let bytes = peak_bytes(0, spheres.len(), params);
+        if bytes > limit {
+            return Err(Error::ResourceLimit {
+                what: format!(
+                    "estimated peak memory ({bytes} bytes for {} spheres before any triangle)",
+                    spheres.len()
+                ),
+                limit,
+            });
+        }
+    }
     control.report(Stage::Geometry, 0, 1);
     let field = SesField::new_with(spheres, params.effective_probe(), params.kind, control)?;
     let kind = field.kind();
@@ -716,37 +933,18 @@ fn run(
     lap(&mut timings.geometry);
 
     control.report(Stage::Classify, 0, 1);
-    let mut spacing = params.spacing();
-    let (mut touched, mut bricks) = engine.surface_bricks()?;
-    control.check()?;
-    if let Some(limit) = params.max_memory {
-        // Refuse, or (auto_coarsen) grow the spacing until the estimate fits:
-        // triangles scale as 1/h², so one corrected pass usually suffices.
-        let mut attempts = 0;
-        loop {
-            let (triangles, bytes) =
-                estimate_memory(bricks.len(), params.brick_size, spacing, spheres.len());
-            if bytes <= limit {
-                break;
-            }
-            let atom_bytes = spheres.len() as u64 * 800;
-            if !params.auto_coarsen || attempts == 4 || limit <= atom_bytes || spacing >= 10.0 {
-                return Err(Error::ResourceLimit {
-                    what: format!(
-                        "estimated mesh memory ({bytes} bytes for about {triangles} triangles at {spacing} Å)"
-                    ),
-                    limit,
-                });
-            }
-            let factor = ((bytes - atom_bytes) as f64 / (limit - atom_bytes) as f64).sqrt();
-            spacing = (spacing * factor * 1.05).min(10.0);
-            let field = engine.field;
-            engine = Engine::new(field, spacing, params.brick_size, params.simd)?;
-            (touched, bricks) = engine.surface_bricks()?;
-            control.check()?;
-            attempts += 1;
+    let (spacing, touched, bricks, memory_estimate) = match params.max_memory {
+        None => {
+            let (touched, bricks) = engine.surface_bricks()?;
+            (params.spacing(), touched, bricks, None)
         }
-    }
+        Some(limit) => {
+            let fit;
+            (engine, fit) = fit_memory(engine, spheres.len(), params, limit, control, pool)?;
+            (fit.spacing, fit.touched, fit.bricks, Some(fit.estimate))
+        }
+    };
+    control.check()?;
     control.report(Stage::Classify, 1, 1);
     lap(&mut timings.classify);
 
@@ -760,6 +958,16 @@ fn run(
         extract::ChunkMesh::default,
         |part, key, values| part.push(&engine, key, values, params.refine),
     )?;
+    let simd = engine.simd_name();
+    // Only smoothing needs the field after meshing: free it before the
+    // assembly, which with validation and decimation holds the peak
+    // (Design §11.3).
+    let field = if params.smoothing > 0 {
+        Some(engine.field)
+    } else {
+        drop(engine);
+        None
+    };
     lap(&mut timings.mesh);
 
     control.report(Stage::Assemble, 0, 1);
@@ -791,8 +999,9 @@ fn run(
         params,
         kind,
     );
-    if params.smoothing > 0 {
-        post::smooth_and_project(&mut mesh, &engine.field, spheres, params.smoothing);
+    if let Some(field) = field {
+        post::smooth_and_project(&mut mesh, &field, spheres, params.smoothing);
+        drop(field);
         let check = mesh::validate(&mesh);
         if !check.is_ok() {
             return Err(Error::Internal(format!(
@@ -856,7 +1065,9 @@ fn run(
         decimation,
         euler: components.iter().map(|c| c.euler).sum(),
         refine_evaluations,
-        simd: engine.simd_name(),
+        simd,
+        estimated_triangles: memory_estimate.map(|e| e.0),
+        estimated_memory: memory_estimate.map(|e| e.1),
         timings,
     };
     Ok(SurfaceOutput {
@@ -918,6 +1129,37 @@ mod tests {
             assert_eq!(other.mesh, one.mesh, "{threads} threads");
             assert_eq!(obj_bytes(&other), bytes, "{threads} threads");
         }
+    }
+
+    /// The memory guard's triangle count is exact when every brick is
+    /// counted and errs high, within a few per cent, when sampled.
+    #[test]
+    fn triangle_estimate_matches_the_mesh() {
+        let c = random_chain(&mut Rng::new(5), 80);
+        let s = spheres(&c);
+        for (h, exact) in [(0.5, true), (0.1, false)] {
+            let field = SesField::new(&s, c.probe, SurfaceKind::Ses).unwrap();
+            let engine = Engine::new(field, h, 10, SimdLevel::Auto).unwrap();
+            let (_, bricks) = engine.surface_bricks().unwrap();
+            assert_eq!(bricks.len() <= SAMPLE_BRICKS, exact, "{}", bricks.len());
+            let estimate = estimate_triangles(&engine, &bricks, &ScratchPool::default());
+            let real = compute_surface(&s, &SurfaceParams::ses(c.probe).with_spacing(h))
+                .unwrap()
+                .stats
+                .triangles as u64;
+            if exact {
+                assert_eq!(estimate, real);
+            } else {
+                assert!(
+                    estimate >= real && estimate * 10 < real * 12,
+                    "{estimate} vs {real}"
+                );
+            }
+        }
+        let plain = SurfaceParams::default();
+        assert_eq!(peak_bytes(0, 0, &plain), PEAK_FIXED);
+        let decimating = plain.clone().with_decimation(mesh::Decimation::ratio(0.5));
+        assert!(peak_bytes(1000, 10, &decimating) > peak_bytes(1000, 10, &plain));
     }
 
     /// Degenerate geometries of the robustness corpus (Design §15) give

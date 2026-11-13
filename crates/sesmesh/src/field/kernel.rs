@@ -302,6 +302,30 @@ impl Engine {
         )
     }
 
+    /// [`Engine::map_bricks`] with buffers taken from `pool` (and returned to
+    /// it for the meshing that follows: no buffer per parallel split).
+    pub(crate) fn map_bricks_pooled<T, F>(
+        &self,
+        bricks: &[[i32; 3]],
+        pool: &ScratchPool,
+        f: F,
+    ) -> Vec<T>
+    where
+        T: Send,
+        F: Fn([i32; 3], &[f32]) -> T + Sync + Send,
+    {
+        let n = self.samples_per_brick();
+        par::map_init(
+            bricks.len(),
+            || pool.take(self),
+            |scratch, i| {
+                let s = &mut scratch.scratch;
+                self.evaluate(bricks[i], s);
+                f(bricks[i], &s.values[..n])
+            },
+        )
+    }
+
     /// Evaluates the bricks in consecutive chunks of `chunk`, in parallel:
     /// `f` folds the bricks of one chunk, in order, into an accumulator made
     /// by `init`; accumulators are returned in chunk order. With

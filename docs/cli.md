@@ -151,7 +151,7 @@ single input the parent directories of `-o` and of the side files (not for
 |---|---|---|
 | `-j, --threads N` | all logical cores | Worker threads (output is identical for any N) |
 | `--simd auto\|scalar\|sse4.2\|avx2\|avx512\|neon` | `auto` | Field kernel instruction set; x86 levels are capped at what the CPU supports |
-| `--max-memory BYTES` | | Refuse inputs whose estimated memory exceeds the limit (`8G`, `512M`); exit code 4 |
+| `--max-memory BYTES` | | Refuse inputs whose *estimated* peak memory exceeds the limit (`8G`, `512M`; binary units); exit code 4 |
 | `--auto-coarsen` | off | With `--max-memory`: grow the grid spacing until the estimate fits instead of refusing (the spacing used is reported) |
 | `--quiet` | off | Print errors only |
 | `--progress` | off | Progress on standard error |
@@ -159,6 +159,22 @@ single input the parent directories of `-o` and of the side files (not for
 
 Standard error shows warnings (e.g. unknown radii), a summary (atoms,
 vertices, triangles, components, cavities, area, volume) and the output path.
+
+`--max-memory` limits an *estimate* of the whole process's peak resident
+memory, made after the atoms' geometry is built and before any mesh exists:
+the triangle count from the Marching Cubes cases of up to 512 sampled
+bricks (errs high by a few per cent), costed at 16 MiB + 1 200 bytes per
+atom + 150 bytes per triangle (+ 50 each with decimation and with
+smoothing) + 100 bytes per brick touched by the finest grid classified. A
+grid finer than 0.5 Å (brick side 5 Å) is first predicted from a 0.5 Å
+pilot grid, so `-q ultra --max-memory 1G --auto-coarsen` never classifies
+the 0.1 Å grid of a large input. The constants bound peaks measured on
+macOS with 10 threads (validation report §5: estimate 1.15–1.7× the
+measured peak); other allocators, platforms or many more threads may
+differ, so keep some headroom below the physical memory. The summary
+prints the estimate; the statistics JSON records it
+(`engine.estimated_memory`). Inputs whose atoms alone exceed the limit are
+refused before any work.
 
 Ctrl-C (SIGINT) cancels the computation within about 100 ms and exits with
 code 130; in batch mode no further input is started. A closed standard

@@ -177,20 +177,95 @@ pub struct DecimationStats {
     pub collapses: usize,
 }
 
+/// No corner (end of a corner list).
+const NONE: u32 = u32::MAX;
+
+/// Vertex → triangle incidence as singly linked lists of triangle corners
+/// (corner `c` is slot `c % 3` of triangle `c / 3`): two flat arrays, 4 bytes
+/// per corner and per vertex, instead of one small vector per vertex (whose
+/// allocations dominated the decimation's peak memory, issue #21 follow-up).
+/// Lists may hold corners of dead triangles; readers filter on `alive_tri`.
+struct Corners {
+    head: Vec<u32>,
+    next: Vec<u32>,
+}
+
+impl Corners {
+    fn new(vertices: usize, tris: &[[u32; 3]]) -> Self {
+        let mut head = vec![NONE; vertices];
+        let mut next = vec![NONE; 3 * tris.len()];
+        for (t, tri) in tris.iter().enumerate() {
+            for (k, &v) in tri.iter().enumerate() {
+                let c = 3 * t + k;
+                next[c] = head[v as usize];
+                head[v as usize] = c as u32;
+            }
+        }
+        Self { head, next }
+    }
+
+    /// Corners of vertex `v` (any order).
+    fn of(&self, v: u32) -> impl Iterator<Item = u32> + '_ {
+        let mut c = self.head[v as usize];
+        std::iter::from_fn(move || {
+            (c != NONE).then(|| {
+                let out = c;
+                c = self.next[c as usize];
+                out
+            })
+        })
+    }
+
+    /// Triangles of vertex `v` that are alive.
+    fn alive_tris<'a>(&'a self, v: u32, alive_tri: &'a [bool]) -> impl Iterator<Item = u32> + 'a {
+        self.of(v)
+            .map(|c| c / 3)
+            .filter(move |&t| alive_tri[t as usize])
+    }
+
+    /// Moves the corners of `u` whose triangle is alive to `v`, drops the
+    /// dead corners of `v`, and empties `u`.
+    fn merge(&mut self, u: u32, v: u32, alive_tri: &[bool]) {
+        let mut c = self.head[u as usize];
+        while c != NONE {
+            let following = self.next[c as usize];
+            if alive_tri[(c / 3) as usize] {
+                self.next[c as usize] = self.head[v as usize];
+                self.head[v as usize] = c;
+            }
+            c = following;
+        }
+        self.head[u as usize] = NONE;
+        // Unlink the dead corners of `v`.
+        let mut prev = NONE;
+        let mut c = self.head[v as usize];
+        while c != NONE {
+            let following = self.next[c as usize];
+            if alive_tri[(c / 3) as usize] {
+                prev = c;
+            } else if prev == NONE {
+                self.head[v as usize] = following;
+            } else {
+                self.next[prev as usize] = following;
+            }
+            c = following;
+        }
+    }
+}
+
 /// Sorted neighbours of vertex `x` over the live triangles, into `out`.
 fn neighbours_into(
     x: u32,
-    vertex_tris: &[Vec<u32>],
+    corners: &Corners,
     tris: &[[u32; 3]],
     alive_tri: &[bool],
     out: &mut Vec<u32>,
 ) {
     out.clear();
     out.extend(
-        vertex_tris[x as usize]
-            .iter()
-            .filter(|&&t| alive_tri[t as usize])
-            .flat_map(|&t| tris[t as usize])
+        corners
+            .alive_tris(x, alive_tri)
+            .flat_map(|t| tris[t as usize])
             .filter(|&w| w != x),
     );
     out.sort_unstable();
@@ -205,10 +280,12 @@ const MIN_NORMAL_COS: f64 = 0.2;
 /// Decimates a closed, edge-manifold mesh in place (see the module docs).
 /// Vertex attributes (normals, nearest atom, patch, component) follow the
 /// retained vertices; unused vertices are removed.
+///
+/// Working memory: ≈ 90 bytes per input triangle on top of the mesh (corner
+/// lists, quadrics, the candidate list of a pass), Design §11.3.
 pub fn decimate(mesh: &mut Mesh, options: &Decimation) -> DecimationStats {
     let nv = mesh.positions.len();
-    let mut tris: Vec<[u32; 3]> = mesh.triangles.clone();
-    let before = tris.len();
+    let before = mesh.triangles.len();
     let target = options.target(before);
     let mut stats = DecimationStats {
         triangles_before: before,
@@ -218,18 +295,16 @@ pub fn decimate(mesh: &mut Mesh, options: &Decimation) -> DecimationStats {
     if target >= before || nv == 0 {
         return stats;
     }
-    let pos: Vec<[f64; 3]> = mesh.positions.iter().map(|p| p.map(f64::from)).collect();
+    // Positions in f64 (exact conversion), read in place rather than copied.
+    let positions = &mesh.positions;
+    let pos = |i: u32| positions[i as usize].map(f64::from);
+    let mut tris: Vec<[u32; 3]> = std::mem::take(&mut mesh.triangles);
     let mut alive_tri = vec![true; tris.len()];
-    let mut vertex_tris: Vec<Vec<u32>> = vec![Vec::new(); nv];
-    for (t, tri) in tris.iter().enumerate() {
-        for &v in tri {
-            vertex_tris[v as usize].push(t as u32);
-        }
-    }
+    let mut corners = Corners::new(nv, &tris);
     // Triangles per component (never collapse below a tetrahedron).
-    let comp_of = |v: u32| mesh.vertex_component.get(v as usize).copied().unwrap_or(0);
-    let ncomp = mesh
-        .vertex_component
+    let vertex_component = &mesh.vertex_component;
+    let comp_of = |v: u32| vertex_component.get(v as usize).copied().unwrap_or(0);
+    let ncomp = vertex_component
         .iter()
         .copied()
         .max()
@@ -241,7 +316,7 @@ pub fn decimate(mesh: &mut Mesh, options: &Decimation) -> DecimationStats {
     // Plane quadrics (unweighted: the error approximates a distance).
     let mut quadric = vec![Quadric::default(); nv];
     for tri in &tris {
-        let [a, b, c] = tri.map(|i| pos[i as usize]);
+        let [a, b, c] = tri.map(pos);
         let n = cross(sub(b, a), sub(c, a));
         let len = dot(n, n).sqrt();
         if len == 0.0 {
@@ -259,9 +334,12 @@ pub fn decimate(mesh: &mut Mesh, options: &Decimation) -> DecimationStats {
     } else {
         f64::INFINITY
     };
-    // Reused buffers (no allocation per collapse).
+    // Reused buffers (no allocation per collapse). A closed mesh has
+    // 3/2 edges per triangle, so the first pass's candidate list never
+    // grows beyond its initial capacity.
     let (mut nbrs, mut ut, mut shared, mut nu, mut nv_) =
         (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+    let mut candidates: Vec<Candidate> = Vec::with_capacity(before / 2 * 3 + 3);
     let mut touched = vec![false; nv];
     let mut remaining = before;
     // Passes (as in meshoptimizer): rank every live edge by the error of
@@ -269,20 +347,20 @@ pub fn decimate(mesh: &mut Mesh, options: &Decimation) -> DecimationStats {
     // whose neighbourhood already changed in this pass; repeat until the
     // target is met or nothing collapses.
     'passes: while remaining > target {
-        let mut candidates: Vec<Candidate> = Vec::new();
+        candidates.clear();
         for v in 0..nv as u32 {
             if !alive_v[v as usize] {
                 continue;
             }
-            neighbours_into(v, &vertex_tris, &tris, &alive_tri, &mut nbrs);
+            neighbours_into(v, &corners, &tris, &alive_tri, &mut nbrs);
             for &w in &nbrs {
                 if w < v {
                     continue;
                 }
                 let mut q = quadric[v as usize];
                 q.add(&quadric[w as usize]);
-                let a = q.eval(pos[w as usize]).max(0.0);
-                let b = q.eval(pos[v as usize]).max(0.0);
+                let a = q.eval(pos(w)).max(0.0);
+                let b = q.eval(pos(v)).max(0.0);
                 let c = if a <= b {
                     Candidate {
                         error: a,
@@ -315,12 +393,7 @@ pub fn decimate(mesh: &mut Mesh, options: &Decimation) -> DecimationStats {
                 continue;
             }
             ut.clear();
-            ut.extend(
-                vertex_tris[u as usize]
-                    .iter()
-                    .copied()
-                    .filter(|&t| alive_tri[t as usize]),
-            );
+            ut.extend(corners.alive_tris(u, &alive_tri));
             // Triangles on edge (u, v): exactly two in a closed manifold.
             shared.clear();
             shared.extend(
@@ -333,8 +406,8 @@ pub fn decimate(mesh: &mut Mesh, options: &Decimation) -> DecimationStats {
             }
             // Link condition: common neighbours are exactly the two
             // opposite vertices of the shared triangles.
-            neighbours_into(u, &vertex_tris, &tris, &alive_tri, &mut nu);
-            neighbours_into(v, &vertex_tris, &tris, &alive_tri, &mut nv_);
+            neighbours_into(u, &corners, &tris, &alive_tri, &mut nu);
+            neighbours_into(v, &corners, &tris, &alive_tri, &mut nv_);
             let common = nu.iter().filter(|w| nv_.binary_search(w).is_ok()).count();
             if common != 2 {
                 continue;
@@ -342,8 +415,8 @@ pub fn decimate(mesh: &mut Mesh, options: &Decimation) -> DecimationStats {
             // No flip, no sliver.
             let ok = ut.iter().filter(|t| !shared.contains(t)).all(|&t| {
                 let tri = tris[t as usize];
-                let old = tri.map(|i| pos[i as usize]);
-                let new = tri.map(|i| pos[if i == u { v } else { i } as usize]);
+                let old = tri.map(pos);
+                let new = tri.map(|i| pos(if i == u { v } else { i }));
                 let n0 = cross(sub(old[1], old[0]), sub(old[2], old[0]));
                 let n1 = cross(sub(new[1], new[0]), sub(new[2], new[0]));
                 let (l0, l1) = (dot(n0, n0).sqrt(), dot(n1, n1).sqrt());
@@ -366,14 +439,12 @@ pub fn decimate(mesh: &mut Mesh, options: &Decimation) -> DecimationStats {
                             *x = v;
                         }
                     }
-                    vertex_tris[v as usize].push(t);
                 }
             }
+            corners.merge(u, v, &alive_tri);
             remaining -= 2;
             comp_tris[comp_of(u) as usize] -= 2;
             alive_v[u as usize] = false;
-            vertex_tris[u as usize] = Vec::new();
-            vertex_tris[v as usize].retain(|&t| alive_tri[t as usize]);
             let qu = quadric[u as usize];
             quadric[v as usize].add(&qu);
             stats.collapses += 1;
@@ -392,6 +463,8 @@ pub fn decimate(mesh: &mut Mesh, options: &Decimation) -> DecimationStats {
             break;
         }
     }
+    // Release the working set before building the compacted mesh.
+    drop((candidates, corners, quadric, alive_v, touched));
     // Compact.
     let mut remap = vec![u32::MAX; nv];
     let mut out = Mesh::default();

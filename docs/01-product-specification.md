@@ -336,6 +336,12 @@ measured after 1.0 (#8, #10).
   ≈ 560 B per atom of field data plus ≈ 150 B of input structure and
   spheres; all large inputs within the revised budget (1K4R capsid at 1 Å
   1.74 GB of 1.92 GB, 3J3Q at 1 Å 7.16 GB of 9.25 GB).
+* *After 1.0 (memory-guard fix, validation report §5):* peaks lowered
+  further (capsid at 1 Å 1.54 GB, decimated 1.97 GB); the budget stays the
+  NFR target, while the memory guard (FR-LOD-6) now estimates the whole
+  process conservatively (16 MiB + 1 200 B per atom + 150 B per triangle,
+  more with decimation, smoothing or a fine grid), not with the budget's
+  figures.
 
 ### 5.3 Accuracy (NFR-ACC)
 

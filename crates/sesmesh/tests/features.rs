@@ -319,17 +319,25 @@ fn density_mode_hits_its_target() {
 fn memory_guard_refuses_large_meshes() {
     let s = shell_with_core();
     let p = SurfaceParams::ses(1.4).with_spacing(0.3);
-    let out = run(&s, &p);
-    let (tris, bytes) =
-        sesmesh::estimate_memory(out.stats.surface_bricks, p.brick_size, 0.3, s.len());
+    let out = run(&s, &p.clone().with_max_memory(u64::MAX));
+    // The guard's triangle count (MC cases of a brick sample) is close to
+    // the mesh and errs high.
+    let tris = out.stats.estimated_triangles.unwrap();
+    let real = out.stats.triangles as f64;
     assert!(
-        tris as f64 > out.stats.triangles as f64 * 0.8,
-        "{tris} vs {}",
-        out.stats.triangles
+        tris as f64 >= real && (tris as f64) < 1.3 * real,
+        "{tris} vs {real}"
     );
-    let err = compute_surface(&s, &p.clone().with_max_memory(bytes / 2)).unwrap_err();
+    let bytes = out.stats.estimated_memory.unwrap();
+    let err = compute_surface(&s, &p.clone().with_max_memory(bytes - 1)).unwrap_err();
     assert!(matches!(err, sesmesh::Error::ResourceLimit { .. }), "{err}");
-    run(&s, &p.with_max_memory(bytes * 2));
+    let fits = run(&s, &p.clone().with_max_memory(bytes));
+    assert_eq!(fits.mesh, out.mesh);
+    assert_eq!(run(&s, &p).stats.estimated_memory, None);
+    // The closed-form estimate is an upper envelope of the triangle count.
+    let (closed, _) =
+        sesmesh::estimate_memory(out.stats.surface_bricks, p.brick_size, 0.3, s.len());
+    assert!(closed as f64 >= real, "{closed} vs {real}");
 }
 
 #[test]
@@ -565,20 +573,14 @@ fn decimation_keeps_vertices_on_the_surface() {
 fn memory_guard_can_coarsen() {
     let s = shell_with_core();
     let p = SurfaceParams::ses(1.4).with_spacing(0.25);
-    let full = run(&s, &p);
-    let (_, bytes) =
-        sesmesh::estimate_memory(full.stats.surface_bricks, p.brick_size, 0.25, s.len());
-    let limit = bytes / 4;
+    let full = run(&s, &p.clone().with_max_memory(u64::MAX));
+    let limit = full.stats.estimated_memory.unwrap() * 3 / 5;
     assert!(compute_surface(&s, &p.clone().with_max_memory(limit)).is_err());
     let coarse = run(&s, &p.with_max_memory(limit).with_auto_coarsen(true));
     assert!(coarse.stats.spacing > 0.25, "{}", coarse.stats.spacing);
-    let (_, used) = sesmesh::estimate_memory(
-        coarse.stats.surface_bricks,
-        10,
-        coarse.stats.spacing,
-        s.len(),
-    );
+    let used = coarse.stats.estimated_memory.unwrap();
     assert!(used <= limit, "{used} > {limit}");
+    assert!(coarse.stats.estimated_triangles.unwrap() >= coarse.stats.triangles as u64);
     assert_eq!(coarse.stats.components, full.stats.components);
 }
 

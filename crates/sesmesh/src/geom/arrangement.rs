@@ -54,6 +54,12 @@ impl Csr {
         }
     }
 
+    /// Releases unused capacity.
+    fn shrink_to_fit(&mut self) {
+        self.offsets.shrink_to_fit();
+        self.items.shrink_to_fit();
+    }
+
     fn push_row(&mut self, row: impl IntoIterator<Item = u32>) {
         self.items.extend(row);
         self.close_row();
@@ -401,18 +407,20 @@ impl Arrangement {
     /// [`Error::InvalidInput`] for non-finite coordinates, negative or
     /// non-finite radii, or an invalid probe radius.
     pub(crate) fn build(spheres: &[Sphere], probe: f64) -> Result<Self> {
-        Self::build_with(spheres, probe, true, &Control::new())
+        Self::build_with(spheres, probe, true, true, &Control::new())
     }
 
     /// Like [`Arrangement::build`] but without circles, arcs and triple
     /// points: enough for the SAS and vdW fields.
     pub(crate) fn build_spheres(spheres: &[Sphere], probe: f64) -> Result<Self> {
-        Self::build_with(spheres, probe, false, &Control::new())
+        Self::build_with(spheres, probe, false, false, &Control::new())
     }
 
     /// [`Arrangement::build`] (`with_circles`) or
     /// [`Arrangement::build_spheres`], checking `control` for cancellation
-    /// between stages and per sphere.
+    /// between stages and per sphere. Without `with_arcs` no exposed arcs
+    /// are stored (the field never reads them) and every circle's arc range
+    /// is `(0, 0)`.
     ///
     /// # Errors
     /// As [`Arrangement::build`], and [`Error::Cancelled`].
@@ -420,6 +428,7 @@ impl Arrangement {
         spheres: &[Sphere],
         probe: f64,
         with_circles: bool,
+        with_arcs: bool,
         control: &Control<'_>,
     ) -> Result<Self> {
         if !(probe.is_finite() && probe >= 0.0) {
@@ -531,46 +540,64 @@ impl Arrangement {
         control.check()?;
 
         // Circles (i, j > i), their exposed arcs and the triple points they
-        // carry, per sphere i in parallel; concatenated in sphere order.
+        // carry, per chunk of spheres in parallel, in waves of `WAVE` chunks
+        // appended in sphere order: only one wave's per-chunk arrays exist
+        // next to the concatenated ones (the build's peak memory, Design
+        // §11.3). Chunks are a quarter of the neighbour stage's, so a wave
+        // (an eighth of the spheres) keeps every thread busy; the result
+        // depends on neither.
+        const WAVE: usize = 128;
+        let small = chunk.div_ceil(4);
+        let small_chunks = n.div_ceil(small);
         let geometry = SphereGeometry {
             centers: &centers,
             expanded: &expanded,
             neighbors: &neighbors,
         };
-        let parts: Vec<Part> = par::map_init(chunks, Scratch::default, |scratch, c| {
-            let mut part = Part::default();
-            if with_circles {
-                for i in range(c) {
-                    if !contained[i] && !control.is_cancelled() {
-                        geometry.circles_of(i, scratch, &mut part);
-                    }
-                }
-            }
-            part
-        });
-        control.check()?;
         let mut exposed: Vec<bool> = (0..n)
             .map(|i| !contained[i] && (!with_circles || neighbors.row(i).is_empty()))
             .collect();
-        // Exact capacities: these arrays live as long as the field.
-        let total = |f: fn(&Part) -> usize| parts.iter().map(f).sum::<usize>();
-        let mut circles = Vec::with_capacity(total(|p| p.circles.len()));
-        let mut arcs = Vec::with_capacity(total(|p| p.arcs.len()));
-        let mut circle_blockers =
-            Csr::with_capacity(circles.capacity(), total(|p| p.blockers.total()));
-        let mut vertices = Vec::with_capacity(total(|p| p.vertices.len()));
-        for part in parts {
-            let base = u32::try_from(arcs.len()).expect("fewer than 2^32 arcs");
-            for mut circle in part.circles {
-                exposed[circle.i as usize] = true;
-                exposed[circle.j as usize] = true;
-                circle.arcs = (circle.arcs.0 + base, circle.arcs.1 + base);
-                circles.push(circle);
+        let mut circles = Vec::new();
+        let mut arcs = Vec::new();
+        let mut circle_blockers = Csr::with_capacity(0, 0);
+        let mut vertices = Vec::new();
+        for first in (0..small_chunks).step_by(WAVE) {
+            let parts: Vec<Part> = par::map_init(
+                WAVE.min(small_chunks - first),
+                Scratch::default,
+                |scratch, c| {
+                    let mut part = Part::default();
+                    if with_circles {
+                        for i in par::chunk_range(n, small, first + c) {
+                            if !contained[i] && !control.is_cancelled() {
+                                geometry.circles_of(i, with_arcs, scratch, &mut part);
+                            }
+                        }
+                    }
+                    part
+                },
+            );
+            control.check()?;
+            for part in parts {
+                let base = u32::try_from(arcs.len()).expect("fewer than 2^32 arcs");
+                for mut circle in part.circles {
+                    exposed[circle.i as usize] = true;
+                    exposed[circle.j as usize] = true;
+                    if with_arcs {
+                        circle.arcs = (circle.arcs.0 + base, circle.arcs.1 + base);
+                    }
+                    circles.push(circle);
+                }
+                circle_blockers.append(&part.blockers);
+                arcs.extend(part.arcs);
+                vertices.extend(part.vertices);
             }
-            circle_blockers.append(&part.blockers);
-            arcs.extend(part.arcs);
-            vertices.extend(part.vertices);
         }
+        // Exact capacities: these arrays live as long as the field.
+        circles.shrink_to_fit();
+        arcs.shrink_to_fit();
+        circle_blockers.shrink_to_fit();
+        vertices.shrink_to_fit();
         debug_assert_eq!(circle_blockers.rows(), circles.len());
 
         let status: Vec<Status> = (0..n)
@@ -634,7 +661,7 @@ struct Part {
 
 impl SphereGeometry<'_> {
     /// Appends the circles of sphere `i` (with `j > i`) to `out`.
-    fn circles_of(&self, i: usize, scratch: &mut Scratch, out: &mut Part) {
+    fn circles_of(&self, i: usize, with_arcs: bool, scratch: &mut Scratch, out: &mut Part) {
         let (centers, expanded) = (self.centers, self.expanded);
         for &j in self.neighbors.row(i).iter().filter(|&&j| j as usize > i) {
             let ju = j as usize;
@@ -678,7 +705,11 @@ impl SphereGeometry<'_> {
             if !exposed_arcs(&mut scratch.intervals, &mut scratch.merged, &mut out.arcs) {
                 continue;
             }
-            circle.arcs = (first, out.arcs.len() as u32);
+            if with_arcs {
+                circle.arcs = (first, out.arcs.len() as u32);
+            } else {
+                out.arcs.truncate(first as usize);
+            }
             // Triple points: each triple i < j < k comes from circle (i, j)
             // and a blocker k > j; it is kept if no other neighbour of i
             // contains it (any sphere containing a point of sphere i

@@ -128,6 +128,83 @@ pressure, so only same-session pairs compare):
   800 B per atom (Spec §5.2), the measured figure and the memory guard's
   estimate; every large input is within it.
 
+**Update (after 1.0, memory guard).** A 1 GiB auto-coarsened capsid run
+(`1K4R --assembly 1 -q high --max-memory 1G --auto-coarsen --max-triangles
+1500000`) peaked at 1.46 GB. Causes, measured with a counting global
+allocator (heap per stage) and peak RSS:
+
+* The triangle estimate ($0.7\,(Bh)^2$ of surface per surface brick) was
+  1.1–2.5× low from 0.5 Å on (several surface sheets per brick); triangles
+  estimated vs real:
+
+  | Input | 0.25 Å | 0.5 Å | 1 Å | 2 Å |
+  |---|---|---|---|---|
+  | 4HHB | 1.79 M / 1.28 M | | 56 k / 78 k | 11 k / 18 k |
+  | 1AON | 23.4 M / 17.5 M | 3.83 M / 4.34 M | 0.60 M / 1.06 M | 102 k / 251 k |
+  | 1K4R assembly 1 | | | 6.21 M / 9.88 M | 1.06 M / 2.33 M |
+
+* The per-atom cost (800 B) missed the arrangement build's transient (heap
+  peak 1 529 B per atom on the capsid), which macOS keeps resident.
+* Decimation held the undecimated mesh, ≈ 5 M per-vertex vectors and a
+  copy of the triangles: capsid at 1 Å decimated to 1.5 M triangles, heap
+  2.05 GB, RSS 3.4–4.0 GB (1.68 GB without decimation).
+
+The guard now counts Marching Cubes triangles on up to 512 sampled bricks
+(exact for 1AON at 1 and 2 Å and 4HHB at 1 Å; otherwise 3–14 % high),
+predicts grids finer than 0.5 Å from a 0.5 Å pilot classification, and
+costs the estimate at 16 MiB + 1 200 B per sphere + 150 B per triangle
+(+ 50 with decimation, + 50 with smoothing) + 100 B per touched brick of
+the finest grid classified (Design §8.6); the build transient, the fine
+classification, decimation and smoothing were reduced (Design §11.3,
+meshes byte-identical on 1CRN, 4HHB and 1AON, including decimated,
+smoothed and cavity-filtered runs). Same-session pairs (peak RSS,
+`/usr/bin/time -l`; the new runs with `--max-memory 1T`, which prints the
+estimate; machine under heavy load):
+
+| Input | Spacing | Options | Triangles | Peak RSS 1.0.0 | Peak RSS new | Guard estimate |
+|---|---|---|---|---|---|---|
+| 4HHB | 0.25 Å | | 1.28 M | 173 MB | 167 MB | 243 MB |
+| 1AON | 0.25 Å | | 17.5 M | 2.09 GB | 2.07 GB | 2.85 GB |
+| 1AON | 0.25 Å | `--max-triangles 2000000` | 17.5 M → 2 M | 5.23 GB | 2.85 GB | 3.77 GB |
+| 1AON | 0.5 Å | `--smooth 2` | 4.34 M | 0.89 GB | 0.68 GB | 1.05 GB |
+| 1K4R assembly 1 | 1 Å | | 9.88 M | 1.68 GB | 1.54 GB | 2.25 GB |
+| 1K4R assembly 1 | 1 Å | `--max-triangles 1500000` | 9.88 M → 1.5 M | 4.04 GB | 1.97 GB | 2.77 GB |
+| 3J3Q | 1 Å | | 48.7 M | 5.03 GB | 4.36–4.86 GB | 11.1 GB |
+
+Under a limit (`--auto-coarsen`; limits in binary units, peaks in MiB to
+compare):
+
+| Input | Options | 1.0.0: grid, peak | New: grid, estimate, peak |
+|---|---|---|---|
+| 1K4R assembly 1 | `-q high --max-memory 1G --max-triangles 1500000` | 1.918 Å, 1 397 MiB ✗ | 2.402 Å, 1 008 MiB, 623 MiB |
+| 1K4R assembly 1 | `-q high --max-memory 1G` | | 2.080 Å, 1 001 MiB, 600 MiB |
+| 1K4R assembly 1 | `-q ultra --max-memory 1G` | 1.785 Å, 2 289 MiB ✗ | 2.080 Å, 1 001 MiB, 599 MiB |
+| 1K4R assembly 1 | `-q ultra --max-memory 2G --max-triangles 2000000` | | 1.233 Å, 1 927 MiB, 1 283 MiB |
+| 1K4R assembly 1 | `-q high --max-memory 700M` | | 6.118 Å, 682 MiB, 593 MiB |
+| 1K4R assembly 1 | `-q high --max-memory 640M` | | refused (atoms alone ≈ 640 MiB), exit 4 |
+| 1AON | `-q ultra --max-memory 512M` | | 0.634 Å, 497 MiB, 352 MiB |
+| 1AON | `-q high --max-memory 1G --max-triangles 1000000` | | 0.500 Å, 1 000 MiB, 722 MiB |
+| 1AON | `-q high --max-memory 512M --smooth 2` | | 0.732 Å, 501 MiB, 341 MiB |
+| 4HHB | `-q ultra --max-memory 64M` | | 0.545 Å, 63 MiB, 47 MiB |
+| 3J3Q | `--max-memory 4G` | | 2.511 Å, 3 960 MiB, 2 496 MiB |
+
+The estimate is 1.15–1.7× the measured peak; the per-sphere term dominates
+inputs with few triangles per atom (the capsid under 700 MiB needs a 6 Å
+grid).
+
+* Per stage on the capsid at 1 Å (heap): arrangement build 834 → 666 MB
+  (1 529 → 1 222 B per atom; 1AON 1 605 → 1 164), RSS after it 783 →
+  498 MB; with decimation the heap peak 2.05 → 1.24 GB. Classification at
+  0.1 Å (17.4 M touched bricks): RSS after it 1.44 → 1.07 GB.
+* Calibration: RSS after the build ≤ 930 B per atom (structure included),
+  field evaluation buffers ≈ 130 B per atom with 10 threads; above that
+  ≤ 113 B per triangle (≤ 154 decimating, ≤ 185 smoothing before the
+  smoothing change); classification ≤ 91 B per touched brick; runs with
+  few triangles add up to 20 MB of fixed overhead. 3J3Q measured 7.16 GB
+  (147 B per triangle) in an earlier session and 4.36–4.86 GB here: macOS
+  RSS falls under memory pressure, so the constants cover the larger
+  figure.
+
 ## 6. Performance (NFR-PERF)
 
 | Structure | Spacing | Target | Measured (10 cores, loaded) | Ratio |

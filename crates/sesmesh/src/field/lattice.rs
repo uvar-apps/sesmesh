@@ -91,8 +91,8 @@ pub(crate) fn unpack(packed: u64) -> [i32; 3] {
 
 /// Bricks overlapping any (non-contained) sphere's surface-carrying ball:
 /// expanded radius for SES/SAS, vdW radius for vdW. All other bricks lie in
-/// the solvent and are uniformly outside. Sorted by packed key.
-pub(crate) fn touched_bricks(field: &SesField, lattice: &Lattice) -> Result<Vec<[i32; 3]>> {
+/// the solvent and are uniformly outside. Packed keys ([`pack`]), sorted.
+pub(crate) fn touched_bricks(field: &SesField, lattice: &Lattice) -> Result<Vec<u64>> {
     let a = &field.arr;
     let n = a.centers.len();
     // Chunks of spheres with flat, locally deduplicated key arrays
@@ -101,6 +101,11 @@ pub(crate) fn touched_bricks(field: &SesField, lattice: &Lattice) -> Result<Vec<
     let chunk = par::chunk_len(n);
     let per_chunk: Vec<Result<Vec<u64>>> = par::map(n.div_ceil(chunk), |c| {
         let mut keys = Vec::new();
+        // Neighbouring spheres share most bricks (a fine grid gives each
+        // sphere hundreds): deduplicate whenever the buffer doubles, so it
+        // stays within about twice the chunk's distinct bricks (peak memory
+        // of a fine classification, Design §11.3).
+        let mut compact_at = 1 << 16;
         for i in par::chunk_range(n, chunk, c) {
             if a.status[i] == Status::Contained {
                 continue;
@@ -122,9 +127,15 @@ pub(crate) fn touched_bricks(field: &SesField, lattice: &Lattice) -> Result<Vec<
                     }
                 }
             }
+            if keys.len() >= compact_at {
+                keys.sort_unstable();
+                keys.dedup();
+                compact_at = compact_at.max(2 * keys.len());
+            }
         }
         keys.sort_unstable();
         keys.dedup();
+        keys.shrink_to_fit();
         Ok(keys)
     });
     let mut keys = Vec::with_capacity(
@@ -138,7 +149,7 @@ pub(crate) fn touched_bricks(field: &SesField, lattice: &Lattice) -> Result<Vec<
     }
     par::sort_unstable(&mut keys);
     keys.dedup();
-    Ok(keys.into_iter().map(unpack).collect())
+    Ok(keys)
 }
 
 /// Keeps the bricks the surface can pass through, using provably
@@ -147,16 +158,17 @@ pub(crate) fn touched_bricks(field: &SesField, lattice: &Lattice) -> Result<Vec<
 pub(crate) fn surface_bricks(
     field: &SesField,
     lattice: &Lattice,
-    touched: &[[i32; 3]],
+    touched: &[u64],
 ) -> Vec<[i32; 3]> {
     let rho = lattice.brick_radius();
     let keep: Vec<bool> = par::map(touched.len(), |t| {
-        uniform_sign(field, lattice.brick_center(touched[t]), rho).is_none()
+        uniform_sign(field, lattice.brick_center(unpack(touched[t])), rho).is_none()
     });
     touched
         .iter()
         .zip(keep)
-        .filter_map(|(k, keep)| keep.then_some(*k))
+        .filter(|&(_, keep)| keep)
+        .map(|(&k, _)| unpack(k))
         .collect()
 }
 

@@ -223,6 +223,33 @@ fn mesh_brick(
     }
 }
 
+/// Number of triangles [`mesh_brick`] emits for a brick of `b`³ cells with
+/// samples `values` (same layout): the cell pass without vertices. Used to
+/// estimate the mesh size before meshing (memory guard, Design §8.6).
+pub(crate) fn brick_triangles(b: usize, values: &[f32]) -> usize {
+    let s = b + 1;
+    let corner_step: [usize; 8] = std::array::from_fn(|c| {
+        let o = corner_offset(c);
+        o[0] + o[1] * s + o[2] * s * s
+    });
+    let mut n = 0;
+    for z in 0..b {
+        for y in 0..b {
+            for x in 0..b {
+                let i0 = (z * s + y) * s + x;
+                let mut case = 0;
+                for (c, &st) in corner_step.iter().enumerate() {
+                    if values[i0 + st] < 0.0 {
+                        case |= 1 << c;
+                    }
+                }
+                n += tables::triangles(case).len();
+            }
+        }
+    }
+    n
+}
+
 /// A crossing edge `pa → pb` with sampled values of opposite inside/outside
 /// state and the parameter clamp.
 struct Edge {
