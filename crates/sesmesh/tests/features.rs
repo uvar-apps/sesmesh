@@ -233,9 +233,11 @@ fn density_mode_hits_its_target() {
         let p = SurfaceParams::ses(1.4).with_density(density);
         assert!((p.spacing() - (1.5f64 / density).sqrt()).abs() < 1e-12);
         let out = run(&s, &p);
+        // Calibrated on the validation set: vertices·h²/area = 1.4999 ± 0.0025
+        // (53 entries, h ≤ 0.5 Å; docs/validation-report.md).
         let achieved = out.stats.vertices as f64 / out.stats.area;
         assert!(
-            (achieved / density - 1.0).abs() < 0.25,
+            (achieved / density - 1.0).abs() < 0.05,
             "{density}: {achieved}"
         );
     }
@@ -247,7 +249,8 @@ fn memory_guard_refuses_large_meshes() {
     let s = shell_with_core();
     let p = SurfaceParams::ses(1.4).with_spacing(0.3);
     let out = run(&s, &p);
-    let (tris, bytes) = sesmesh::estimate_memory(out.stats.surface_bricks, p.brick_size, 0.3);
+    let (tris, bytes) =
+        sesmesh::estimate_memory(out.stats.surface_bricks, p.brick_size, 0.3, s.len());
     assert!(
         tris as f64 > out.stats.triangles as f64 * 0.8,
         "{tris} vs {}",

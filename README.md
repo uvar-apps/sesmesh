@@ -15,7 +15,7 @@ molecular surface) meshing for molecular structures, written in Rust.
   (AVX2 / AVX-512 / NEON).
 * Ships as a reusable library crate plus a command-line tool.
 
-> **Status: Phases 0–8 done (decimation pending).** Structure files → closed, oriented SES / SAS /
+> **Status: Phases 0–9 done (decimation and cross-tool references pending).** Structure files → closed, oriented SES / SAS /
 > vdW meshes with analytic normals → OBJ, from the library and the `sesmesh`
 > CLI, multi-threaded and SIMD-accelerated, with cavity handling, components,
 > vertex colours, per-atom areas, JSON statistics, density and smoothing
@@ -69,6 +69,8 @@ fn main() -> sesmesh::Result<()> {
   milestones
 * [Output formats](docs/04-output-formats.md): OBJ, CSV side files, JSON
   statistics
+* [Validation report](docs/validation-report.md): accuracy, robustness,
+  large inputs, performance
 
 ## Workspace layout
 

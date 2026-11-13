@@ -1209,6 +1209,8 @@ dependencies = [
  "anyhow",
  "clap",
  "serde",
+ "serde_json",
+ "sesmesh",
  "sha2",
  "toml",
 ]

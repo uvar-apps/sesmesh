@@ -17,6 +17,9 @@ cargo fmt --all
 cargo +1.89 check -p sesmesh -p sesmesh-cli  # MSRV
 cargo xtask fetch --set small --set bench  # RCSB structures into tests/data/cache (untracked)
 cargo bench -p sesmesh --bench surface     # end to end; also: field (per SIMD level), scaling, parse, geometry
+cargo xtask fetch --set validation --set sweep   # Phase 9 corpora (~70 MB)
+cargo run --release -p xtask -- validate   # accuracy study → docs/validation/accuracy.csv (~3 min)
+cargo run --release -p xtask -- sweep      # robustness sweep → docs/validation/sweep.csv (~2 min)
 SESMESH_BLESS=1 cargo test -p sesmesh mc_table   # regenerate mesh/mc_table.rs (then rerun tests)
 target/release/sesmesh data/1crn.cif -q high --timings   # CLI smoke run (writes 1crn.obj)
 ```
@@ -46,8 +49,9 @@ any deviation from the plan.
 - `main` = `origin/main` = Phase 8 (`phase-8-lod`), except T8.4 decimation and shell completions
   (issues #1, #2).
 - Root `atom-colors.json` and `out/` are untracked on purpose.
-- Phases 0–8 done (T8.4 deferred). Next: T8.4 decimation if wanted, then Phase 9 (validation
-  and performance campaign) on `phase-9-validation`.
+- Branch `phase-9-validation`: Phase 9 committed locally (report `docs/validation-report.md`);
+  not yet merged into `main` or pushed: fast-forward `main` and push when the user asks.
+- Phases 0–9 done (T8.4 deferred; cross-tool references T9.2/T9.6 open). Next: Phase 10.
 
 ## Layout (crates/sesmesh/src)
 
@@ -99,11 +103,15 @@ any deviation from the plan.
 - Accuracy: the inscribed MC mesh underestimates area (0.4–0.65 %) and volume (0.8–1.35 %) at
   0.25 Å for atom-sized spheres, O(h²) (D§15 "Measured", spec NFR-ACC note).
 - Performance: D§7.7 and D§11.1 (1AON at 0.5 Å ≈ 3.1 s, 4HHB at 0.25 Å ≈ 0.54 s, 10 cores).
+- Phase 9 (docs/validation-report.md): 53-entry accuracy study (area −0.20 %, volume −0.02 % at
+  0.25 Å vs h → 0 extrapolation), density constant 1.4999 ± 0.0025, 200/200 sweep ok, large
+  inputs (3J3Q 1 Å: 48.7 M triangles, 70 s, 5.3 GB). Open: cross-tool references (#5, #6), NFR-ACC
+  decision (#4), NFR-PERF targets missed ≤ 2× on this machine, per-atom memory ≈ 600–800 B.
 
 ## Next
 
-Open items are GitHub issues #1–#18, collected in the tracking issue #19 ("Roadmap: open items
-after Phase 8"). Labels: `type:` (feature, performance, validation, ci, docs, decision,
+Open items are GitHub issues #1–#18 and #20–#23, collected in the tracking issue #19
+("Roadmap: open items after Phase 9"; Phase 9 results are posted on #4, #5, #7, #11). Labels: `type:` (feature, performance, validation, ci, docs, decision,
 tracking), `area:` (io, field, mesh, engine, export, cli, ci), `phase:` (8, 9, 10, backlog),
 `priority:` (must/should/could = spec MoSCoW). Close issues from commits/PRs (`Fixes #N`) and
 tick them in #19. Summary:

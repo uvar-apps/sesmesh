@@ -567,16 +567,26 @@ impl SurfaceEngine {
     }
 }
 
-/// Estimated triangle count and peak bytes of the mesh stages for
-/// `surface_bricks` bricks (Design §8.4, §8.6): area ≤ 0.7·(B·h)² per surface
-/// brick (measured 0.38–0.68 on 1CRN, 4HHB, 1AON), `2 · 1.5 / h²`
-/// triangles per Å², ≈ 100 bytes per triangle at peak (brick meshes,
-/// assembled mesh, sorted edge keys).
-pub fn estimate_memory(surface_bricks: usize, brick_size: usize, spacing: f64) -> (u64, u64) {
+/// Estimated triangle count and peak bytes for `surface_bricks` bricks and
+/// `spheres` input spheres (Design §8.4, §8.6): area ≤ 0.7·(B·h)² per
+/// surface brick (measured 0.38–0.68 on 1CRN, 4HHB, 1AON), `2 · 1.5 / h²`
+/// triangles per Å², and peak memory of 150 bytes per triangle plus 800 bytes
+/// per sphere (Phase 9 measurements: 110–150 B per triangle on 1AON, 4V6X,
+/// 3J3Q; ≈ 600–800 B per atom for the SAS arrangement and structure data,
+/// docs/validation-report.md).
+pub fn estimate_memory(
+    surface_bricks: usize,
+    brick_size: usize,
+    spacing: f64,
+    spheres: usize,
+) -> (u64, u64) {
     let side = brick_size as f64 * spacing;
     let area = surface_bricks as f64 * 0.7 * side * side;
     let triangles = 2.0 * VERTICES_PER_AREA_H2 * area / (spacing * spacing);
-    (triangles as u64, (triangles * 100.0) as u64)
+    (
+        triangles as u64,
+        (triangles * 150.0 + spheres as f64 * 800.0) as u64,
+    )
 }
 
 /// Applies the cavity mode and filters (Design §9.2); returns the number of
@@ -640,7 +650,12 @@ fn run(
     let (touched, bricks) = engine.surface_bricks()?;
     control.check()?;
     if let Some(limit) = params.max_memory {
-        let (triangles, bytes) = estimate_memory(bricks.len(), params.brick_size, params.spacing());
+        let (triangles, bytes) = estimate_memory(
+            bricks.len(),
+            params.brick_size,
+            params.spacing(),
+            spheres.len(),
+        );
         if bytes > limit {
             return Err(Error::ResourceLimit {
                 what: format!(

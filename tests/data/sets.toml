@@ -28,3 +28,67 @@ files = [
     "3J3Q.cif.gz",  # HIV-1 capsid, 2.44 M atoms (mmCIF only)
     "1K4R.cif.gz",  # dengue virus, asymmetric unit (assembly ~545 k atoms)
 ]
+
+[sets.validation]
+description = "Validation corpus (Plan T9.1): ~50 entries, 300 to 240 k atoms, mmCIF"
+files = [
+    # small proteins and peptides
+    "1CRN.cif.gz", "1L2Y.cif.gz", "1EJG.cif.gz", "1VII.cif.gz", "1PPT.cif.gz",
+    "5PTI.cif.gz", "4PTI.cif.gz", "1BPI.cif.gz", "1ENH.cif.gz", "1PGB.cif.gz",
+    "1SHG.cif.gz", "1UBQ.cif.gz", "1TEN.cif.gz", "1HRC.cif.gz", "3CLN.cif.gz",
+    "1CLL.cif.gz", "1MBN.cif.gz", "1LYZ.cif.gz", "2LZM.cif.gz", "3FX2.cif.gz",
+    # medium proteins and complexes
+    "2PTN.cif.gz", "3PTB.cif.gz", "1BRS.cif.gz", "1ECA.cif.gz", "1AKE.cif.gz",
+    "4AKE.cif.gz", "1STP.cif.gz", "1GFL.cif.gz", "1EMA.cif.gz", "1TIM.cif.gz",
+    "2CPP.cif.gz", "1HSG.cif.gz", "1A28.cif.gz", "6LU7.cif.gz", "4HHB.cif.gz",
+    "2DHB.cif.gz", "1HHO.cif.gz", "1A3N.cif.gz", "1GZM.cif.gz", "2RH1.cif.gz",
+    # nucleic acids, large complexes
+    "1BNA.cif.gz", "1D66.cif.gz", "1ATN.cif.gz", "1IGT.cif.gz", "1HZH.cif.gz",
+    "3HVT.cif.gz", "1KX5.cif.gz", "1AOI.cif.gz", "6VXX.cif.gz", "1AON.cif.gz",
+    "1FFK.cif.gz", "1JJ2.cif.gz", "4V6X.cif.gz",
+]
+
+[sets.sweep]
+description = "Robustness sweep (Plan T9.4): 200 random current PDB entries (seed 2026, sampled from 263196 entries), mmCIF"
+files = [
+    "11XW.cif.gz", "1C3D.cif.gz", "1CMK.cif.gz", "1EYU.cif.gz", "1HAW.cif.gz",
+    "1JTO.cif.gz", "1LV3.cif.gz", "1LYS.cif.gz", "1O8H.cif.gz", "1OEL.cif.gz",
+    "1PI5.cif.gz", "1RAZ.cif.gz", "1RCL.cif.gz", "1SHX.cif.gz", "1SYN.cif.gz",
+    "1T0O.cif.gz", "1T32.cif.gz", "1Y0J.cif.gz", "1Z1J.cif.gz", "1ZEZ.cif.gz",
+    "22UK.cif.gz", "25JX.cif.gz", "2BQ0.cif.gz", "2CE2.cif.gz", "2F94.cif.gz",
+    "2HUI.cif.gz", "2I4E.cif.gz", "2IDF.cif.gz", "2IEM.cif.gz", "2LWL.cif.gz",
+    "2MG3.cif.gz", "2N4M.cif.gz", "2OAI.cif.gz", "2PNN.cif.gz", "2WQ5.cif.gz",
+    "2XFH.cif.gz", "3BD4.cif.gz", "3BUT.cif.gz", "3C05.cif.gz", "3E6O.cif.gz",
+    "3FD0.cif.gz", "3FPB.cif.gz", "3FX6.cif.gz", "3GDR.cif.gz", "3GFO.cif.gz",
+    "3GPN.cif.gz", "3H81.cif.gz", "3JQE.cif.gz", "3JR2.cif.gz", "3L6P.cif.gz",
+    "3LV9.cif.gz", "3MNA.cif.gz", "3MO4.cif.gz", "3NO7.cif.gz", "3OV5.cif.gz",
+    "3PCO.cif.gz", "3R37.cif.gz", "3R5D.cif.gz", "3TC2.cif.gz", "3U12.cif.gz",
+    "3UXL.cif.gz", "3V1D.cif.gz", "3VVA.cif.gz", "3WHJ.cif.gz", "3ZXL.cif.gz",
+    "4APM.cif.gz", "4EW3.cif.gz", "4FX4.cif.gz", "4HB9.cif.gz", "4I4W.cif.gz",
+    "4IDX.cif.gz", "4INJ.cif.gz", "4IYL.cif.gz", "4K6R.cif.gz", "4L62.cif.gz",
+    "4MCI.cif.gz", "4MDE.cif.gz", "4MLN.cif.gz", "4MU7.cif.gz", "4TRK.cif.gz",
+    "4UC8.cif.gz", "4WX9.cif.gz", "4X82.cif.gz", "4YF5.cif.gz", "4YVS.cif.gz",
+    "4YWJ.cif.gz", "4ZBC.cif.gz", "4ZX0.cif.gz", "5DG5.cif.gz", "5DLE.cif.gz",
+    "5F2B.cif.gz", "5FML.cif.gz", "5FRM.cif.gz", "5KBN.cif.gz", "5MSY.cif.gz",
+    "5N2Z.cif.gz", "5P25.cif.gz", "5PY1.cif.gz", "5Q4S.cif.gz", "5QQW.cif.gz",
+    "5S3A.cif.gz", "5SFA.cif.gz", "5T88.cif.gz", "5TAX.cif.gz", "5YP1.cif.gz",
+    "5YQS.cif.gz", "5ZFB.cif.gz", "5ZG0.cif.gz", "5ZOF.cif.gz", "6C4A.cif.gz",
+    "6CH1.cif.gz", "6DW7.cif.gz", "6DWN.cif.gz", "6EEB.cif.gz", "6ESB.cif.gz",
+    "6H7G.cif.gz", "6HHT.cif.gz", "6IUV.cif.gz", "6J35.cif.gz", "6JAP.cif.gz",
+    "6JM5.cif.gz", "6M2Q.cif.gz", "6MZG.cif.gz", "6NB1.cif.gz", "6NSI.cif.gz",
+    "6P4O.cif.gz", "6PH6.cif.gz", "6RQZ.cif.gz", "6UJU.cif.gz", "6UTB.cif.gz",
+    "6UX4.cif.gz", "6VNR.cif.gz", "6W2R.cif.gz", "6W37.cif.gz", "6W5O.cif.gz",
+    "6XO8.cif.gz", "7AHA.cif.gz", "7BHL.cif.gz", "7C9W.cif.gz", "7CIR.cif.gz",
+    "7DF9.cif.gz", "7F0M.cif.gz", "7FND.cif.gz", "7FXK.cif.gz", "7GBK.cif.gz",
+    "7GQO.cif.gz", "7GRH.cif.gz", "7GTT.cif.gz", "7H0J.cif.gz", "7HU1.cif.gz",
+    "7LZR.cif.gz", "7N74.cif.gz", "7NPW.cif.gz", "7NZM.cif.gz", "7OP7.cif.gz",
+    "7QW7.cif.gz", "7U84.cif.gz", "7XIU.cif.gz", "7YQE.cif.gz", "7YYJ.cif.gz",
+    "7ZDM.cif.gz", "7ZDV.cif.gz", "8AGP.cif.gz", "8APD.cif.gz", "8BA3.cif.gz",
+    "8BNW.cif.gz", "8DFV.cif.gz", "8FAD.cif.gz", "8FSV.cif.gz", "8K27.cif.gz",
+    "8R0Z.cif.gz", "8TH1.cif.gz", "8TRH.cif.gz", "8VAS.cif.gz", "8VH8.cif.gz",
+    "8VW7.cif.gz", "8W8M.cif.gz", "8WCF.cif.gz", "8X09.cif.gz", "8Y7M.cif.gz",
+    "8YI8.cif.gz", "8ZXO.cif.gz", "9AUS.cif.gz", "9BAG.cif.gz", "9BEO.cif.gz",
+    "9BSP.cif.gz", "9C5K.cif.gz", "9F2R.cif.gz", "9FCP.cif.gz", "9GE9.cif.gz",
+    "9I3T.cif.gz", "9JIG.cif.gz", "9JZA.cif.gz", "9N01.cif.gz", "9NOX.cif.gz",
+    "9QSS.cif.gz", "9R6N.cif.gz", "9RG8.cif.gz", "9UVO.cif.gz", "9ZPZ.cif.gz",
+]

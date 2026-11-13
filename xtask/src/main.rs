@@ -5,6 +5,13 @@
 //! * `cargo xtask sets` — list the data sets defined in `tests/data/sets.toml`.
 //! * `cargo xtask fetch --set <name>` — download a set into
 //!   `tests/data/cache/` and verify it against `tests/data/sets.lock`.
+//! * `cargo xtask sample-sweep --count N --seed S` — record N random current
+//!   PDB entries as the `sweep` set (Plan T9.4).
+//! * `cargo xtask validate` / `cargo xtask sweep` — the accuracy study and the
+//!   robustness sweep of Plan Phase 9 (run with `--release`:
+//!   `cargo run --release -p xtask -- validate`).
+
+mod campaign;
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -41,6 +48,37 @@ enum Cmd {
         /// Download again even when a verified copy is cached.
         #[arg(long)]
         force: bool,
+    },
+    /// Record a reproducible random sample of current PDB entries as the
+    /// `sweep` set in tests/data/sets.toml.
+    SampleSweep {
+        /// Number of entries.
+        #[arg(long, default_value_t = 200)]
+        count: usize,
+        /// Random seed.
+        #[arg(long, default_value_t = 2026)]
+        seed: u64,
+    },
+    /// Accuracy study on the validation set (Plan T9.3, T9.5): area and
+    /// volume vs grid spacing, extrapolated to h → 0; writes
+    /// docs/validation/accuracy.csv.
+    Validate {
+        /// Grid spacings (Å), coarse to fine.
+        #[arg(long, value_delimiter = ',', default_value = "1.0,0.7,0.5,0.35,0.25")]
+        spacings: Vec<f64>,
+        /// Skip entries with more atoms than this at the finest spacing.
+        #[arg(long, default_value_t = 300_000)]
+        max_atoms: usize,
+    },
+    /// Robustness sweep over the `sweep` set (Plan T9.4) at one spacing;
+    /// writes docs/validation/sweep.csv.
+    Sweep {
+        /// Grid spacing (Å).
+        #[arg(long, default_value_t = 0.5)]
+        spacing: f64,
+        /// Use 1.0 Å above this many atoms.
+        #[arg(long, default_value_t = 200_000)]
+        coarse_above: usize,
     },
 }
 
@@ -86,6 +124,27 @@ fn main() -> Result<()> {
             update_lock,
             force,
         } => fetch(&data_dir, &sets, &requested, update_lock, force),
+        Cmd::SampleSweep { count, seed } => campaign::sample_sweep(&data_dir, count, seed),
+        Cmd::Validate {
+            spacings,
+            max_atoms,
+        } => campaign::validate(
+            &workspace_root(),
+            &sets.sets["validation"].files,
+            &spacings,
+            max_atoms,
+        ),
+        Cmd::Sweep {
+            spacing,
+            coarse_above,
+        } => {
+            let files = sets
+                .sets
+                .get("sweep")
+                .map(|s| s.files.clone())
+                .context("no `sweep` set: run `cargo xtask sample-sweep` first")?;
+            campaign::sweep(&workspace_root(), &files, spacing, coarse_above)
+        }
     }
 }
 
@@ -186,7 +245,7 @@ fn fetch(
     Ok(())
 }
 
-fn download(url: &str, dest: &Path) -> Result<()> {
+pub(crate) fn download(url: &str, dest: &Path) -> Result<()> {
     let status = Command::new("curl")
         .args([
             "--fail",

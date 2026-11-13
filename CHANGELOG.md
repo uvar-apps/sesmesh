@@ -152,6 +152,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   - Batch mode: several inputs, `--output-dir`, `--keep-going`.
   - Testkit binary PLY reader.
 
+- Phase 9 validation (T9.1, T9.3–T9.5, T9.7; internal references):
+  - `[sets.validation]` (53 entries) and `cargo xtask sample-sweep`
+    (`[sets.sweep]`, 200 random entries, seed 2026).
+  - `cargo xtask validate` (accuracy vs h → 0 extrapolation, density
+    calibration) and `cargo xtask sweep` (robustness); results in
+    `docs/validation/` and `docs/validation-report.md`.
+  - `estimate_memory` takes the sphere count and uses measured costs
+    (150 B/triangle + 800 B/sphere); density test tightened to ±5 %.
+
 ### Fixed
 
 - Validation ignored vertex positions when a mesh had no normals.

@@ -305,6 +305,11 @@ Additional targets:
 * Parsing ≥ 200 MB/s for mmCIF and PDB per core on uncompressed input.
 * OBJ writing ≥ 300 MB/s (parallel formatting).
 
+*Phase 9 measurement (10-core Apple Silicon under background load,
+`docs/validation-report.md` §6):* 1CRN meets its target; the others are
+1.2–2.2× slower than the provisional targets. To be confirmed on the
+reference machines or revised.
+
 ### 5.2 Scalability and memory (NFR-MEM)
 
 * Memory proportional to surface area (narrow band), not to bounding-box
@@ -313,6 +318,9 @@ Additional targets:
   atom (3J3Q at 1.0 Å within 16 GB).
 * No hard limits on atom count (32-bit indices up to 2³² − 1 atoms/vertices;
   error otherwise).
+* *Phase 9 measurement:* 110–150 B per triangle at peak (met); ≈ 600–800 B
+  per atom for the SAS arrangement and structure data (above 200 B; visible
+  for the 1K4R capsid at 1 Å). 3J3Q at 1.0 Å: 5.3 GB.
 
 ### 5.3 Accuracy (NFR-ACC)
 

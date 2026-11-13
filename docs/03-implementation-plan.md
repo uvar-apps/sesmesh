@@ -363,6 +363,23 @@ Exit (v0.3): all Must/Should requirements implemented.
 | T9.7 | Large inputs: 4V6X at 0.5 Å, 3J3Q at 1.0 Å, 1K4R assembly at 1.0 Å — time, peak memory. | Within NFR-MEM. |
 | T9.8 | Fuzzing campaign: ≥ 24 CPU-hours per parser target; fix findings; add regressions to corpus. | Clean campaign log. |
 
+> Status (Phase 9, with internal references by decision; report:
+> `docs/validation-report.md`):
+> * T9.1: `[sets.validation]` (53 entries, 154–237 685 atoms) and
+>   `xtask sample-sweep` (`[sets.sweep]`: 200 random entries, seed 2026).
+> * T9.2/T9.6: **not done** — no external tools installed (issues #5, #6);
+>   internal references instead (analytic + h → 0 extrapolation).
+> * T9.3: `xtask validate` → `docs/validation/accuracy.csv`; area −0.20 % /
+>   volume −0.02 % mean at 0.25 Å; NFR-ACC protein bounds met; analytic
+>   small-sphere bound still open (issue #4, recommendation in the report).
+> * T9.4: `xtask sweep` → 200/200 ok (1 000 planned; reduced by decision).
+> * T9.5: density constant confirmed (1.4999 ± 0.0025), test tightened to
+>   ±5 %; brick tuning done in Phase 6; memory estimate recalibrated.
+> * T9.7: 4V6X, 3J3Q, 1K4R assembly, 1AON — within NFR-MEM except the
+>   per-atom budget (≈ 600–800 B/atom vs 200).
+> * T9.8: left to the nightly fuzz job.
+> * NFR-PERF provisional targets missed by up to ≈ 2× on this machine.
+
 ### Phase 10 — Documentation and release (M5 = v1.0)
 
 | ID | Task | Deliverable / tests |
