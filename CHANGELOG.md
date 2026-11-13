@@ -6,6 +6,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Project website in `site/`, published to GitHub Pages by
+  `.github/workflows/pages.yml`: home page with a live WebGL viewer, CLI and
+  library guides, four tutorials, a gallery of rendered surfaces; helper
+  scripts in `tools/site/` (display-mesh converter, gallery meshes, still
+  renderer capture server, social card).
+
 ## [1.0.0] - 2026-11-13
 
 First stable release. The v1.0 criteria of the specification (§6.2) are met

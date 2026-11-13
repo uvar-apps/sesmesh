@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tutorials — sesmesh</title>
+<meta name="description" content="sesmesh tutorials: from a PDB ID to a rendered surface, cavities and per-atom areas, a 545 040-atom virus capsid on a laptop, and trajectories with the Rust library.">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&amp;family=Fragment+Mono:ital@0;1&amp;display=swap">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="./">sesmesh <small>1.0.0</small></a>
+  <ul class="nav">
+    <li><a href="./">Home</a></li>
+    <li><a href="cli.html">CLI</a></li>
+    <li><a href="library.html">Library</a></li>
+    <li><a href="tutorials.html" aria-current="page">Tutorials</a></li>
+    <li><a href="gallery.html">Gallery</a></li>
+    <li class="push"><a href="https://docs.rs/sesmesh">API docs ↗</a></li>
+    <li><a href="https://github.com/uvar-apps/sesmesh">GitHub ↗</a></li>
+  </ul>
+  <button class="theme-toggle" type="button" aria-label="Switch colour theme">Dark</button>
+</header>
+<div class="cpk" aria-hidden="true"></div>
+<main>
+<section>
+  <div class="wrap pagehead">
+    <span class="label inv">Learn · four walkthroughs</span>
+    <h1>Tuto<span class="knock">rials</span></h1>
+    <p class="lede">Four short, complete walkthroughs with real inputs from the PDB and the output they produce. Commands assume <code>sesmesh</code> 1.0 on your <code>PATH</code> (<code>cargo install sesmesh-cli</code>), plus <code>curl</code> and <code>jq</code>.</p>
+  </div>
+</section>
+
+<div class="wrap doc">
+  <nav class="toc" aria-label="On this page">
+    <b>On this page</b>
+    <ol>
+      <li><a href="#picture">PDB ID → picture</a></li>
+      <li><a href="#cavities">Cavities &amp; areas</a></li>
+      <li><a href="#capsid">A virus on a laptop</a></li>
+      <li><a href="#rust">Trajectories in Rust</a></li>
+    </ol>
+  </nav>
+  <div class="doc-body">
+
+    <section id="picture">
+      <span class="label">01</span>
+      <h2>PDB ID → picture</h2>
+<p class="mute">CLI · 10 minutes · haemoglobin (4HHB)</p><ol class="steps"><li><h3>Download a structure</h3><p>Any entry from the PDB works; mmCIF is the archive's native format. sesmesh reads it gzipped.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>curl -LO https://files.rcsb.org/download/4HHB.cif.gz</code></pre></div></li><li><h3>Look before you mesh</h3><p><code>info</code> shows models, chains, composition and whether the radius set covers every atom.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh info 4HHB.cif.gz
+<span class="c">chains: 4 (A:1168 B:1224 C:1171 D:1216)</span>
+<span class="c">elements: C:2954 O:1027 N:780 S:12 Fe:4 P:2</span>
+<span class="c">hetero atoms: 395  hydrogens: 0  water atoms: 221  alt-loc atoms: 0</span>
+<span class="c">selected: 4558 atoms</span>
+<span class="c">radii (bondi): 4554 of 4558 atoms covered, 4 fallback (1.80 Å)</span></code></pre></div></li><li><h3>Mesh it</h3><p>A fine grid for detail, internal cavities removed, colours by chain, then decimated to 30 % of the triangles — the kept vertices are still exactly on the surface.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 4HHB.cif.gz -q high --cavities remove \
+<span class="c">    --vertex-colors chain --decimate 0.3 -o 4hhb.ply</span></code></pre></div></li><li><h3>Open it</h3><p>Binary PLY keeps positions, normals and colours compactly. <b>Blender</b>: File ▸ Import ▸ Stanford PLY, then in the material feed a <i>Color Attribute</i> node into Base Color. <b>MeshLab</b> and <b>ParaView</b> open it directly. For tools that prefer OBJ, write <code>-o 4hhb.obj</code> (colours as <code>v x y z r g b</code>).</p></li><li><h3>Try other colourings</h3><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="c"># chemistry: the nearest atom's element (bundled palette, or --palette file.json)</span>
+<span class="p">$ </span>sesmesh 4HHB.cif.gz -q high --vertex-colors element -o 4hhb-el.ply
+<span class="c"># geometry: convex (contact), saddle (toroidal) and concave (re-entrant) patches</span>
+<span class="p">$ </span>sesmesh 4HHB.cif.gz -q high --vertex-colors patch -o 4hhb-patch.ply</code></pre></div></li></ol>
+    </section>
+
+    <section id="cavities">
+      <span class="label">02</span>
+      <h2>Cavities &amp; areas</h2>
+<p class="mute">CLI + jq + Python · 15 minutes · GroEL–GroES (1AON), haemoglobin (4HHB)</p><ol class="steps"><li><h3>Keep only the cavities</h3><p>The exact SES contains closed internal cavities with negative signed volume. Keep just them, drop the tiny ones, and record the numbers.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 1AON.cif.gz -q high --cavities only --min-cavity-volume 5 \
+<span class="c">    --group-components --stats cavities.json -o cavities.obj</span>
+<span class="p">$ </span>jq '[.components[] | select(.cavity)] | length' cavities.json
+<span class="c">285</span>
+<span class="p">$ </span>jq -c '.components[] | select(.cavity) | {index, volume, area}' cavities.json | head -3
+<span class="c">{"index":0,"volume":-13.174403395890868,"area":27.0622199529793}</span>
+<span class="c">{"index":1,"volume":-11.614457386530887,"area":24.868030910443903}</span>
+<span class="c">{"index":2,"volume":-86.08582206107998,"area":128.0659578151871}</span></code></pre></div></li><li><h3>Per-atom surface area</h3><p><code>--atom-areas</code> writes the SES area of every selected atom: index, serial, chain, residue, atom name, element, radius, area.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 4HHB.cif.gz -q high --atom-areas areas.csv -o /dev/null
+<span class="p">$ </span>head -3 areas.csv
+<span class="c">atom,serial,chain,res_name,res_seq,ins_code,atom_name,element,radius,area</span>
+<span class="c">0,1,A,VAL,1,,N,N,1.550,16.8767</span></code></pre></div><p>Save as <code>residues.py</code> and sum per residue with nothing but the standard library:</p><div class="code"><div class="code-head"><span>Python</span><button type="button">Copy</button></div>
+<pre><code>import csv
+from collections import defaultdict
+
+area = defaultdict(float)
+with open("areas.csv") as f:
+    for row in csv.DictReader(f):
+        area[(row["chain"], row["res_name"], int(row["res_seq"]))] += float(row["area"])
+
+for (chain, name, seq), a in sorted(area.items(), key=lambda kv: -kv[1])[:10]:
+    print(f"{chain} {name}{seq}: {a:.1f} Å²")</code></pre></div><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>python3 residues.py
+<span class="c">C HEM142: 217.9 Å²</span>
+<span class="c">D HEM148: 214.8 Å²</span>
+<span class="c">B HEM148: 211.8 Å²</span>
+<span class="c">...</span></code></pre></div></li><li><h3>Buried interface area</h3><p>The surface two chains lose when they meet: mesh each chain alone and together, then subtract.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>for c in A B A,B; do
+<span class="c">  sesmesh 4HHB.cif.gz -q high --chains $c --no-hetatm --cavities remove \</span>
+<span class="c">    --stats - -o /dev/null --quiet | jq .mesh.area</span>
+<span class="c">done</span>
+<span class="c">7197.0    # A</span>
+<span class="c">7493.8    # B</span>
+<span class="c">13651.5   # A,B   → buried: 7197.0 + 7493.8 − 13651.5 = 1039.3 Å²</span></code></pre></div></li></ol>
+    </section>
+
+    <section id="capsid">
+      <span class="label">03</span>
+      <h2>A virus on a laptop</h2>
+<p class="mute">CLI · 10 minutes · dengue virus capsid (1K4R, assembly 1)</p><ol class="steps"><li><h3>Find the assembly</h3><p>Deposited coordinates are often one asymmetric unit. The biological assembly is built from the file's operators.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>curl -LO https://files.rcsb.org/download/1K4R.cif.gz
+<span class="p">$ </span>sesmesh info 1K4R.cif.gz
+<span class="c">chains: 3 (A:3028 B:3028 C:3028)</span>
+<span class="c">assemblies: 1 (60 copies), 2 (1 copy), 3 (5 copies), 4 (6 copies), 5 (1 copy)</span></code></pre></div></li><li><h3>Mesh 545 040 atoms</h3><p>The full dengue virus capsid at 1 Å: about 10 s and 9.9 million triangles on a 10-core laptop, peak memory ≈ 1.7 GB.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 1K4R.cif.gz --assembly 1 -q draft --progress --timings -o capsid.ply
+<span class="c">sesmesh: 4937664 vertices, 9883296 triangles, 1123 component(s) (1098 cavities), ...</span></code></pre></div></li><li><h3>Make it viewer-friendly</h3><p>Cap the triangle count and colour by chain; decimation keeps the surface exact where it keeps vertices.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 1K4R.cif.gz --assembly 1 -q draft --max-triangles 1500000 \
+<span class="c">    --vertex-colors chain -o capsid-1.5M.ply</span></code></pre></div></li><li><h3>Set a memory budget</h3><p>With <code>--max-memory</code> alone, inputs whose estimate exceeds the limit stop with exit code 4. Add <code>--auto-coarsen</code> to grow the spacing until the estimate fits; the spacing used is printed and stored in the file header.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>sesmesh 1K4R.cif.gz --assembly 1 -q high --max-memory 1G --auto-coarsen \
+<span class="c">    --max-triangles 1500000 -o capsid.ply</span>
+<span class="c">sesmesh: ... 545040 atoms (model 1), ses surface, probe 1.40 Å, grid 1.918 Å</span></code></pre></div><div class="note hot">The limit applies to the <i>estimate</i> (150 bytes per triangle + 800 bytes per atom). The measured peak of this run was 1.46 GB — leave headroom.</div></li><li><h3>Stop any time</h3><p>Ctrl-C cancels within about 100 ms and exits with code 130.</p></li></ol>
+    </section>
+
+    <section id="rust">
+      <span class="label">04</span>
+      <h2>Trajectories in Rust</h2>
+<p class="mute">Rust · 15 minutes · Trp-cage NMR ensemble (1L2Y)</p><ol class="steps"><li><h3>Create a project</h3><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>cargo new ensemble &amp;&amp; cd ensemble
+<span class="p">$ </span>cargo add sesmesh
+<span class="p">$ </span>curl -LO https://files.rcsb.org/download/1L2Y.cif.gz</code></pre></div><div class="code"><div class="code-head"><span>Cargo.toml</span><button type="button">Copy</button></div>
+<pre><code>[package]
+name = "ensemble"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sesmesh = "1"</code></pre></div></li><li><h3>Mesh every model</h3><p>One <code>SurfaceEngine</code> for all frames: parameters are validated once and per-thread buffers are reused. Each model is selected with <code>ModelChoice::Index</code>.</p><div class="code"><div class="code-head"><span>src/main.rs</span><button type="button">Copy</button></div>
+<pre><code>use sesmesh::io::{ReadOptions, read_path};
+use sesmesh::radii::{RadiusOptions, assign};
+use sesmesh::structure::ModelChoice;
+use sesmesh::{Diagnostics, Selection, Sphere, SurfaceEngine, SurfaceParams};
+
+fn main() -&gt; sesmesh::Result&lt;()&gt; {
+    let path = std::env::args().nth(1).unwrap_or_else(|| "ensemble.pdb".into());
+    let structure = read_path(&amp;path, &amp;ReadOptions::default())?;
+    let mut engine = SurfaceEngine::new(SurfaceParams::ses(1.4).with_spacing(0.4))?;
+
+    println!("model,atoms,area_A2,volume_A3,components");
+    for index in 0..structure.models.len() {
+        let mut selection = Selection::default();
+        selection.model = ModelChoice::Index(index);
+        let mut diags = Diagnostics::new();
+        let atoms = structure.select(&amp;selection, &amp;mut diags)?;
+        let radii = assign(&amp;atoms, &amp;RadiusOptions::default(), &amp;mut diags)?;
+        let out = engine.compute(&amp;Sphere::from_atoms(&amp;atoms, &amp;radii)?)?;
+        println!(
+            "{},{},{:.2},{:.2},{}",
+            index + 1,
+            atoms.len(),
+            out.stats.area,
+            out.stats.volume,
+            out.stats.components
+        );
+    }
+    Ok(())
+}</code></pre></div></li><li><h3>Run it</h3><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>cargo run --release -- 1L2Y.cif.gz &gt; areas.csv
+<span class="p">$ </span>head -4 areas.csv
+<span class="c">model,atoms,area_A2,volume_A3,components</span>
+<span class="c">1,154,1271.87,2064.42,1</span>
+<span class="c">2,154,1332.64,2037.91,1</span>
+<span class="c">3,154,1342.58,2045.66,1</span></code></pre></div><p>The Trp-cage NMR ensemble has 38 models; over the first five the SES area varies by about 8 %, the enclosed volume by 3 %.</p></li><li><h3>Go further</h3><p>Add <code>Control</code> for progress bars and cancellation (<code>engine.compute_with</code>), write meshes per frame with <code>export::ply::write_ply_path</code>, or query the exact field with <code>SesField</code> — see the <a href="library.html">library guide</a>.</p></li></ol>
+    </section>
+
+  </div>
+</div>
+</main>
+<footer class="wrap foot">
+  <p class="eof" aria-hidden="true"># EOF</p>
+  <div class="foot-grid">
+    <div><b>Guides</b><ul><li><a href="cli.html">CLI guide</a></li><li><a href="library.html">Library guide</a></li><li><a href="tutorials.html">Tutorials</a></li></ul></div>
+    <div><b>Reference</b><ul><li><a href="https://docs.rs/sesmesh">API reference</a></li><li><a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md">CLI manual</a></li><li><a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/04-output-formats.md">Output formats</a></li></ul></div>
+    <div><b>Project</b><ul><li><a href="https://github.com/uvar-apps/sesmesh">GitHub</a></li><li><a href="https://github.com/uvar-apps/sesmesh/releases">Releases</a></li><li><a href="https://crates.io/crates/sesmesh">crates.io</a></li></ul></div>
+    <div><b>Licence</b><ul><li>MIT OR Apache-2.0</li><li>© sesmesh contributors</li></ul></div>
+  </div>
+</footer>
+</body>
+</html>

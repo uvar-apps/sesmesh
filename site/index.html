@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sesmesh — Solvent Excluded Surface meshes for molecules</title>
+<meta name="description" content="sesmesh: a Rust library and CLI that turns PDB, mmCIF, XYZ and PQR structures into closed, oriented triangle meshes of the Solvent Excluded (Connolly) surface, with vertices on the exact surface and analytic normals.">
+<meta property="og:title" content="sesmesh — Solvent Excluded Surface meshes">
+<meta property="og:description" content="Exact, watertight, deterministic SES meshes from PDB/mmCIF/XYZ/PQR. Rust library + CLI. OBJ, PLY, MSMS.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://uvar-apps.github.io/sesmesh/img/og.png">
+<meta property="og:url" content="https://uvar-apps.github.io/sesmesh/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Fragment+Mono:ital@0;1&display=swap">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="assets/viewer.js"></script>
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="./">sesmesh <small>1.0.0</small></a>
+  <ul class="nav">
+    <li><a href="./" aria-current="page">Home</a></li>
+    <li><a href="cli.html">CLI</a></li>
+    <li><a href="library.html">Library</a></li>
+    <li><a href="tutorials.html">Tutorials</a></li>
+    <li><a href="gallery.html">Gallery</a></li>
+    <li class="push"><a href="https://docs.rs/sesmesh">API docs ↗</a></li>
+    <li><a href="https://github.com/uvar-apps/sesmesh">GitHub ↗</a></li>
+  </ul>
+  <button class="theme-toggle" type="button" aria-label="Switch colour theme">Dark</button>
+</header>
+<div class="cpk" aria-hidden="true"></div>
+
+<main>
+
+<section class="hero">
+  <div class="hero-text">
+    <div>
+      <span class="label">Rust library + CLI · v1.0.0</span>
+      <h1 style="margin-top:22px">
+        <span>Solvent</span>
+        <span class="knock">Excluded</span>
+        <span>Surfaces<span class="dot">.</span></span>
+      </h1>
+    </div>
+    <div class="hero-meta">
+      <p class="lede">sesmesh turns <b>PDB, mmCIF, XYZ and PQR</b> structures into
+        closed, oriented triangle meshes of the molecular (Connolly) surface:
+        <mark>every vertex on the exact surface</mark>, analytic normals, and the
+        same bytes on one thread or sixteen.</p>
+      <div class="code">
+        <div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>cargo install sesmesh-cli
+<span class="p">$ </span>sesmesh 1crn.cif -q high -o 1crn.obj   <span class="c"># SES at 0.25 Å</span></code></pre>
+      </div>
+      <div class="btns">
+        <a class="btn primary" href="tutorials.html">Start the tutorial →</a>
+        <a class="btn" href="cli.html">CLI</a>
+        <a class="btn" href="library.html">Library</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="viewer" data-viewer="1crn">
+    <div class="viewer-bar">
+      <span class="live">Live</span>
+      <span data-caption>1CRN crambin</span>
+      <span class="mute">drag · scroll · double-click</span>
+    </div>
+    <div class="viewer-stage">
+      <div class="viewer-msg">Loading …</div>
+      <div class="viewer-axes">mesh written by sesmesh · display copy</div>
+    </div>
+    <div class="viewer-ctl">
+      <button type="button" data-model="1crn">1CRN</button>
+      <button type="button" data-model="4hhb">4HHB</button>
+      <button type="button" data-model="1aon">1AON</button>
+      <button type="button" data-toggle="wire" aria-pressed="false">Wire</button>
+      <button type="button" data-toggle="spin" aria-pressed="true">Spin</button>
+      <span class="readout"></span>
+    </div>
+  </div>
+</section>
+
+<div class="ticker" aria-hidden="true"><div>
+  <span>PDB</span><span>PDBx/mmCIF</span><span>XYZ</span><span>PQR</span><span>gzip</span><span>biological assemblies</span><span>SES · SAS · vdW</span><span>OBJ</span><span>PLY</span><span>MSMS</span><span>NEON</span><span>AVX-512</span><span>AVX2</span><span>SSE4.2</span><span>deterministic</span><span>MIT / Apache-2.0</span>
+  <span>PDB</span><span>PDBx/mmCIF</span><span>XYZ</span><span>PQR</span><span>gzip</span><span>biological assemblies</span><span>SES · SAS · vdW</span><span>OBJ</span><span>PLY</span><span>MSMS</span><span>NEON</span><span>AVX-512</span><span>AVX2</span><span>SSE4.2</span><span>deterministic</span><span>MIT / Apache-2.0</span>
+</div></div>
+
+<div class="stats">
+  <div class="stat"><b>545 040</b><span>atoms: the 1K4R virus capsid assembly, meshed at 1 Å in about 10 s on 10 cores</span></div>
+  <div class="stat"><b>−0.20<small>%</small></b><span>mean area error at 0.25 Å on 53 proteins (volume −0.02 %)</span></div>
+  <div class="stat"><b>0</b><span>open or non-manifold edges: every mesh is validated before it is returned</span></div>
+  <div class="stat"><b>1&nbsp;=&nbsp;16</b><span>threads: byte-identical output for any thread count, tested</span></div>
+</div>
+
+<section>
+  <div class="wrap sec">
+    <span class="label inv">§01 · What you get</span>
+    <h2>A mesh you can<br>compute on.</h2>
+    <div class="cells">
+      <div class="cell"><i class="swatch" style="background:var(--el-c)"></i>
+        <span class="num">01 / EXACT</span>
+        <h3>On the surface</h3>
+        <p>The exact SES distance field is sampled on a grid, Marching Cubes finds the crossings, and every vertex is then solved onto the analytic surface (|F| ≤ 10⁻⁴·h). Normals come from the closest point, not from triangles.</p></div>
+      <div class="cell"><i class="swatch" style="background:var(--el-o)"></i>
+        <span class="num">02 / WATERTIGHT</span>
+        <h3>Closed. Oriented.</h3>
+        <p>Edge-manifold meshes with outward normals, split into components with area, signed volume and genus. Internal cavities are found, kept, removed or isolated on request.</p></div>
+      <div class="cell"><i class="swatch" style="background:var(--el-n)"></i>
+        <span class="num">03 / FAST</span>
+        <h3>Sparse + SIMD</h3>
+        <p>Only bricks near the surface are sampled. The field kernel dispatches at run time to AVX-512, AVX2, SSE4.2 or NEON; rayon spreads bricks over every core.</p></div>
+      <div class="cell"><i class="swatch" style="background:var(--el-s)"></i>
+        <span class="num">04 / REPRODUCIBLE</span>
+        <h3>Same bytes</h3>
+        <p>Output does not depend on the number of threads or on scheduling. Re-run a figure in a year and diff the OBJ files.</p></div>
+      <div class="cell"><i class="swatch" style="background:var(--el-p)"></i>
+        <span class="num">05 / LEVEL OF DETAIL</span>
+        <h3>You set the budget</h3>
+        <p>Grid spacing, presets, target vertex density, smoothing with exact re-projection, decimation that keeps vertices on the surface, and a memory limit that can coarsen the grid for you.</p></div>
+      <div class="cell"><i class="swatch" style="background:var(--el-fe)"></i>
+        <span class="num">06 / OUTPUT</span>
+        <h3>Your format</h3>
+        <p>OBJ with groups and vertex colours, binary PLY, MSMS <code>.vert</code>/<code>.face</code>, all optionally gzipped; per-atom areas and per-vertex data as CSV, statistics as JSON.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap sec">
+    <span class="label inv">§02 · Two ways in</span>
+    <h2>Shell or Rust.</h2>
+    <div class="split">
+      <div>
+        <h3>The CLI</h3>
+        <p>One command from a file — or a whole directory of files — to a mesh. Pick the surface, the resolution and the extras.</p>
+        <div class="code">
+          <div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="c"># GroEL–GroES, fine grid, cavities removed,</span>
+<span class="c"># coloured by chain, decimated to a quarter</span>
+<span class="p">$ </span>sesmesh 1aon.cif.gz -q high \
+    --cavities remove --vertex-colors chain \
+    --decimate 0.25 -o groel.ply</code></pre>
+        </div>
+        <a class="btn" href="cli.html">CLI guide →</a>
+      </div>
+      <div>
+        <h3>The library</h3>
+        <p>The same engine as a crate: spheres in, a validated mesh and its statistics out. Reuse one engine across trajectory frames.</p>
+        <div class="code">
+          <div class="code-head"><span>Rust</span><button type="button">Copy</button></div>
+<pre><code><span class="k">use</span> sesmesh::{compute_surface, Sphere, SurfaceParams};
+
+<span class="k">let</span> atoms = [
+    Sphere::new([<span class="n">0.0</span>, <span class="n">0.0</span>, <span class="n">0.0</span>], <span class="n">1.7</span>),
+    Sphere::new([<span class="n">3.0</span>, <span class="n">0.0</span>, <span class="n">0.0</span>], <span class="n">1.7</span>),
+];
+<span class="k">let</span> params = SurfaceParams::ses(<span class="n">1.4</span>).with_spacing(<span class="n">0.25</span>);
+<span class="k">let</span> out = compute_surface(&amp;atoms, &amp;params)?;
+println!(<span class="s">"{} triangles, {:.1} Å²"</span>,
+         out.stats.triangles, out.stats.area);</code></pre>
+        </div>
+        <a class="btn" href="library.html">Library guide →</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap sec">
+    <span class="label inv">§03 · How it works</span>
+    <h2>From atoms<br>to triangles.</h2>
+    <p class="formula">F(x) = r<sub>p</sub> − d(x, P)</p>
+    <p class="lede">The SES is the zero level set of one exact function: the probe radius minus
+      the distance to <i>P</i>, the set of positions the probe centre can reach.
+      sesmesh builds <i>P</i> from the SAS arrangement (spheres, intersection circles,
+      triple points), evaluates <i>F</i> only where the surface can be, and contours it.</p>
+    <ol class="pipe" style="margin-top:36px;padding:0">
+      <li><b>Read</b>PDB, mmCIF, XYZ, PQR, gzip; models, alt-locs, assemblies; radii (Bondi, Alvarez, ProtOr).</li>
+      <li><b>Arrange</b>Neighbour lists, exposed circles and arcs, SAS triple points.</li>
+      <li><b>Sample</b>Sparse bricks near the surface; SIMD kernel for exact field values.</li>
+      <li><b>Contour</b>Marching Cubes, then Newton steps onto F = 0 in f64.</li>
+      <li><b>Refine</b>Components, cavities, optional smoothing and decimation.</li>
+      <li><b>Write</b>OBJ, PLY, MSMS; CSV, JSON; validated before return.</li>
+    </ol>
+  </div>
+</section>
+
+<section>
+  <div class="wrap sec">
+    <span class="label inv">§04 · Documentation</span>
+    <h2>Read on.</h2>
+    <div class="links">
+      <a class="int" href="tutorials.html"><b>Tutorials</b><span>From a PDB ID to a rendered surface; cavities and areas; huge assemblies; trajectories in Rust.</span></a>
+      <a class="int" href="cli.html"><b>CLI guide</b><span>Every option group with examples, output formats, exit codes.</span></a>
+      <a class="int" href="library.html"><b>Library guide</b><span>Parameters, engines, field queries, exporters, features.</span></a>
+      <a href="https://docs.rs/sesmesh"><b>API reference</b><span>docs.rs: every public item, with examples.</span></a>
+      <a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md"><b>CLI manual</b><span>The complete option reference (docs/cli.md).</span></a>
+      <a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/04-output-formats.md"><b>Formats</b><span>OBJ, PLY, MSMS layouts, CSV side files, JSON statistics.</span></a>
+      <a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/validation-report.md"><b>Validation</b><span>Accuracy on 53 proteins, robustness sweep, memory, timings.</span></a>
+      <a href="https://github.com/uvar-apps/sesmesh/blob/main/docs/02-design.md"><b>Design</b><span>The algorithms, data structures and the decisions behind them.</span></a>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="wrap foot">
+  <p class="eof" aria-hidden="true"># EOF</p>
+  <div class="foot-grid">
+    <div><b>Project</b><ul>
+      <li><a href="https://github.com/uvar-apps/sesmesh">GitHub</a></li>
+      <li><a href="https://github.com/uvar-apps/sesmesh/releases">Releases &amp; binaries</a></li>
+      <li><a href="https://crates.io/crates/sesmesh">crates.io: sesmesh</a></li>
+      <li><a href="https://crates.io/crates/sesmesh-cli">crates.io: sesmesh-cli</a></li></ul></div>
+    <div><b>Docs</b><ul>
+      <li><a href="https://docs.rs/sesmesh">API reference</a></li>
+      <li><a href="tutorials.html">Tutorials</a></li>
+      <li><a href="https://github.com/uvar-apps/sesmesh/blob/main/CHANGELOG.md">Changelog</a></li>
+      <li><a href="https://github.com/uvar-apps/sesmesh/issues">Issues</a></li></ul></div>
+    <div><b>Methods</b><ul>
+      <li>Quan &amp; Stamm 2016 · SES field</li>
+      <li>Connolly 1983 · analytic SES</li>
+      <li>Lorensen &amp; Cline 1987 · MC</li>
+      <li>Garland &amp; Heckbert 1997 · QEM</li></ul></div>
+    <div><b>Licence</b><ul>
+      <li>MIT OR Apache-2.0</li>
+      <li>© sesmesh contributors</li>
+      <li><a href="library.html#cite">How to cite</a></li></ul></div>
+  </div>
+</footer>
+
+</body>
+</html>
