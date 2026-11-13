@@ -246,6 +246,53 @@ fn cavity_modes_and_groups() {
     assert_eq!(count(&["--min-cavity-volume", "1e6"]), (1, 0));
 }
 
+/// Three atoms spanned by an SES sheet thinner than the grid (Design §9.1):
+/// one sub-grid fragment at 0.25 Å, dropped unless `--keep-fragments`.
+#[test]
+fn sub_grid_fragments() {
+    let xyz = tmp("thin-sheet.xyz");
+    std::fs::write(
+        &xyz,
+        "3\nthin sheet\nO -2.171 7.406 15.697\nO -2.245 11.599 13.186\nC -4.576 11.056 16.662\n",
+    )
+    .unwrap();
+    let stats = tmp("thin-sheet.json");
+    let run_with = |extra: &[&str]| {
+        let mut args = vec![
+            xyz.to_str().unwrap(),
+            "-s",
+            "0.25",
+            "-o",
+            "-",
+            "--group-components",
+            "--stats",
+            stats.to_str().unwrap(),
+        ];
+        args.extend_from_slice(extra);
+        let o = run(&args);
+        assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+        let text = String::from_utf8(o.stdout).unwrap();
+        assert_closed(&obj::parse(&text).unwrap());
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&stats).unwrap()).unwrap();
+        let groups = text.lines().filter(|l| l.starts_with("g ")).count();
+        (groups, json, String::from_utf8(o.stderr).unwrap(), text)
+    };
+    let (groups, json, err, text) = run_with(&[]);
+    assert_eq!(groups, 1);
+    assert_eq!(json["mesh"]["removed_fragments"], 1);
+    assert_eq!(json["mesh"]["removed_components"], 0);
+    assert_eq!(json["parameters"]["keep_fragments"], false);
+    assert!(err.contains("dropped 1 sub-grid fragment(s)"), "{err}");
+    assert!(text.contains("fragments_removed: 1"));
+    let (groups, json, err, _) = run_with(&["--keep-fragments", "--quiet"]);
+    assert_eq!(groups, 2);
+    assert_eq!(json["mesh"]["removed_fragments"], 0);
+    assert_eq!(json["parameters"]["keep_fragments"], true);
+    assert_eq!(json["components"][1]["triangles"], 8);
+    assert!(err.is_empty(), "{err}");
+}
+
 #[test]
 fn colours_csv_and_stats() {
     let crn = fixture("1CRN.cif.gz");

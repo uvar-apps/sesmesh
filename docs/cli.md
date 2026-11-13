@@ -87,6 +87,7 @@ Fe = 2.0
 | `--cavities keep\|remove\|only` | `keep` | Internal cavities: keep (exact SES), remove with their content (MSMS-like), or keep only them |
 | `--min-cavity-volume V` | 0 | Drop cavities below V Å³ |
 | `--min-component-area A` | 0 | Drop components below A Å² |
+| `--keep-fragments` | off | Keep sub-grid fragments: tiny solid SES components without a convex atom patch, cut off by the grid from reentrant sheets thinner than the spacing (dropped by default; Design §9.1) |
 
 ## Resolution
 

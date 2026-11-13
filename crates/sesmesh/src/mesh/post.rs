@@ -1,8 +1,8 @@
 //! Mesh post-processing (Design §9): grouping triangles by component,
-//! cavity handling and component filters (§9.2), face-averaged normals and
-//! per-atom areas (§9.6).
+//! sub-grid fragments (§9.1), cavity handling and component filters (§9.2),
+//! face-averaged normals and per-atom areas (§9.6).
 
-use super::{Component, Mesh, triangle_area_volume};
+use super::{Component, Mesh, PatchKind, triangle_area_volume};
 
 /// Reorders triangles so each component's triangles are contiguous, keeping
 /// their relative order (deterministic), and sets
@@ -43,7 +43,7 @@ fn component_boxes(mesh: &Mesh, vertex_component: &[u32], n: usize) -> Vec<([f64
 /// `true` if `point` is inside the closed component `c` (ray parity; the
 /// ray direction is fixed and generic, so hits on edges are vanishingly
 /// rare).
-fn inside_component(mesh: &Mesh, c: &Component, point: [f64; 3]) -> bool {
+pub(crate) fn inside_component(mesh: &Mesh, c: &Component, point: [f64; 3]) -> bool {
     const DIR: [f64; 3] = [
         0.801_783_725_737_273_2,
         0.534_522_483_824_848_8,
@@ -127,6 +127,32 @@ pub(crate) fn enclosed_by(
                     && inside_component(mesh, &comps[k], point)
             })
         })
+        .collect()
+}
+
+/// Marks the sub-grid fragments of an SES mesh: solid (non-cavity)
+/// components none of whose vertices lies on a convex patch (Design §9.1).
+///
+/// The solid bounded by an SES component lies outside the probe balls on
+/// concave patches and is saddle-shaped on toroidal ones, so its extreme
+/// points (in every direction) lie on convex atom patches: a true solid
+/// component contains an atom and has convex area of the order of
+/// `4π·R²`. A solid component without a convex vertex is a piece of a
+/// reentrant sheet thinner than the grid spacing (two probe balls from
+/// opposite sides of an atom ring almost meeting) that Marching Cubes cut
+/// off from the body it belongs to. Cavities hold a whole probe ball and are
+/// never fragments.
+pub(crate) fn fragments(mesh: &Mesh, vertex_component: &[u32], comps: &[Component]) -> Vec<bool> {
+    let mut convex = vec![false; comps.len()];
+    for (&patch, &c) in mesh.vertex_patch.iter().zip(vertex_component) {
+        if patch == PatchKind::Convex {
+            convex[c as usize] = true;
+        }
+    }
+    comps
+        .iter()
+        .zip(convex)
+        .map(|(c, convex)| !convex && !c.is_cavity() && c.triangles > 0)
         .collect()
 }
 
@@ -303,9 +329,9 @@ pub(crate) fn smooth_and_project(
         }
         let atom = nearest_atom(&s.patch, p, spheres).unwrap_or(mesh.vertex_atom[i]);
         let patch = match s.patch {
-            crate::field::Patch::Saddle { .. } => super::PatchKind::Saddle,
-            crate::field::Patch::Concave { .. } => super::PatchKind::Concave,
-            _ => super::PatchKind::Convex,
+            crate::field::Patch::Saddle { .. } => PatchKind::Saddle,
+            crate::field::Patch::Concave { .. } => PatchKind::Concave,
+            _ => PatchKind::Convex,
         };
         let normal = s.normal.map_or(
             mesh.normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]),

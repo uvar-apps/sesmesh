@@ -160,6 +160,11 @@ struct SurfaceArgs {
     /// Drop components with less area than this (Å²).
     #[arg(long, default_value_t = 0.0, help_heading = "Surface")]
     min_component_area: f64,
+    /// Keep sub-grid fragments: tiny solid SES components without any convex
+    /// atom patch, cut off by the grid from reentrant sheets thinner than the
+    /// spacing (dropped by default).
+    #[arg(long, help_heading = "Surface")]
+    keep_fragments: bool,
     /// Grid spacing (Å); overrides `--quality`.
     #[arg(
         short = 's',
@@ -636,6 +641,7 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
         .with_min_cavity_volume(a.min_cavity_volume)
         .with_smoothing(a.smooth)
         .with_min_component_area(a.min_component_area)
+        .with_remove_fragments(!a.keep_fragments)
         .with_normals(if a.no_normals {
             NormalMode::None
         } else if a.face_normals {
@@ -999,6 +1005,12 @@ fn surface_one(a: &SurfaceArgs, params: &SurfaceParams, job: &Job) -> CliResult<
                 params.cavities.name()
             );
         }
+        if s.removed_fragments > 0 {
+            eprintln!(
+                "sesmesh: dropped {} sub-grid fragment(s) (--keep-fragments keeps them)",
+                s.removed_fragments
+            );
+        }
         if a.timings {
             let t = &s.timings;
             eprintln!(
@@ -1105,15 +1117,22 @@ fn header(
             ),
         ),
         format!(
-            "cavities: {}  min_cavity_volume: {}  min_component_area: {}  normals: {}",
+            "cavities: {}  min_cavity_volume: {}  min_component_area: {}  keep_fragments: {}  normals: {}",
             params.cavities.name(),
             params.min_cavity_volume,
             params.min_component_area,
+            !params.remove_fragments,
             params.normals.name(),
         ),
         format!(
-            "vertices: {}  triangles: {}  components: {}  cavities: {}  removed: {}  euler: {}",
-            s.vertices, s.triangles, s.components, s.cavities, s.removed_components, s.euler
+            "vertices: {}  triangles: {}  components: {}  cavities: {}  removed: {}  fragments_removed: {}  euler: {}",
+            s.vertices,
+            s.triangles,
+            s.components,
+            s.cavities,
+            s.removed_components,
+            s.removed_fragments,
+            s.euler
         ),
         format!("area_A2: {:.4}  volume_A3: {:.4}", s.area, s.volume),
         "normals point to the solvent; faces counter-clockwise seen from outside".to_string(),
@@ -1489,6 +1508,7 @@ fn stats_json(
             "cavities": params.cavities.name(),
             "min_cavity_volume": params.min_cavity_volume,
             "min_component_area": params.min_component_area,
+            "keep_fragments": !params.remove_fragments,
             "normals": params.normals.name(),
             "smoothing": params.smoothing,
             "decimation": params.decimation.map(|d| serde_json::json!({
@@ -1508,6 +1528,7 @@ fn stats_json(
             "components": s.components,
             "cavities": s.cavities,
             "removed_components": s.removed_components,
+            "removed_fragments": s.removed_fragments,
             "triangles_before_decimation": s.decimation.map(|d| d.triangles_before),
         },
         "components": out.components.iter().enumerate().map(|(i, c)| serde_json::json!({

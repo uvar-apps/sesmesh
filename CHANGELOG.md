@@ -6,6 +6,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Sub-grid fragments are dropped by default (Design §9.1): solid SES
+  components without any vertex on a convex atom patch. They are pieces of
+  reentrant sheets thinner than the grid spacing that Marching Cubes cuts off
+  from the body they belong to (e.g. three atoms whose two probe positions
+  lie just under one probe radius from their plane), not separate parts of
+  the exact surface; 4HHB at 0.25 Å had one (6 vertices, 8 triangles,
+  0.037 Å²). On the 53-entry validation corpus at 0.25 Å there were 1 358 in
+  36 entries (94 % single-node octahedra, at most 0.54 Å²), against ≥ 40 Å²
+  for the smallest true solid component. Meshes stay closed and manifold;
+  the output stays deterministic.
+
+### Added
+
+- `SurfaceParams::remove_fragments` / `with_remove_fragments` (default
+  `true`) and `SurfaceStats::removed_fragments` (not counted in
+  `removed_components`). CLI: `--keep-fragments`, a summary line when
+  fragments are dropped, `keep_fragments` / `fragments_removed` in the OBJ
+  and PLY header, `parameters.keep_fragments` and `mesh.removed_fragments` in
+  the statistics JSON.
+
 ## [1.0.0] - 2026-11-13
 
 First stable release. The v1.0 criteria of the specification (§6.2) are met

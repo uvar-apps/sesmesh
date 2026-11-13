@@ -80,6 +80,13 @@ tightened from ±25 % to ±5 %. Presets were not changed.
 * Sizes 197–129 900 atoms (median 3 727); 9 714 cavities in total; up to
   1 098 components in one entry; 108 s of compute in total, 11.8 s for the
   largest entry.
+* *After 1.0:* the component counts of `accuracy.csv` and `sweep.csv` (made
+  with 1.0.0) include sub-grid fragments, which are now dropped by default
+  (Design §9.1): at 0.25 Å, 1 358 in 36 of the 53 validation entries (all but
+  one non-cavity component per entry, 1AOI three); the sweep set meshed at
+  0.5 Å has 1 026 in 119 of 200 entries (at most 2.7 Å² each; the smallest
+  true solid component has 36 Å²). The accuracy figures above are
+  unaffected.
 
 ## 5. Large inputs and memory (T9.7, NFR-MEM)
 

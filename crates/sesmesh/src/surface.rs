@@ -197,6 +197,13 @@ pub struct SurfaceParams {
     pub min_cavity_volume: f64,
     /// Drop components with area below this (Å²). Default 0.
     pub min_component_area: f64,
+    /// Drop sub-grid fragments: solid (non-cavity) SES components with no
+    /// vertex on a convex atom patch. Every true solid component contains an
+    /// atom and reaches the solvent through convex patches; such fragments
+    /// are pieces of reentrant sheets thinner than the grid spacing, cut off
+    /// from the body they belong to (Design §9.1). Default `true`; no effect
+    /// on SAS and vdW surfaces.
+    pub remove_fragments: bool,
     /// Vertex normals. Default [`NormalMode::Analytic`].
     pub normals: NormalMode,
     /// Limit on the estimated peak memory of the mesh stages (bytes), checked
@@ -233,6 +240,7 @@ impl SurfaceParams {
             cavities: CavityMode::Keep,
             min_cavity_volume: 0.0,
             min_component_area: 0.0,
+            remove_fragments: true,
             normals: NormalMode::Analytic,
             max_memory: None,
             auto_coarsen: false,
@@ -325,6 +333,14 @@ impl SurfaceParams {
     #[must_use]
     pub fn with_min_component_area(mut self, area: f64) -> Self {
         self.min_component_area = area;
+        self
+    }
+
+    /// Drops (`true`, the default) or keeps sub-grid fragments, see
+    /// [`SurfaceParams::remove_fragments`].
+    #[must_use]
+    pub fn with_remove_fragments(mut self, on: bool) -> Self {
+        self.remove_fragments = on;
         self
     }
 
@@ -483,6 +499,9 @@ pub struct SurfaceStats {
     pub cavities: usize,
     /// Components dropped by the cavity mode and filters.
     pub removed_components: usize,
+    /// Sub-grid fragments dropped (see [`SurfaceParams::remove_fragments`]),
+    /// not counted in `removed_components`.
+    pub removed_fragments: usize,
     /// Decimation result, when decimation was requested.
     pub decimation: Option<mesh::DecimationStats>,
     /// Euler characteristic of the whole mesh.
@@ -630,23 +649,31 @@ pub fn estimate_memory(
     )
 }
 
-/// Applies the cavity mode and filters (Design §9.2); returns the number of
-/// removed components.
+/// Drops sub-grid fragments (SES, `params.remove_fragments`, Design §9.1),
+/// then applies the cavity mode and filters (Design §9.2); returns the
+/// numbers of removed components and of removed fragments.
 fn select_components(
     mesh: &mut Mesh,
     vertex_component: &mut Vec<u32>,
     components: &mut Vec<mesh::Component>,
     params: &SurfaceParams,
-) -> usize {
+    kind: SurfaceKind,
+) -> (usize, usize) {
+    let fragment = if params.remove_fragments && kind == SurfaceKind::Ses {
+        post::fragments(mesh, vertex_component, components)
+    } else {
+        vec![false; components.len()]
+    };
     let mut keep: Vec<bool> = components
         .iter()
-        .map(|c| {
+        .zip(&fragment)
+        .map(|(c, &f)| {
             let by_mode = match params.cavities {
                 CavityMode::Keep => true,
                 CavityMode::Remove => !c.is_cavity(),
                 CavityMode::Only => c.is_cavity(),
             };
-            by_mode
+            !f && by_mode
                 && !(c.is_cavity() && -c.volume < params.min_cavity_volume)
                 && c.area >= params.min_component_area
         })
@@ -659,9 +686,10 @@ fn select_components(
             *k &= !i;
         }
     }
-    let n = keep.iter().filter(|k| !**k).count();
+    let fragments = fragment.iter().filter(|&&f| f).count();
+    let n = keep.iter().filter(|k| !**k).count() - fragments;
     post::retain_components(mesh, vertex_component, components, &keep);
-    n
+    (n, fragments)
 }
 
 fn run(
@@ -756,8 +784,13 @@ fn run(
     drop(edges);
     let mut mesh = mesh;
     post::group_by_component(&mut mesh, &vertex_component, &mut components);
-    let removed_components =
-        select_components(&mut mesh, &mut vertex_component, &mut components, params);
+    let (removed_components, removed_fragments) = select_components(
+        &mut mesh,
+        &mut vertex_component,
+        &mut components,
+        params,
+        kind,
+    );
     if params.smoothing > 0 {
         post::smooth_and_project(&mut mesh, &engine.field, spheres, params.smoothing);
         let check = mesh::validate(&mesh);
@@ -819,6 +852,7 @@ fn run(
         components: components.len(),
         cavities: components.iter().filter(|c| c.is_cavity()).count(),
         removed_components,
+        removed_fragments,
         decimation,
         euler: components.iter().map(|c| c.euler).sum(),
         refine_evaluations,
@@ -1021,6 +1055,84 @@ mod tests {
             assert_eq!(a.mesh, b.mesh, "frame {seed}");
         }
         assert!(SurfaceEngine::new(SurfaceParams::ses(1.4).with_spacing(-1.0)).is_err());
+    }
+
+    /// Random atom triangles whose two probe positions lie within ±3 % of
+    /// the probe radius from the atom plane (a thin SES sheet, with or
+    /// without a pinhole), at random orientations, offsets and spacings:
+    /// sub-grid fragments occur, hold no atom, and removing them leaves
+    /// every atom centre inside the mesh and the other components unchanged.
+    #[test]
+    fn fragments_hold_no_atoms() {
+        let cross = |a: [f64; 3], b: [f64; 3]| {
+            [
+                a[1] * b[2] - a[2] * b[1],
+                a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0],
+            ]
+        };
+        let normalize = |a: [f64; 3]| {
+            let n = (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt();
+            a.map(|c| c / n)
+        };
+        let mut rng = Rng::new(9);
+        let mut fragments = 0;
+        for _ in 0..48 {
+            let (probe, radius) = (1.4, rng.uniform(1.5, 1.8));
+            let height = probe * rng.uniform(0.97, 1.03);
+            let rho = ((radius + probe).powi(2) - height * height).sqrt();
+            let (u, w) = (rng.unit(), rng.unit());
+            let v = normalize(cross(u, w));
+            let u = normalize(cross(v, normalize(cross(u, v))));
+            let w = cross(v, u);
+            let origin = [0, 1, 2].map(|_| rng.uniform(-5.0, 5.0));
+            let s: Vec<Sphere> = (0..3)
+                .map(|k| {
+                    let a = std::f64::consts::TAU * f64::from(k) / 3.0 + rng.uniform(-0.1, 0.1);
+                    let (c, d) = (rho * a.cos(), rho * a.sin());
+                    Sphere::new([0, 1, 2].map(|i| origin[i] + c * u[i] + d * w[i]), radius)
+                })
+                .collect();
+            let base = SurfaceParams::ses(probe).with_spacing(rng.uniform(0.2, 0.5));
+            let kept = compute_surface(&s, &base.clone().with_remove_fragments(false)).unwrap();
+            let out = compute_surface(&s, &base).unwrap();
+            assert!(mesh::validate(&out.mesh).is_ok());
+            let mask = post::fragments(&kept.mesh, &kept.mesh.vertex_component, &kept.components);
+            let n = mask.iter().filter(|&&f| f).count();
+            assert_eq!(out.stats.removed_fragments, n);
+            fragments += n;
+            for (c, &f) in kept.components.iter().zip(&mask) {
+                for a in &s {
+                    assert!(!f || !post::inside_component(&kept.mesh, c, a.center));
+                }
+            }
+            let rest: Vec<_> = kept
+                .components
+                .iter()
+                .zip(&mask)
+                .filter(|(_, f)| !**f)
+                .map(|(c, _)| (c.vertices, c.triangles, c.area, c.volume, c.euler))
+                .collect();
+            let now: Vec<_> = out
+                .components
+                .iter()
+                .map(|c| (c.vertices, c.triangles, c.area, c.volume, c.euler))
+                .collect();
+            assert_eq!(rest, now);
+            // Whole-mesh ray parity: every atom centre is inside the solid.
+            let all = mesh::Component {
+                vertices: out.mesh.vertex_count(),
+                triangles: out.mesh.triangle_count(),
+                area: 0.0,
+                volume: 0.0,
+                euler: 0,
+                first_triangle: 0,
+            };
+            for a in &s {
+                assert!(post::inside_component(&out.mesh, &all, a.center));
+            }
+        }
+        assert!(fragments > 0, "no fragment generated");
     }
 
     proptest! {
