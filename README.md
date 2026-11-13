@@ -15,12 +15,12 @@ molecular surface) meshing for molecular structures, written in Rust.
   (AVX2 / AVX-512 / NEON).
 * Ships as a reusable library crate plus a command-line tool.
 
-> **Status: Phases 0–7 done.** Structure files → closed, oriented SES / SAS /
+> **Status: Phases 0–8 done (decimation pending).** Structure files → closed, oriented SES / SAS /
 > vdW meshes with analytic normals → OBJ, from the library and the `sesmesh`
 > CLI, multi-threaded and SIMD-accelerated, with cavity handling, components,
-> vertex colours, per-atom areas and JSON statistics. Level-of-detail controls
-> (smoothing, decimation, density), PLY/MSMS output, biological assemblies and
-> batch mode follow (Phases 8–10, see the
+> vertex colours, per-atom areas, JSON statistics, density and smoothing
+> controls, PLY/MSMS output, biological assemblies and batch mode. Decimation,
+> the validation campaign and the release follow (Phases 8–10, see the
 > [implementation plan](docs/03-implementation-plan.md)).
 
 ## Quick start
@@ -31,6 +31,8 @@ target/release/sesmesh 1crn.cif -o 1crn.obj            # SES, 0.5 Å grid
 target/release/sesmesh 4hhb.cif.gz -q high --timings    # 0.25 Å grid
 target/release/sesmesh ligand.xyz --radii alvarez --probe 1.2 -s 0.1 -o lig.obj
 target/release/sesmesh 1crn.cif --cavities remove --vertex-colors element --stats stats.json
+target/release/sesmesh 1k4r.cif.gz --assembly 1 -q draft -o capsid.ply    # 545k-atom capsid
+target/release/sesmesh *.cif.gz --output-dir meshes --keep-going           # batch
 target/release/sesmesh info 1crn.pdb
 target/release/sesmesh radii --set protor
 ```

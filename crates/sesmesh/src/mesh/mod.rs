@@ -102,7 +102,7 @@ pub fn area_volume(mesh: &Mesh) -> (f64, f64) {
         .fold((0.0, 0.0), |(a, v), &(pa, pv)| (a + pa, v + pv))
 }
 
-fn triangle_area_volume(mesh: &Mesh, t: [u32; 3], origin: [f64; 3]) -> (f64, f64) {
+pub(crate) fn triangle_area_volume(mesh: &Mesh, t: [u32; 3], origin: [f64; 3]) -> (f64, f64) {
     let p = t.map(|i| {
         let q = mesh.positions[i as usize];
         [0, 1, 2].map(|k| f64::from(q[k]) - origin[k])

@@ -745,6 +745,13 @@ reference ⇒ ≲ 100 B per triangle before final compaction (NFR-MEM).
 * Memory guard (FR-LOD-6): estimate triangles ≈ $3\,A_{\text{est}}/h^2$ with
   $A_{\text{est}}$ from a coarse pass (or from atom count heuristics), compare with
   the limit before the fine pass.
+* *As built (Phase 8):* `Resolution::Density(d)` → $h = \sqrt{1.5/d}$
+  (`VERTICES_PER_AREA_H2 = 1.5`, measured 1.50 on crambin; the density test
+  hits its target within 25 %). The memory guard runs after brick
+  classification instead of a coarse pass: $A_{\text{est}} = 0.7\,(Bh)^2$ per
+  surface brick (measured 0.38–0.68), 100 bytes per triangle at peak
+  (`estimate_memory`), `Error::ResourceLimit` above `max_memory` (refuse only;
+  auto-coarsening is not implemented).
 
 ---
 
@@ -795,6 +802,12 @@ $\mathbf x \leftarrow \mathbf x - F(\mathbf x)\nabla F(\mathbf x)$ (exact in one
 steps, with a bracketed line search along the normal as fallback), and
 recompute analytic normals and attributes. Improves triangle quality while
 keeping vertices on the SES.
+*As built (Phase 8):* `SurfaceParams::smoothing` rounds, Jacobi updates over a
+CSR adjacency (parallel, deterministic), re-projection with
+`SesField::sample` (≤ 4 steps), nearest atoms from the patch's generating
+atoms; the mesh is re-validated and component areas/volumes recomputed.
+Tested: vertices within 10⁻⁴ Å of the SES after 5 rounds, triangles with a
+minimum angle below 10° more than halved, area within 1 %.
 
 ### 9.5 Decimation (FR-LOD-4)
 
@@ -805,6 +818,8 @@ subset of the *original* vertices, so retained vertices stay exactly on the
 SES with exact normals and attributes; vertices are then compacted. The mesh
 is re-validated (manifoldness) afterwards. A pure-Rust QEM implementation
 can replace it later to drop the C++ build dependency.
+*Status (Phase 8):* not implemented yet (deferred: optional C++ dependency;
+spacing, density and smoothing cover level of detail meanwhile).
 
 ### 9.6 Per-atom area (FR-OUT-7)
 
@@ -863,6 +878,13 @@ f 1//1 2//2 3//3
   manual [R9]; patch kinds mapped to MSMS type codes.
 * **CSV** per-vertex attributes; **stats** as human text or JSON
   (`serde_json`, feature `json`).
+* *As built (Phase 8):* `export::ply::{write_ply, write_ply_path, PlyOptions}`
+  (x y z, nx ny nz when present, red green blue `uchar` with colours, `uint
+  atom`, `uchar patch` 0/1/2, `uint component`, faces `list uchar uint`);
+  `export::msms::{write_msms, write_msms_files, MsmsHeader}` with type codes
+  from the MSMS manual (1 toric reentrant = saddle, 2 spheric reentrant =
+  concave, 3 contact = convex), face number = 1-based component, header
+  density = vertices / area. Formats: `docs/04-output-formats.md`.
 
 ---
 
@@ -1038,6 +1060,15 @@ sesmesh radii [--set bondi|alvarez|protor]
 | Performance | `-j/--threads N` (all), `--simd auto\|scalar\|sse4.2\|avx2\|avx512\|neon`, `--max-memory <bytes>` |
 | Diagnostics | `-v/-vv`, `-q`, `--progress`, `--validate`, `--timings` |
 | Batch | multiple inputs + `--output-dir <dir>`, `--keep-going` |
+
+*As built (Phase 8):* several inputs run in batch mode (outputs named after
+the inputs in `--output-dir`; `-o` is then a usage error; side-file options
+name directories, `<stem>.stats.json`, `<stem>.atoms.csv`,
+`<stem>.vertices.csv`); `--keep-going` continues after a failure and the exit
+code is the first failure's; `--output-format obj|ply|msms` (default from the
+`-o` extension); `--density`, `--smooth`, `--max-memory` (K/M/G suffixes),
+`--assembly ID`; `info` lists the assemblies. Shell completions are not
+implemented.
 
 Exit codes per FR-CLI-6. *As built (Phase 4):* `surface` (default when the
 first argument is not a subcommand), `info`, `radii`; options of the Input,

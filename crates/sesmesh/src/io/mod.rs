@@ -9,7 +9,10 @@
 //! # Ok::<(), sesmesh::Error>(())
 //! ```
 
+mod assembly;
 pub(crate) mod cif;
+
+pub use assembly::AssemblySummary;
 mod hybrid36;
 mod lines;
 mod model;
@@ -136,6 +139,10 @@ pub struct ReadOptions {
     pub data_block: Option<String>,
     /// Extended XYZ: name of a per-atom radius column in `Properties=`.
     pub radius_column: Option<String>,
+    /// Build this biological assembly (mmCIF `pdbx_struct_assembly_gen`
+    /// `assembly_id`, PDB `REMARK 350` biomolecule number) instead of the
+    /// deposited coordinates (Spec FR-IN-8). Default `None`.
+    pub assembly: Option<String>,
     /// Maximum size of decompressed gzip input, protecting against
     /// decompression bombs. Default [`ReadOptions::DEFAULT_MAX_DECOMPRESSED`]
     /// (the largest PDB entries decompress to a few hundred MB).
@@ -153,6 +160,7 @@ impl Default for ReadOptions {
             format: None,
             data_block: None,
             radius_column: None,
+            assembly: None,
             max_decompressed_bytes: Self::DEFAULT_MAX_DECOMPRESSED,
         }
     }
@@ -224,16 +232,64 @@ fn read_impl(
         Format::Pqr => pqr::parse(&data),
     }
     .map_err(|e| e.into_error(format, path.clone()))?;
-    Ok(Structure {
+    let structure = Structure {
         models: parsed.models,
         strings: parsed.strings,
         source: Source {
             format,
-            path,
+            path: path.clone(),
             data_block: parsed.data_block,
         },
         diagnostics: parsed.diagnostics,
-    })
+    };
+    match &options.assembly {
+        None => Ok(structure),
+        Some(id) => {
+            let defs = assembly_data(&data, format, options, path)?;
+            assembly::expand(structure, &defs, id)
+        }
+    }
+}
+
+fn assembly_data(
+    data: &[u8],
+    format: Format,
+    options: &ReadOptions,
+    path: Option<PathBuf>,
+) -> Result<assembly::AssemblyData> {
+    match format {
+        Format::Mmcif => assembly::parse_cif(data, options.data_block.as_deref())
+            .map_err(|e| e.into_error(format, path)),
+        Format::Pdb => Ok(assembly::parse_pdb(data)),
+        _ => Err(Error::Unsupported(format!(
+            "biological assemblies need mmCIF or PDB input, not {}",
+            format.name()
+        ))),
+    }
+}
+
+/// Lists the biological assemblies a file defines (mmCIF
+/// `pdbx_struct_assembly_gen`, PDB `REMARK 350`); empty if none.
+///
+/// # Errors
+/// As [`read_path`]; [`Error::Unsupported`] for formats without assemblies.
+pub fn read_assemblies(
+    path: impl AsRef<Path>,
+    options: &ReadOptions,
+) -> Result<Vec<AssemblySummary>> {
+    let path = path.as_ref();
+    let data = std::fs::read(path).map_err(|source| Error::Io {
+        path: Some(path.to_path_buf()),
+        source,
+    })?;
+    let data = decompress(Cow::Owned(data), Some(path), options.max_decompressed_bytes)?;
+    let format = match options.format {
+        Some(f) => f,
+        None => Format::from_path(path)
+            .or_else(|| Format::sniff(&data))
+            .ok_or_else(|| Error::Unsupported("could not determine the input format".into()))?,
+    };
+    assembly_data(&data, format, options, Some(path.to_path_buf()))?.summaries()
 }
 
 const GZIP_MAGIC: [u8; 2] = [0x1f, 0x8b];

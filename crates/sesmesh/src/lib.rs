@@ -62,7 +62,8 @@ pub use mesh::{Mesh, PatchKind};
 pub use structure::{AtomRecord, AtomSet, Element, Model, Selection, Structure};
 pub use surface::{
     CavityMode, NormalMode, Quality, RefineMode, Resolution, SurfaceEngine, SurfaceOutput,
-    SurfaceParams, SurfaceStats, Timings, compute_surface, compute_surface_with,
+    SurfaceParams, SurfaceStats, Timings, VERTICES_PER_AREA_H2, compute_surface,
+    compute_surface_with, estimate_memory,
 };
 
 /// Version of the `sesmesh` library, taken from `Cargo.toml`.

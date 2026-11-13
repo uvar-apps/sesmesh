@@ -19,7 +19,9 @@ use std::time::{Duration, Instant};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use sesmesh::color::{self, ElementPalette};
+use sesmesh::export::msms::{MsmsHeader, write_msms_files};
 use sesmesh::export::obj::{ObjOptions, write_obj, write_obj_path};
+use sesmesh::export::ply::{PlyOptions, write_ply, write_ply_path};
 use sesmesh::io::{Format, ReadOptions};
 use sesmesh::radii::{BuiltinRadii, RadiusOptions, RadiusRules, RadiusSet};
 use sesmesh::structure::{AltLocPolicy, ChainIdKind, ModelChoice, WATER_RESIDUES};
@@ -52,8 +54,6 @@ enum Command {
 
 #[derive(Debug, Args)]
 struct InputArgs {
-    /// Input structure: PDB, mmCIF, XYZ or PQR, optionally gzip-compressed.
-    input: PathBuf,
     /// Input format (default: from the file name, then the content).
     #[arg(long, value_enum, default_value_t = FormatArg::Auto, help_heading = "Input")]
     format: FormatArg,
@@ -67,6 +67,10 @@ struct InputArgs {
     /// mmCIF data block (default: the first block with atoms).
     #[arg(long, help_heading = "Input")]
     block: Option<String>,
+    /// Build this biological assembly (mmCIF `assembly_id`, PDB
+    /// `REMARK 350` biomolecule) instead of the deposited coordinates.
+    #[arg(long, help_heading = "Input")]
+    assembly: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -114,8 +118,12 @@ struct RadiusArgs {
 
 #[derive(Debug, Args)]
 struct SurfaceArgs {
+    /// Input structures: PDB, mmCIF, XYZ or PQR, optionally gzip-compressed.
+    /// Several inputs run in batch mode (outputs in `--output-dir`).
+    #[arg(required = true)]
+    inputs: Vec<PathBuf>,
     #[command(flatten)]
-    input: InputArgs,
+    source: InputArgs,
     #[command(flatten)]
     select: SelectArgs,
     #[command(flatten)]
@@ -137,8 +145,24 @@ struct SurfaceArgs {
     #[arg(long, default_value_t = 0.0, help_heading = "Surface")]
     min_component_area: f64,
     /// Grid spacing (Å); overrides `--quality`.
-    #[arg(short = 's', long, help_heading = "Resolution")]
+    #[arg(
+        short = 's',
+        long,
+        help_heading = "Resolution",
+        conflicts_with = "density"
+    )]
     grid_spacing: Option<f64>,
+    /// Target vertex density (vertices per Å²; MSMS-like); overrides
+    /// `--quality`.
+    #[arg(long, help_heading = "Resolution")]
+    density: Option<f64>,
+    /// Taubin smoothing rounds, then exact re-projection onto the surface.
+    #[arg(long, default_value_t = 0, help_heading = "Resolution")]
+    smooth: u32,
+    /// Refuse inputs whose estimated mesh memory exceeds this (bytes; K, M,
+    /// G suffixes, e.g. `8G`); exit code 4.
+    #[arg(long, value_parser = parse_bytes, help_heading = "Performance")]
+    max_memory: Option<u64>,
     /// Quality preset: draft (1.0 Å), low (0.7), medium (0.5), high (0.25),
     /// ultra (0.1).
     #[arg(short = 'q', long, value_enum, default_value_t = QualityArg::Medium, help_heading = "Resolution")]
@@ -149,11 +173,23 @@ struct SurfaceArgs {
     /// Brick edge in grid cells (expert).
     #[arg(long, default_value_t = 10, help_heading = "Resolution")]
     brick_size: usize,
-    /// Output file (`-`: standard output; a `.gz` suffix compresses).
-    /// Default: the input name with an `.obj` extension, in the current
-    /// directory.
+    /// Output file (`-`: standard output; a `.gz` suffix compresses OBJ).
+    /// Default: the input name with the format's extension, in
+    /// `--output-dir`.
     #[arg(short = 'o', long, help_heading = "Output")]
     output: Option<PathBuf>,
+    /// Output format (default: from the `-o` extension: `.ply` → PLY,
+    /// `.vert`/`.face` → MSMS, otherwise OBJ).
+    #[arg(long, value_enum, help_heading = "Output")]
+    output_format: Option<OutputFormat>,
+    /// Directory for outputs named after the inputs (default: current
+    /// directory). With several inputs, `--stats`, `--atom-areas` and
+    /// `--vertex-data` also name directories.
+    #[arg(long, help_heading = "Output")]
+    output_dir: Option<PathBuf>,
+    /// Batch mode: continue with the next input after a failure.
+    #[arg(long, help_heading = "Output")]
+    keep_going: bool,
     /// Decimals of coordinates and normals (0–9).
     #[arg(long, default_value_t = 4, help_heading = "Output")]
     precision: usize,
@@ -205,8 +241,10 @@ struct SurfaceArgs {
 
 #[derive(Debug, Args)]
 struct InfoArgs {
+    /// Input structure: PDB, mmCIF, XYZ or PQR, optionally gzip-compressed.
+    input: PathBuf,
     #[command(flatten)]
-    input: InputArgs,
+    source: InputArgs,
     #[command(flatten)]
     select: SelectArgs,
     #[command(flatten)]
@@ -240,6 +278,43 @@ enum KindArg {
     Ses,
     Sas,
     Vdw,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum OutputFormat {
+    Obj,
+    Ply,
+    Msms,
+}
+
+impl OutputFormat {
+    fn extension(self) -> &'static str {
+        match self {
+            Self::Obj => "obj",
+            Self::Ply => "ply",
+            Self::Msms => "vert",
+        }
+    }
+}
+
+/// Parses a byte count with an optional K/M/G/T suffix (powers of 1024).
+fn parse_bytes(text: &str) -> Result<u64, String> {
+    let t = text.trim();
+    let (num, mult) = match t.chars().last().map(|c| c.to_ascii_uppercase()) {
+        Some('K') => (&t[..t.len() - 1], 1u64 << 10),
+        Some('M') => (&t[..t.len() - 1], 1 << 20),
+        Some('G') => (&t[..t.len() - 1], 1 << 30),
+        Some('T') => (&t[..t.len() - 1], 1 << 40),
+        _ => (t, 1),
+    };
+    let v: f64 = num
+        .trim()
+        .parse()
+        .map_err(|_| format!("invalid byte count {text:?}"))?;
+    if !(v.is_finite() && v > 0.0) {
+        return Err(format!("invalid byte count {text:?}"));
+    }
+    Ok((v * mult as f64) as u64)
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -309,6 +384,16 @@ impl Failure {
         }
     }
 
+    /// The same exit code with another message.
+    fn with_message(&self, m: String) -> Self {
+        match self {
+            Self::Runtime(_) => Self::Runtime(m),
+            Self::Usage(_) => Self::Usage(m),
+            Self::Parse(_) => Self::Parse(m),
+            Self::Resource(_) => Self::Resource(m),
+        }
+    }
+
     fn message(&self) -> &str {
         match self {
             Self::Runtime(m) | Self::Usage(m) | Self::Parse(m) | Self::Resource(m) => m,
@@ -359,7 +444,7 @@ fn main() -> ExitCode {
     }
 }
 
-fn read(input: &InputArgs) -> CliResult<Structure> {
+fn read(path: &Path, input: &InputArgs) -> CliResult<Structure> {
     let mut options = ReadOptions::default();
     options.format = match input.format {
         FormatArg::Auto => None,
@@ -369,7 +454,8 @@ fn read(input: &InputArgs) -> CliResult<Structure> {
         FormatArg::Pqr => Some(Format::Pqr),
     };
     options.data_block.clone_from(&input.block);
-    Ok(sesmesh::io::read_path(&input.input, &options)?)
+    options.assembly.clone_from(&input.assembly);
+    Ok(sesmesh::io::read_path(path, &options)?)
 }
 
 fn selection(input: &InputArgs, a: &SelectArgs) -> CliResult<Selection> {
@@ -447,9 +533,10 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
         KindArg::Sas => SurfaceParams::sas(a.probe),
         KindArg::Vdw => SurfaceParams::vdw(),
     };
-    let base = match a.grid_spacing {
-        Some(h) => base.with_spacing(h),
-        None => base.with_quality(match a.quality {
+    let base = match (a.grid_spacing, a.density) {
+        (Some(h), _) => base.with_spacing(h),
+        (None, Some(d)) => base.with_density(d),
+        (None, None) => base.with_quality(match a.quality {
             QualityArg::Draft => Quality::Draft,
             QualityArg::Low => Quality::Low,
             QualityArg::Medium => Quality::Medium,
@@ -469,6 +556,7 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
             CavityArg::Only => CavityMode::Only,
         })
         .with_min_cavity_volume(a.min_cavity_volume)
+        .with_smoothing(a.smooth)
         .with_min_component_area(a.min_component_area)
         .with_normals(if a.no_normals {
             NormalMode::None
@@ -485,6 +573,10 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
             SimdArg::Avx512 => SimdLevel::Avx512,
             SimdArg::Neon => SimdLevel::Neon,
         });
+    let p = match a.max_memory {
+        Some(bytes) => p.with_max_memory(bytes),
+        None => p,
+    };
     p.validate().map_err(|e| Failure::Usage(e.to_string()))?;
     if p.simd.effective().is_none() {
         return Err(Failure::Usage(format!(
@@ -501,8 +593,8 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
     Ok(p)
 }
 
-/// `1crn.cif.gz` → `1crn.obj`.
-fn default_output(input: &Path) -> PathBuf {
+/// `1crn.cif.gz` → `1crn`.
+fn input_stem(input: &Path) -> String {
     let name = input.file_name().map_or_else(
         || "surface".to_string(),
         |n| n.to_string_lossy().into_owned(),
@@ -511,10 +603,9 @@ fn default_output(input: &Path) -> PathBuf {
         .strip_suffix(".gz")
         .or_else(|| name.strip_suffix(".GZ"))
         .unwrap_or(&name);
-    let stem = Path::new(name)
+    Path::new(name)
         .file_stem()
-        .map_or_else(|| "surface".into(), |s| s.to_string_lossy().into_owned());
-    PathBuf::from(format!("{stem}.obj"))
+        .map_or_else(|| "surface".into(), |s| s.to_string_lossy().into_owned())
 }
 
 fn kind_name(k: SurfaceKind) -> &'static str {
@@ -535,8 +626,84 @@ fn print_warnings(diags: &Diagnostics) {
     }
 }
 
+/// Output paths of one input.
+struct Job {
+    input: PathBuf,
+    output: PathBuf,
+    format: OutputFormat,
+    stats: Option<PathBuf>,
+    vertex_data: Option<PathBuf>,
+    atom_areas: Option<PathBuf>,
+}
+
+fn output_format(a: &SurfaceArgs) -> OutputFormat {
+    a.output_format.unwrap_or_else(|| {
+        let ext = a
+            .output
+            .as_ref()
+            .and_then(|o| o.extension())
+            .map(|e| e.to_string_lossy().to_ascii_lowercase());
+        match ext.as_deref() {
+            Some("ply") => OutputFormat::Ply,
+            Some("vert" | "face") => OutputFormat::Msms,
+            _ => OutputFormat::Obj,
+        }
+    })
+}
+
+/// One job per input (FR-CLI-5).
+fn jobs(a: &SurfaceArgs) -> CliResult<Vec<Job>> {
+    let format = output_format(a);
+    let batch = a.inputs.len() > 1;
+    if batch && a.output.is_some() {
+        return Err(Failure::Usage(
+            "-o names one output; use --output-dir with several inputs".into(),
+        ));
+    }
+    if a.output.as_ref().is_some_and(|o| o.as_os_str() == "-") {
+        if format == OutputFormat::Msms {
+            return Err(Failure::Usage("MSMS output needs files, not -o -".into()));
+        }
+        if a.stats.as_ref().is_some_and(|p| p.as_os_str() == "-") {
+            return Err(Failure::Usage(
+                "--stats - and -o - cannot both use standard output".into(),
+            ));
+        }
+    }
+    let dir = a.output_dir.clone().unwrap_or_default();
+    if let Some(d) = &a.output_dir {
+        std::fs::create_dir_all(d)
+            .map_err(|e| Failure::Runtime(format!("{}: {e}", d.display())))?;
+    }
+    Ok(a.inputs
+        .iter()
+        .map(|input| {
+            let stem = input_stem(input);
+            let side = |p: &Option<PathBuf>, suffix: &str| {
+                p.as_ref().map(|p| {
+                    if batch && p.as_os_str() != "-" {
+                        p.join(format!("{stem}.{suffix}"))
+                    } else {
+                        p.clone()
+                    }
+                })
+            };
+            Job {
+                input: input.clone(),
+                output: a
+                    .output
+                    .clone()
+                    .unwrap_or_else(|| dir.join(format!("{stem}.{}", format.extension()))),
+                format,
+                stats: side(&a.stats, "stats.json"),
+                vertex_data: side(&a.vertex_data, "vertices.csv"),
+                atom_areas: side(&a.atom_areas, "atoms.csv"),
+            }
+        })
+        .collect())
+}
+
 fn surface(a: &SurfaceArgs) -> CliResult<()> {
-    let start = Instant::now();
     let params = params(a)?;
     if let Some(n) = a.threads {
         if n == 0 {
@@ -547,9 +714,45 @@ fn surface(a: &SurfaceArgs) -> CliResult<()> {
             .build_global()
             .map_err(|e| Failure::Runtime(format!("thread pool: {e}")))?;
     }
-    let structure = read(&a.input)?;
+    let jobs = jobs(a)?;
+    if jobs.len() == 1 {
+        return surface_one(a, &params, &jobs[0]);
+    }
+    let mut failed: Vec<Failure> = Vec::new();
+    for job in &jobs {
+        if let Err(f) = surface_one(a, &params, job) {
+            let name = job.input.display().to_string();
+            let msg = f.message();
+            if msg.starts_with(&name) {
+                eprintln!("sesmesh: error: {msg}");
+            } else {
+                eprintln!("sesmesh: error: {name}: {msg}");
+            }
+            failed.push(f);
+            if !a.keep_going {
+                break;
+            }
+        }
+    }
+    match failed.first() {
+        None => Ok(()),
+        Some(first) => {
+            let summary = if a.keep_going {
+                format!("{} of {} inputs failed", failed.len(), jobs.len())
+            } else {
+                "stopped at the first failure (--keep-going continues)".to_string()
+            };
+            Err(first.with_message(summary))
+        }
+    }
+}
+
+fn surface_one(a: &SurfaceArgs, params: &SurfaceParams, job: &Job) -> CliResult<()> {
+    let start = Instant::now();
+    let params = params.clone();
+    let structure = read(&job.input, &a.source)?;
     let mut diags = structure.diagnostics.clone();
-    let (atoms, radii) = atoms_and_radii(&structure, &a.input, &a.select, &a.radius, &mut diags)?;
+    let (atoms, radii) = atoms_and_radii(&structure, &a.source, &a.select, &a.radius, &mut diags)?;
     let spheres = Sphere::from_atoms(&atoms, &radii)?;
     let read_time = start.elapsed();
     let reporter = ProgressLine::new(io::stderr().is_terminal());
@@ -567,7 +770,7 @@ fn surface(a: &SurfaceArgs) -> CliResult<()> {
     options.precision = a.precision;
     options.normals = !a.no_normals;
     options.object_name = kind_name(out.stats.kind).to_string();
-    options.comments = header(a, &structure, &atoms, &params, &out);
+    options.comments = header(a, &job.input, &structure, &atoms, &params, &out);
     if a.group_components {
         options.groups = out
             .components
@@ -590,38 +793,55 @@ fn surface(a: &SurfaceArgs) -> CliResult<()> {
         };
         options.vertex_colors = vertex_colors(scheme, &structure, &atoms, &out, &palette);
     }
-    let output = a
-        .output
-        .clone()
-        .unwrap_or_else(|| default_output(&a.input.input));
+    let output = job.output.clone();
     let to_stdout = output.as_os_str() == "-";
-    if to_stdout && a.stats.as_ref().is_some_and(|p| p.as_os_str() == "-") {
-        return Err(Failure::Usage(
-            "--stats - and -o - cannot both use standard output".into(),
-        ));
-    }
-    if let Some(path) = &a.vertex_data {
+    if let Some(path) = &job.vertex_data {
         write_text(path, |w| write_vertex_data(w, &structure, &atoms, &out))?;
     }
-    if let Some(path) = &a.atom_areas {
+    if let Some(path) = &job.atom_areas {
         let areas = mesh::atom_areas(&out.mesh, atoms.len());
         write_text(path, |w| {
             write_atom_areas(w, &structure, &atoms, &radii, &areas)
         })?;
     }
-    if to_stdout {
-        let stdout = io::stdout().lock();
-        let mut w = BufWriter::with_capacity(1 << 20, stdout);
-        write_obj(&mut w, &out.mesh, &options)?;
-        w.flush()
-            .map_err(|e| Failure::Runtime(format!("standard output: {e}")))?;
-    } else {
-        write_obj_path(&output, &out.mesh, &options)?;
+    match job.format {
+        OutputFormat::Obj if to_stdout => {
+            let mut w = BufWriter::with_capacity(1 << 20, io::stdout().lock());
+            write_obj(&mut w, &out.mesh, &options)?;
+            w.flush()
+                .map_err(|e| Failure::Runtime(format!("standard output: {e}")))?;
+        }
+        OutputFormat::Obj => write_obj_path(&output, &out.mesh, &options)?,
+        OutputFormat::Ply => {
+            let mut ply = PlyOptions::new();
+            ply.normals = options.normals;
+            ply.comments = options.comments.clone();
+            ply.vertex_colors = std::mem::take(&mut options.vertex_colors);
+            if to_stdout {
+                let mut w = BufWriter::with_capacity(1 << 20, io::stdout().lock());
+                write_ply(&mut w, &out.mesh, &ply)?;
+                w.flush()
+                    .map_err(|e| Failure::Runtime(format!("standard output: {e}")))?;
+            } else {
+                write_ply_path(&output, &out.mesh, &ply)?;
+            }
+        }
+        OutputFormat::Msms => {
+            let density = out.stats.vertices as f64 / out.stats.area.max(1e-12);
+            let header = MsmsHeader::new(
+                job.input.display().to_string(),
+                atoms.len(),
+                density,
+                params.effective_probe(),
+            );
+            write_msms_files(&output, &out.mesh, &header)?;
+        }
     }
     let write_time = write_start.elapsed();
-    if let Some(path) = &a.stats {
+    if let Some(path) = &job.stats {
         let json = stats_json(
             a,
+            &job.input,
             &structure,
             &atoms,
             &params,
@@ -645,7 +865,7 @@ fn surface(a: &SurfaceArgs) -> CliResult<()> {
         let s = &out.stats;
         eprintln!(
             "sesmesh: {}: {} atoms (model {}), {} surface, probe {:.2} Å, grid {:.3} Å",
-            a.input.input.display(),
+            job.input.display(),
             atoms.len(),
             atoms.model().number,
             kind_name(s.kind),
@@ -745,6 +965,7 @@ impl ProgressLine {
 /// OBJ header comments (FR-OUT-1).
 fn header(
     a: &SurfaceArgs,
+    input: &Path,
     structure: &Structure,
     atoms: &AtomSet<'_>,
     params: &SurfaceParams,
@@ -754,19 +975,20 @@ fn header(
     vec![
         format!(
             "input: {}  format: {}  model: {}  atoms: {} selected / {} read",
-            a.input.input.display(),
+            input.display(),
             structure.source.format.name(),
             atoms.model().number,
             atoms.len(),
             atoms.model().atoms.len(),
         ),
         format!(
-            "surface: {}  probe_radius: {:.4}  grid_spacing: {:.4}  radii: {}  refine: {}",
+            "surface: {}  probe_radius: {:.4}  grid_spacing: {:.4}  radii: {}  refine: {}  smoothing: {}",
             kind_name(s.kind),
             params.effective_probe(),
             s.spacing,
             a.radius.radii,
             params.refine.name(),
+            params.smoothing,
         ),
         format!(
             "cavities: {}  min_cavity_volume: {}  min_component_area: {}  normals: {}",
@@ -785,14 +1007,14 @@ fn header(
 }
 
 fn info(a: &InfoArgs) -> CliResult<()> {
-    let structure = read(&a.input)?;
+    let structure = read(&a.input, &a.source)?;
     let mut out = String::new();
     let line = |out: &mut String, s: String| {
         out.push_str(&s);
         out.push('\n');
     };
     let src = &structure.source;
-    line(&mut out, format!("file: {}", a.input.input.display()));
+    line(&mut out, format!("file: {}", a.input.display()));
     line(
         &mut out,
         format!(
@@ -826,9 +1048,32 @@ fn info(a: &InfoArgs) -> CliResult<()> {
         &mut out,
         format!("atoms (all models): {}", structure.atom_count()),
     );
+    if let Some(id) = &a.source.assembly {
+        line(&mut out, format!("assembly: {id} (expanded)"));
+    }
+    if matches!(src.format, Format::Mmcif | Format::Pdb) {
+        let mut opts = ReadOptions::default();
+        opts.format = Some(src.format);
+        opts.data_block.clone_from(&a.source.block);
+        if let Ok(list) = sesmesh::io::read_assemblies(&a.input, &opts) {
+            let items: Vec<String> = list
+                .iter()
+                .map(|s| {
+                    let plural = if s.copies == 1 { "y" } else { "ies" };
+                    format!("{} ({} cop{plural})", s.id, s.copies)
+                })
+                .collect();
+            let text = if items.is_empty() {
+                "none".to_string()
+            } else {
+                items.join(", ")
+            };
+            line(&mut out, format!("assemblies: {text}"));
+        }
+    }
 
     let mut diags = Diagnostics::new();
-    let selection = selection(&a.input, &a.select)?;
+    let selection = selection(&a.source, &a.select)?;
     let options = radius_options(&a.radius)?;
     match structure.select(&selection, &mut diags) {
         Ok(atoms) => {
@@ -1099,6 +1344,7 @@ fn write_atom_areas(
 #[allow(clippy::too_many_arguments)]
 fn stats_json(
     a: &SurfaceArgs,
+    input: &Path,
     structure: &Structure,
     atoms: &AtomSet<'_>,
     params: &SurfaceParams,
@@ -1114,7 +1360,7 @@ fn stats_json(
     serde_json::json!({
         "sesmesh": sesmesh::VERSION,
         "input": {
-            "path": a.input.input.display().to_string(),
+            "path": input.display().to_string(),
             "format": structure.source.format.name(),
             "model": atoms.model().number,
             "atoms_selected": atoms.len(),
@@ -1130,6 +1376,7 @@ fn stats_json(
             "min_cavity_volume": params.min_cavity_volume,
             "min_component_area": params.min_component_area,
             "normals": params.normals.name(),
+            "smoothing": params.smoothing,
             "brick_size": params.brick_size,
             "simd": params.simd.name(),
         },
@@ -1233,14 +1480,16 @@ mod tests {
 
     #[test]
     fn output_names() {
-        assert_eq!(
-            default_output(Path::new("a/1crn.cif.gz")),
-            PathBuf::from("1crn.obj")
-        );
-        assert_eq!(default_output(Path::new("x.pdb")), PathBuf::from("x.obj"));
-        assert_eq!(
-            default_output(Path::new("noext")),
-            PathBuf::from("noext.obj")
-        );
+        assert_eq!(input_stem(Path::new("a/1crn.cif.gz")), "1crn");
+        assert_eq!(input_stem(Path::new("x.pdb")), "x");
+        assert_eq!(input_stem(Path::new("noext")), "noext");
+    }
+
+    #[test]
+    fn byte_counts() {
+        assert_eq!(parse_bytes("1024"), Ok(1024));
+        assert_eq!(parse_bytes("2K"), Ok(2048));
+        assert_eq!(parse_bytes("1.5g"), Ok(3 << 29));
+        assert!(parse_bytes("-1").is_err() && parse_bytes("lots").is_err());
     }
 }

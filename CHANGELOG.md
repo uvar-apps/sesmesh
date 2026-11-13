@@ -140,6 +140,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   - `docs/04-output-formats.md`: OBJ header, colours, CSV columns, JSON
     statistics schema.
 
+- Phase 8 level of detail and outputs (T8.1–T8.3, T8.5–T8.7):
+  - `Resolution::Density` / `--density` (vertices per Å²).
+  - `estimate_memory`, `SurfaceParams::max_memory` / `--max-memory`
+    (`Error::ResourceLimit`, exit code 4).
+  - Taubin smoothing with exact re-projection (`--smooth N`).
+  - Binary PLY (`export::ply`) and MSMS `.vert`/`.face` (`export::msms`)
+    writers; `--output-format obj|ply|msms`.
+  - Biological assemblies from mmCIF and PDB (`ReadOptions::assembly`,
+    `io::read_assemblies`, `--assembly`; `info` lists them).
+  - Batch mode: several inputs, `--output-dir`, `--keep-going`.
+  - Testkit binary PLY reader.
+
 ### Fixed
 
 - Validation ignored vertex positions when a mesh had no normals.

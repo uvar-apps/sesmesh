@@ -225,3 +225,222 @@ fn obj_groups_and_colors() {
     o.vertex_colors.pop();
     assert!(write_obj(Vec::new(), &out.mesh, &o).is_err());
 }
+
+#[test]
+fn density_mode_hits_its_target() {
+    let s = shell_with_core();
+    for density in [2.0, 6.0] {
+        let p = SurfaceParams::ses(1.4).with_density(density);
+        assert!((p.spacing() - (1.5f64 / density).sqrt()).abs() < 1e-12);
+        let out = run(&s, &p);
+        let achieved = out.stats.vertices as f64 / out.stats.area;
+        assert!(
+            (achieved / density - 1.0).abs() < 0.25,
+            "{density}: {achieved}"
+        );
+    }
+    assert!(compute_surface(&s, &SurfaceParams::ses(1.4).with_density(0.0)).is_err());
+}
+
+#[test]
+fn memory_guard_refuses_large_meshes() {
+    let s = shell_with_core();
+    let p = SurfaceParams::ses(1.4).with_spacing(0.3);
+    let out = run(&s, &p);
+    let (tris, bytes) = sesmesh::estimate_memory(out.stats.surface_bricks, p.brick_size, 0.3);
+    assert!(
+        tris as f64 > out.stats.triangles as f64 * 0.8,
+        "{tris} vs {}",
+        out.stats.triangles
+    );
+    let err = compute_surface(&s, &p.clone().with_max_memory(bytes / 2)).unwrap_err();
+    assert!(matches!(err, sesmesh::Error::ResourceLimit { .. }), "{err}");
+    run(&s, &p.with_max_memory(bytes * 2));
+}
+
+#[test]
+fn smoothing_keeps_vertices_on_the_surface() {
+    let s = shell_with_core();
+    let p = SurfaceParams::ses(1.4).with_spacing(0.5);
+    let raw = run(&s, &p);
+    let smooth = run(&s, &p.clone().with_smoothing(5));
+    assert_eq!(smooth.mesh.triangles, raw.mesh.triangles);
+    let field = sesmesh::SesField::new(&s, 1.4, sesmesh::SurfaceKind::Ses).unwrap();
+    let worst = smooth
+        .mesh
+        .positions
+        .iter()
+        .map(|q| field.value(q.map(f64::from)).abs())
+        .fold(0.0, f64::max);
+    assert!(worst < 1e-4, "{worst}");
+    // Fewer slivers.
+    let slivers = |m: &sesmesh::Mesh| {
+        m.triangles
+            .iter()
+            .filter(|t| {
+                let p = t.map(|i| m.positions[i as usize].map(f64::from));
+                let ang = |a: [f64; 3], b: [f64; 3], c: [f64; 3]| {
+                    let u = [0, 1, 2].map(|k| b[k] - a[k]);
+                    let v = [0, 1, 2].map(|k| c[k] - a[k]);
+                    let d: f64 = (0..3).map(|k| u[k] * v[k]).sum();
+                    let nu = (0..3).map(|k| u[k] * u[k]).sum::<f64>().sqrt();
+                    let nv = (0..3).map(|k| v[k] * v[k]).sum::<f64>().sqrt();
+                    (d / (nu * nv)).clamp(-1.0, 1.0).acos().to_degrees()
+                };
+                ang(p[0], p[1], p[2])
+                    .min(ang(p[1], p[2], p[0]))
+                    .min(ang(p[2], p[0], p[1]))
+                    < 10.0
+            })
+            .count()
+    };
+    let (before, after) = (slivers(&raw.mesh), slivers(&smooth.mesh));
+    assert!(after * 2 < before, "{before} -> {after}");
+    assert!((smooth.stats.area / raw.stats.area - 1.0).abs() < 0.01);
+}
+
+#[test]
+fn ply_round_trip() {
+    use sesmesh::export::ply::{PlyOptions, write_ply};
+    let s = shell_with_core();
+    let out = run(&s, &SurfaceParams::ses(1.4).with_spacing(0.7));
+    let mut o = PlyOptions::new();
+    o.comments = vec!["test".into()];
+    o.vertex_colors = out
+        .mesh
+        .vertex_patch
+        .iter()
+        .map(|&p| color::patch_color(p))
+        .collect();
+    let mut buf = Vec::new();
+    write_ply(&mut buf, &out.mesh, &o).unwrap();
+    let back = sesmesh_testkit::ply::parse(&buf).unwrap();
+    assert_eq!(back.comments[1], "test");
+    assert_eq!(back.vertices.len(), out.mesh.vertex_count());
+    let names: Vec<&str> = back.vertex_properties.iter().map(String::as_str).collect();
+    assert_eq!(
+        names,
+        [
+            "x",
+            "y",
+            "z",
+            "nx",
+            "ny",
+            "nz",
+            "red",
+            "green",
+            "blue",
+            "atom",
+            "patch",
+            "component"
+        ]
+    );
+    let x = back.column("x").unwrap();
+    assert!(
+        x.iter()
+            .zip(&out.mesh.positions)
+            .all(|(a, p)| *a == f64::from(p[0]))
+    );
+    let atom = back.column("atom").unwrap();
+    assert!(
+        atom.iter()
+            .zip(&out.mesh.vertex_atom)
+            .all(|(a, &b)| *a == f64::from(b))
+    );
+    let faces: Vec<[u32; 3]> = back.faces.iter().map(|f| [f[0], f[1], f[2]]).collect();
+    assert_eq!(faces, out.mesh.triangles);
+}
+
+#[test]
+fn msms_files() {
+    use sesmesh::export::msms::{MsmsHeader, write_msms};
+    let s = [
+        Sphere::new([0.0; 3], 1.7),
+        Sphere::new([2.6, 0.0, 0.0], 1.6),
+    ];
+    let out = run(&s, &SurfaceParams::ses(1.4).with_spacing(0.5));
+    let (mut v, mut f) = (Vec::new(), Vec::new());
+    let header = MsmsHeader::new("two atoms", 2, 3.0, 1.4);
+    write_msms(&mut v, &mut f, &out.mesh, &header).unwrap();
+    let (v, f) = (String::from_utf8(v).unwrap(), String::from_utf8(f).unwrap());
+    let vl: Vec<&str> = v.lines().collect();
+    assert_eq!(
+        vl[0],
+        "# MSMS solvent excluded surface vertices for two atoms"
+    );
+    assert_eq!(vl[1], "#vertices #sphere density probe_r");
+    assert_eq!(
+        vl[2],
+        format!(
+            "{:7} {:7} {:5.2} {:5.2}",
+            out.mesh.vertex_count(),
+            2,
+            3.0,
+            1.4
+        )
+    );
+    assert_eq!(vl.len(), 3 + out.mesh.vertex_count());
+    // Fixed-width fields: 6 × 9 + 8 + 8 + 3 characters.
+    assert!(
+        vl[3..].iter().all(|l| l.len() == 6 * 9 + 5 + 2 * 8 + 3),
+        "{}",
+        vl[3]
+    );
+    let fl: Vec<&str> = f.lines().collect();
+    assert_eq!(fl.len(), 3 + out.mesh.triangle_count());
+    let first: Vec<u32> = fl[3]
+        .split_whitespace()
+        .take(3)
+        .map(|t| t.parse().unwrap())
+        .collect();
+    assert_eq!(first, out.mesh.triangles[0].map(|i| i + 1));
+    // Every vertex has a valid 1-based sphere and an MSMS type.
+    for l in &vl[3..] {
+        let t: Vec<&str> = l.split_whitespace().collect();
+        let sphere: usize = t[7].parse().unwrap();
+        assert!((1..=2).contains(&sphere));
+        assert!(["1", "2", "3"].contains(&t[8]));
+    }
+}
+
+fn fixture_path(rel: &str) -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data")
+        .join(rel)
+}
+
+#[test]
+fn identity_assembly_keeps_the_deposited_atoms() {
+    use sesmesh::io::{ReadOptions, read_assemblies, read_path};
+    for rel in ["fixtures/1CRN.pdb.gz", "fixtures/1CRN.cif.gz"] {
+        let path = fixture_path(rel);
+        let list = read_assemblies(&path, &ReadOptions::default()).unwrap();
+        assert_eq!(list.len(), 1, "{rel}");
+        assert_eq!((list[0].id.as_str(), list[0].copies), ("1", 1));
+        let plain = read_path(&path, &ReadOptions::default()).unwrap();
+        let mut opts = ReadOptions::default();
+        opts.assembly = Some("1".into());
+        let asm = read_path(&path, &opts).unwrap();
+        assert_eq!(asm.atom_count(), plain.atom_count(), "{rel}");
+        opts.assembly = Some("7".into());
+        assert!(read_path(&path, &opts).is_err());
+    }
+}
+
+/// 1K4R assembly 1 is the 60-copy capsid (≈ 545 k atoms, Spec R15).
+#[test]
+fn capsid_assembly() {
+    use sesmesh::io::{ReadOptions, read_path};
+    let path = fixture_path("cache/1K4R.cif.gz");
+    if !path.exists() {
+        eprintln!(
+            "skipping: {} not found (cargo xtask fetch --set bench)",
+            path.display()
+        );
+        return;
+    }
+    let mut opts = ReadOptions::default();
+    opts.assembly = Some("1".into());
+    let s = read_path(&path, &opts).unwrap();
+    assert_eq!(s.atom_count(), 9_084 * 60);
+}

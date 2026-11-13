@@ -333,6 +333,23 @@ Exit (v0.2): fast, deterministic, multi-level SIMD.
 
 Exit (v0.3): all Must/Should requirements implemented.
 
+> Status (Phase 8 done except T8.4 and completions):
+> * T8.1: `Resolution::Density`, `--density` (constant 1.5 confirmed on
+>   crambin; calibration on the validation set stays in T9.5).
+> * T8.2: `estimate_memory` after classification, `max_memory` /
+>   `--max-memory` (exit code 4); refusal only, no auto-coarsening.
+> * T8.3: Taubin smoothing + exact re-projection (`--smooth N`), tested on
+>   vertex distance, sliver count and area.
+> * T8.4: **deferred** — decimation via `meshopt` adds an optional C++
+>   dependency; candidates: `meshopt` behind `decimate` or a pure-Rust QEM.
+> * T8.5: binary PLY and MSMS writers (gzip output and stdout already
+>   existed for OBJ; PLY also writes to stdout); testkit PLY reader.
+> * T8.6: mmCIF/PDB assemblies (`ReadOptions::assembly`,
+>   `io::read_assemblies`, `--assembly`, `info` listing); 1K4R assembly 1 =
+>   545 040 atoms (meshed at 1 Å: 9.8 M triangles in ≈ 10 s, 10 cores).
+> * T8.7: batch mode (`--output-dir`, `--keep-going`); shell completions
+>   (C) not done.
+
 ### Phase 9 — Validation and performance campaign (M5) — NFR-PERF/ACC/ROB/DET
 
 | ID | Task | Deliverable / tests |

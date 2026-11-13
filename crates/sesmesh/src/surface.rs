@@ -75,14 +75,22 @@ pub enum Resolution {
     Spacing(f64),
     /// A preset.
     Quality(Quality),
+    /// Target vertex density in vertices per Å² (Spec FR-LOD-3).
+    Density(f64),
 }
 
+/// Mesh vertices per Å² times h²: crossing grid edges per unit area of a
+/// surface average `1.5 / h²` over orientations (Design §8.6); measured
+/// 1.50 on crambin at 0.25 Å. Calibrated on the validation set in Phase 9.
+pub const VERTICES_PER_AREA_H2: f64 = 1.5;
+
 impl Resolution {
-    /// Grid spacing in Å.
+    /// Grid spacing in Å (for a density, `√(1.5 / density)`).
     pub fn spacing(self) -> f64 {
         match self {
             Self::Spacing(h) => h,
             Self::Quality(q) => q.spacing(),
+            Self::Density(d) => (VERTICES_PER_AREA_H2 / d).sqrt(),
         }
     }
 }
@@ -191,6 +199,12 @@ pub struct SurfaceParams {
     pub min_component_area: f64,
     /// Vertex normals. Default [`NormalMode::Analytic`].
     pub normals: NormalMode,
+    /// Limit on the estimated peak memory of the mesh stages (bytes), checked
+    /// after brick classification. Default `None`.
+    pub max_memory: Option<u64>,
+    /// Taubin smoothing rounds followed by exact re-projection (Spec
+    /// FR-LOD-5). Default 0 (off).
+    pub smoothing: u32,
 }
 
 impl Default for SurfaceParams {
@@ -213,6 +227,8 @@ impl SurfaceParams {
             min_cavity_volume: 0.0,
             min_component_area: 0.0,
             normals: NormalMode::Analytic,
+            max_memory: None,
+            smoothing: 0,
         }
     }
 
@@ -243,6 +259,21 @@ impl SurfaceParams {
     #[must_use]
     pub fn with_quality(mut self, quality: Quality) -> Self {
         self.resolution = Resolution::Quality(quality);
+        self
+    }
+
+    /// Sets a target vertex density (vertices per Å²).
+    #[must_use]
+    pub fn with_density(mut self, density: f64) -> Self {
+        self.resolution = Resolution::Density(density);
+        self
+    }
+
+    /// Refuses meshes whose estimated peak memory exceeds `bytes`
+    /// (Spec FR-LOD-6; [`Error::ResourceLimit`]).
+    #[must_use]
+    pub fn with_max_memory(mut self, bytes: u64) -> Self {
+        self.max_memory = Some(bytes);
         self
     }
 
@@ -288,6 +319,15 @@ impl SurfaceParams {
         self
     }
 
+    /// Smooths the mesh for `rounds` Taubin rounds and re-projects every
+    /// vertex onto the exact surface (better-shaped triangles, vertices still
+    /// on the surface).
+    #[must_use]
+    pub fn with_smoothing(mut self, rounds: u32) -> Self {
+        self.smoothing = rounds;
+        self
+    }
+
     /// Sets the vertex normal mode.
     #[must_use]
     pub fn with_normals(mut self, normals: NormalMode) -> Self {
@@ -314,6 +354,13 @@ impl SurfaceParams {
     /// # Errors
     /// [`Error::InvalidInput`] describing the first invalid value.
     pub fn validate(&self) -> Result<()> {
+        if let Resolution::Density(d) = self.resolution
+            && !(d.is_finite() && d > 0.0)
+        {
+            return Err(Error::InvalidInput(format!(
+                "vertex density must be finite and > 0, got {d}"
+            )));
+        }
         let h = self.spacing();
         if !(h.is_finite() && (0.01..=10.0).contains(&h)) {
             return Err(Error::InvalidInput(format!(
@@ -520,6 +567,18 @@ impl SurfaceEngine {
     }
 }
 
+/// Estimated triangle count and peak bytes of the mesh stages for
+/// `surface_bricks` bricks (Design §8.4, §8.6): area ≤ 0.7·(B·h)² per surface
+/// brick (measured 0.38–0.68 on 1CRN, 4HHB, 1AON), `2 · 1.5 / h²`
+/// triangles per Å², ≈ 100 bytes per triangle at peak (brick meshes,
+/// assembled mesh, sorted edge keys).
+pub fn estimate_memory(surface_bricks: usize, brick_size: usize, spacing: f64) -> (u64, u64) {
+    let side = brick_size as f64 * spacing;
+    let area = surface_bricks as f64 * 0.7 * side * side;
+    let triangles = 2.0 * VERTICES_PER_AREA_H2 * area / (spacing * spacing);
+    (triangles as u64, (triangles * 100.0) as u64)
+}
+
 /// Applies the cavity mode and filters (Design §9.2); returns the number of
 /// removed components.
 fn select_components(
@@ -580,6 +639,18 @@ fn run(
     control.report(Stage::Classify, 0, 1);
     let (touched, bricks) = engine.surface_bricks()?;
     control.check()?;
+    if let Some(limit) = params.max_memory {
+        let (triangles, bytes) = estimate_memory(bricks.len(), params.brick_size, params.spacing());
+        if bytes > limit {
+            return Err(Error::ResourceLimit {
+                what: format!(
+                    "estimated mesh memory ({bytes} bytes for about {triangles} triangles at {} Å)",
+                    params.spacing()
+                ),
+                limit,
+            });
+        }
+    }
     control.report(Stage::Classify, 1, 1);
     lap(&mut timings.classify);
 
@@ -613,6 +684,30 @@ fn run(
     post::group_by_component(&mut mesh, &vertex_component, &mut components);
     let removed_components =
         select_components(&mut mesh, &mut vertex_component, &mut components, params);
+    if params.smoothing > 0 {
+        post::smooth_and_project(&mut mesh, &engine.field, spheres, params.smoothing);
+        let check = mesh::validate(&mesh);
+        if !check.is_ok() {
+            return Err(Error::Internal(format!(
+                "smoothed mesh failed validation: {check:?}"
+            )));
+        }
+        // Areas and volumes of the smoothed surface.
+        let origin = mesh
+            .positions
+            .first()
+            .map_or([0.0; 3], |p| p.map(f64::from));
+        for c in &mut components {
+            let (mut area, mut volume) = (0.0, 0.0);
+            for t in &mesh.triangles[c.first_triangle..c.first_triangle + c.triangles] {
+                let (a, v) = mesh::triangle_area_volume(&mesh, *t, origin);
+                area += a;
+                volume += v;
+            }
+            c.area = area;
+            c.volume = volume;
+        }
+    }
     match params.normals {
         NormalMode::Analytic => {}
         NormalMode::FaceAverage => post::face_average_normals(&mut mesh),

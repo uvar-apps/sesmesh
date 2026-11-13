@@ -48,6 +48,52 @@ f ...
   * `patch` — convex (light blue), saddle (green), concave (orange);
   * `component` — categorical colour of the component index.
 
+## Binary PLY (`--output-format ply`, or `-o name.ply`)
+
+Little-endian binary PLY 1.0 with header comments (the same lines as the OBJ
+header):
+
+| Element / property | Type | Present |
+|---|---|---|
+| `vertex`: `x`, `y`, `z` | float | always |
+| `nx`, `ny`, `nz` | float | unless `--no-normals` |
+| `red`, `green`, `blue` | uchar | with `--vertex-colors` |
+| `atom` | uint | always: 0-based nearest selected atom |
+| `patch` | uchar | always: 0 convex, 1 saddle, 2 concave |
+| `component` | uint | always (from `sesmesh`) |
+| `face`: `vertex_indices` | list uchar uint | always (triangles) |
+
+`-o -` writes PLY to standard output when `--output-format ply` is given.
+
+## MSMS `.vert` / `.face` (`--output-format msms`, or `-o name.vert`)
+
+Two files next to each other (`name.vert`, `name.face`), as written by
+M. Sanner's MSMS:
+
+```
+# MSMS solvent excluded surface vertices for 1crn.cif
+#vertices #sphere density probe_r
+  13812     327  6.00  1.40
+    4.500     3.500    -7.104    -0.321    -0.168    -0.932       1     131  3
+```
+
+* `.vert` rows: position, normal (`%9.3f` each), face number (here the
+  1-based component), closest sphere (1-based selected atom), type.
+* `.face` rows: three 1-based vertex indices (`%6d`), type (`%2d`), face
+  number (`%6d`).
+* Types follow the MSMS manual: 1 toric reentrant (saddle), 2 spheric
+  reentrant (concave), 3 contact (convex); a triangle takes its vertices'
+  common type, else 1.
+* The header density is vertices per Å² of the written mesh.
+
+## Batch mode
+
+Several inputs (`sesmesh a.cif b.pdb ...`) write `<stem>.<ext>` into
+`--output-dir` (default: the current directory). `--stats`, `--atom-areas`
+and `--vertex-data` then name directories and get `<stem>.stats.json`,
+`<stem>.atoms.csv` and `<stem>.vertices.csv`. `--keep-going` continues after
+a failing input; the exit code is the first failure's.
+
 ## Per-vertex attributes (`--vertex-data <csv>`)
 
 One row per OBJ vertex, in OBJ order:

@@ -233,3 +233,121 @@ pub fn atom_areas(mesh: &Mesh, atoms: usize) -> Vec<f64> {
     }
     out
 }
+
+/// Taubin λ|μ smoothing (λ = 0.5, μ = −0.53, uniform umbrella Laplacian)
+/// for `iterations` rounds, then exact re-projection of every vertex onto
+/// the surface (`x ← x − F(x)·∇F(x)`, up to 4 steps) with analytic normals,
+/// patch kinds and nearest atoms recomputed (Design §9.4, Spec FR-LOD-5).
+/// Improves triangle shape while keeping vertices on the surface.
+pub(crate) fn smooth_and_project(
+    mesh: &mut Mesh,
+    field: &crate::field::SesField,
+    spheres: &[crate::geom::Sphere],
+    iterations: u32,
+) {
+    if iterations == 0 || mesh.positions.is_empty() {
+        return;
+    }
+    // Vertex adjacency (CSR, sorted, deduplicated).
+    let n = mesh.positions.len();
+    let mut pairs: Vec<u64> = Vec::with_capacity(6 * mesh.triangles.len());
+    for t in &mesh.triangles {
+        for k in 0..3 {
+            let (a, b) = (t[k], t[(k + 1) % 3]);
+            pairs.push((u64::from(a) << 32) | u64::from(b));
+            pairs.push((u64::from(b) << 32) | u64::from(a));
+        }
+    }
+    crate::par::sort_unstable(&mut pairs);
+    pairs.dedup();
+    let mut offsets = vec![0u32; n + 1];
+    for p in &pairs {
+        offsets[(p >> 32) as usize + 1] += 1;
+    }
+    for i in 0..n {
+        offsets[i + 1] += offsets[i];
+    }
+    let neighbours: Vec<u32> = pairs.iter().map(|&p| p as u32).collect();
+    drop(pairs);
+    let mut x: Vec<[f64; 3]> = mesh.positions.iter().map(|p| p.map(f64::from)).collect();
+    let step = |x: &[[f64; 3]], f: f64| -> Vec<[f64; 3]> {
+        crate::par::map(n, |i| {
+            let nb = &neighbours[offsets[i] as usize..offsets[i + 1] as usize];
+            if nb.is_empty() {
+                return x[i];
+            }
+            let mut m = [0.0; 3];
+            for &j in nb {
+                for k in 0..3 {
+                    m[k] += x[j as usize][k];
+                }
+            }
+            let inv = 1.0 / nb.len() as f64;
+            [0, 1, 2].map(|k| x[i][k] + f * (m[k] * inv - x[i][k]))
+        })
+    };
+    for _ in 0..iterations {
+        x = step(&x, 0.5);
+        x = step(&x, -0.53);
+    }
+    let projected = crate::par::map(n, |i| {
+        let mut p = x[i];
+        let mut s = field.sample(p);
+        for _ in 0..4 {
+            let Some(g) = s.normal else { break };
+            if s.value.abs() < 1e-9 {
+                break;
+            }
+            p = [0, 1, 2].map(|k| p[k] - s.value * g[k]);
+            s = field.sample(p);
+        }
+        let atom = nearest_atom(&s.patch, p, spheres).unwrap_or(mesh.vertex_atom[i]);
+        let patch = match s.patch {
+            crate::field::Patch::Saddle { .. } => super::PatchKind::Saddle,
+            crate::field::Patch::Concave { .. } => super::PatchKind::Concave,
+            _ => super::PatchKind::Convex,
+        };
+        let normal = s.normal.map_or(
+            mesh.normals.get(i).copied().unwrap_or([0.0, 0.0, 1.0]),
+            |g| g.map(|c| c as f32),
+        );
+        (p.map(|c| c as f32), normal, atom, patch)
+    });
+    let has_normals = !mesh.normals.is_empty();
+    for (i, (p, q, atom, patch)) in projected.into_iter().enumerate() {
+        mesh.positions[i] = p;
+        if has_normals {
+            mesh.normals[i] = q;
+        }
+        mesh.vertex_atom[i] = atom;
+        mesh.vertex_patch[i] = patch;
+    }
+}
+
+/// Nearest generating atom of a patch (`|v − c| − r`, MSMS semantics).
+fn nearest_atom(
+    patch: &crate::field::Patch,
+    v: [f64; 3],
+    spheres: &[crate::geom::Sphere],
+) -> Option<u32> {
+    use crate::field::Patch;
+    let atoms: &[usize] = match patch {
+        Patch::Convex { atom } => std::slice::from_ref(atom),
+        Patch::Saddle { atoms } => atoms,
+        Patch::Concave { atoms } => atoms,
+        _ => return None,
+    };
+    atoms
+        .iter()
+        .map(|&a| {
+            let s = &spheres[a];
+            let d = (0..3)
+                .map(|k| (v[k] - s.center[k]).powi(2))
+                .sum::<f64>()
+                .sqrt()
+                - s.radius;
+            (d, a)
+        })
+        .min_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)))
+        .map(|(_, a)| a as u32)
+}

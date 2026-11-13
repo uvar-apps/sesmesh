@@ -43,16 +43,16 @@ any deviation from the plan.
 
 ## Repository state at handoff (2026-11-13)
 
-- `main` = `origin/main` = Phase 6 (`afa2369`); CI passed on all jobs (incl. the SIMD matrix).
-- Branch `phase-7-mesh`: Phase 7 committed locally (all local checks pass); not yet merged into
-  `main` or pushed: fast-forward `main` and push when the user asks, then check CI (first
-  `cargo deny` run with `serde_json`).
+- `main` = `origin/main` = Phase 8 (`phase-8-lod`), except T8.4 decimation and shell completions
+  (issues #1, #2).
 - Root `atom-colors.json` and `out/` are untracked on purpose.
-- Phases 0–7 done. Next: Phase 8 on a new branch `phase-8-lod` from `main`.
+- Phases 0–8 done (T8.4 deferred). Next: T8.4 decimation if wanted, then Phase 9 (validation
+  and performance campaign) on `phase-9-validation`.
 
 ## Layout (crates/sesmesh/src)
 
-- `io/` readers (PDB, mmCIF, XYZ, PQR, gzip) · `structure/` atoms, selection · `radii/` tables
+- `io/` readers (PDB, mmCIF, XYZ, PQR, gzip), biological assemblies (`assembly.rs`:
+  `ReadOptions::assembly`, `read_assemblies`) · `structure/` atoms, selection · `radii/` tables
 - `geom/` `Sphere`, cell lists, SAS arrangement (circles, exposed arcs, SAS vertices), built in
   parallel with cancellation checks (`Arrangement::build_with`)
 - `field/` `SesField` exact f64 field (`point.rs`: global `ses_eval`; per-sub-block
@@ -66,13 +66,17 @@ any deviation from the plan.
   compaction, face-averaged normals, `atom_areas`
 - `surface.rs` `SurfaceParams` (incl. `CavityMode`, `NormalMode`, filters),
   `compute_surface[_with]`, `SurfaceEngine`, stats · `control.rs` `Control`/`Progress`/`Stage` ·
-  `export/` OBJ writer (colours, groups) + fixed-point formatter · `color/` palettes
+  `export/` OBJ (colours, groups), binary PLY, MSMS `.vert`/`.face` writers + fixed-point
+  formatter · `color/` palettes · density/memory estimate (`Resolution::Density`,
+  `estimate_memory`) and Taubin smoothing + re-projection (`mesh/post.rs`)
 - `par.rs` rayon facade (feature `parallel`) · `crates/sesmesh-testkit` brute-force oracle,
   analytic two-sphere references, cluster generators, minimal OBJ reader
 - `crates/sesmesh-cli/src/main.rs` CLI (`surface` default, `info`, `radii`; `--progress`,
   `--simd`, `-j`, `--timings`, `--cavities`, `--vertex-colors`, `--palette`, `--group-components`,
-  `--face-normals`, `--vertex-data`, `--atom-areas`, `--stats`), end-to-end tests in
-  `crates/sesmesh-cli/tests/cli.rs`. Output formats: `docs/04-output-formats.md`.
+  `--face-normals`, `--vertex-data`, `--atom-areas`, `--stats`, `--density`, `--smooth`,
+  `--max-memory`, `--output-format`, `--assembly`; batch mode with `--output-dir` /
+  `--keep-going`), end-to-end tests in `crates/sesmesh-cli/tests/cli.rs`. Output formats:
+  `docs/04-output-formats.md`. Testkit has minimal OBJ and binary PLY readers.
 - Tests: unit tests next to the code; `crates/sesmesh/tests/{surface,features,determinism,structures}.rs`;
   data-dependent tests skip when `tests/data/cache` is missing (the nightly workflow fetches it)
 
@@ -89,20 +93,28 @@ any deviation from the plan.
   modes + filters (components inside removed cavities removed too), normal modes, per-atom areas,
   OBJ groups + vertex colours, CSV side files, JSON stats (CLI-side `serde_json`, no library
   `json` feature). Deferred: 2PTN cavity comparison with reference tools (Phase 9).
+- Phase 8: `--density` (h = √(1.5/d)), memory guard (exit 4), Taubin smoothing + exact
+  re-projection, PLY/MSMS writers, mmCIF/PDB assemblies (1K4R capsid = 545 040 atoms, meshed at
+  1 Å in ≈ 10 s), batch mode. Deferred: T8.4 decimation (`meshopt`, C++) and shell completions.
 - Accuracy: the inscribed MC mesh underestimates area (0.4–0.65 %) and volume (0.8–1.35 %) at
   0.25 Å for atom-sized spheres, O(h²) (D§15 "Measured", spec NFR-ACC note).
 - Performance: D§7.7 and D§11.1 (1AON at 0.5 Å ≈ 3.1 s, 4HHB at 0.25 Å ≈ 0.54 s, 10 cores).
 
-## Next: Phase 8 (plan §3, FR-LOD, FR-OUT, FR-IN-8, FR-CLI-5)
+## Next
 
-1. T8.1 `--density <v/Å²>`: spacing h ≈ √(1.5/density) (D§8.6), provisional constant.
-2. T8.2 memory estimate (≈ 3·A/h² triangles) + `--max-memory` (exit code 4).
-3. T8.3 Taubin smoothing + exact re-projection (`SesField` closest point, D§9.4) +
-   recomputed normals/attributes (`--smooth <iters>`).
-4. T8.4 decimation via `meshopt` behind a `decimate` feature (D§9.5), re-validate.
-5. T8.5 PLY (binary, with attributes) and MSMS `.vert/.face` writers.
-6. T8.6 biological assemblies (`pdbx_struct_assembly_gen`/`oper_list`, PDB BIOMT, `--assembly`).
-7. T8.7 batch mode (`--output-dir`, `--keep-going`), shell completions.
+Open items are GitHub issues #1–#18, collected in the tracking issue #19 ("Roadmap: open items
+after Phase 8"). Labels: `type:` (feature, performance, validation, ci, docs, decision,
+tracking), `area:` (io, field, mesh, engine, export, cli, ci), `phase:` (8, 9, 10, backlog),
+`priority:` (must/should/could = spec MoSCoW). Close issues from commits/PRs (`Fixes #N`) and
+tick them in #19. Summary:
+
+1. Optional T8.4 decimation (D§9.5): `meshopt` behind a `decimate` feature (C++ build) or a
+   pure-Rust quadric edge collapse; keep retained vertices on the SES, re-validate, compact.
+2. Phase 9 (plan §3): validation corpus vs reference tools (MSMS/NanoShaper/EDTSurf/sesa
+   numbers stored in `tests/data/reference/*.toml`, D§15), density constant calibration (T9.5),
+   NFR-ACC decision for small-sphere volume bias, x86 SIMD speed-ups, 3J3Q scale test, 2PTN
+   cavity comparison (deferred from T7.2).
+3. Phase 10: docs (user guide), packaging, release `v1.0`.
 
 ## Gotchas learned
 

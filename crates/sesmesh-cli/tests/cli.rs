@@ -340,3 +340,155 @@ fn phase7_usage_and_input_errors() {
     ]);
     assert_eq!(code(&o), 3, "{}", String::from_utf8_lossy(&o.stderr));
 }
+
+#[test]
+fn batch_mode_keep_going_and_formats() {
+    let dir = tmp("batch");
+    let _ = std::fs::remove_dir_all(&dir);
+    let good = [fixture("1CRN.cif.gz"), fixture("1L2Y.pdb.gz")];
+    let bad = tmp("broken.pdb");
+    std::fs::write(&bad, "ATOM  garbage\n").unwrap();
+    let args = |keep: bool| {
+        let mut v: Vec<String> = vec![
+            good[0].to_str().unwrap().into(),
+            bad.to_str().unwrap().into(),
+            good[1].to_str().unwrap().into(),
+            "--output-dir".into(),
+            dir.to_str().unwrap().into(),
+            "--output-format".into(),
+            "ply".into(),
+            "-q".into(),
+            "draft".into(),
+            "--stats".into(),
+            dir.to_str().unwrap().into(),
+        ];
+        if keep {
+            v.push("--keep-going".into());
+        }
+        v
+    };
+    // Without --keep-going the batch stops at the broken input.
+    let o = bin().args(args(false)).output().unwrap();
+    assert_ne!(code(&o), 0);
+    assert!(dir.join("1CRN.ply").exists() && !dir.join("1L2Y.ply").exists());
+    let o = bin().args(args(true)).output().unwrap();
+    assert_ne!(code(&o), 0);
+    let stderr = String::from_utf8_lossy(&o.stderr);
+    assert!(stderr.contains("1 of 3 inputs failed"), "{stderr}");
+    for stem in ["1CRN", "1L2Y"] {
+        let ply = std::fs::read(dir.join(format!("{stem}.ply"))).unwrap();
+        let m = sesmesh_testkit::ply::parse(&ply).unwrap();
+        assert!(m.faces.len() > 1000 && m.faces.iter().all(|f| f.len() == 3));
+        let stats: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(dir.join(format!("{stem}.stats.json"))).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            stats["mesh"]["triangles"].as_u64().unwrap() as usize,
+            m.faces.len()
+        );
+    }
+    // -o with several inputs is a usage error.
+    let o = run(&[
+        good[0].to_str().unwrap(),
+        good[1].to_str().unwrap(),
+        "-o",
+        "x.obj",
+    ]);
+    assert_eq!(code(&o), 2);
+}
+
+#[test]
+fn msms_density_smoothing_memory() {
+    let crn = fixture("1CRN.cif.gz");
+    let crn = crn.to_str().unwrap();
+    let stem = tmp("crn-msms");
+    let vert = stem.with_extension("vert");
+    let o = run(&[
+        crn,
+        "-o",
+        vert.to_str().unwrap(),
+        "--density",
+        "4",
+        "--smooth",
+        "2",
+        "--quiet",
+    ]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    let v = std::fs::read_to_string(&vert).unwrap();
+    let f = std::fs::read_to_string(stem.with_extension("face")).unwrap();
+    let nv: usize = v
+        .lines()
+        .nth(2)
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let nf: usize = f
+        .lines()
+        .nth(2)
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert_eq!(v.lines().count(), 3 + nv);
+    assert_eq!(f.lines().count(), 3 + nf);
+    let density: f64 = v
+        .lines()
+        .nth(2)
+        .unwrap()
+        .split_whitespace()
+        .nth(2)
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!((density / 4.0 - 1.0).abs() < 0.25, "{density}");
+    // Memory guard: exit code 4.
+    assert_eq!(
+        code(&run(&[crn, "-o", "-", "--max-memory", "10K", "--quiet"])),
+        4
+    );
+    assert_eq!(code(&run(&[crn, "-o", "-", "--max-memory", "lots"])), 2);
+    assert_eq!(
+        code(&run(&[crn, "-o", "-", "-s", "0.5", "--density", "3"])),
+        2
+    );
+    assert_eq!(code(&run(&[crn, "--output-format", "msms", "-o", "-"])), 2);
+}
+
+#[test]
+fn assemblies() {
+    let crn = fixture("1CRN.cif.gz");
+    let o = run(&["info", crn.to_str().unwrap()]);
+    assert!(
+        String::from_utf8(o.stdout)
+            .unwrap()
+            .contains("assemblies: 1 (1 copy)")
+    );
+    let o = run(&[
+        crn.to_str().unwrap(),
+        "--assembly",
+        "1",
+        "-o",
+        "-",
+        "-q",
+        "draft",
+        "--quiet",
+    ]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    assert_closed(&obj::parse(&String::from_utf8(o.stdout).unwrap()).unwrap());
+    assert_eq!(
+        code(&run(&[
+            crn.to_str().unwrap(),
+            "--assembly",
+            "42",
+            "-o",
+            "-"
+        ])),
+        1
+    );
+}
