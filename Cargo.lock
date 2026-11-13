@@ -954,7 +954,7 @@ dependencies = [
 
 [[package]]
 name = "sesmesh"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "criterion",
  "fast-float2",
@@ -973,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "sesmesh-cli"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "clap",
  "clap_complete",
@@ -987,7 +987,7 @@ dependencies = [
 
 [[package]]
 name = "sesmesh-testkit"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "proptest",
 ]
@@ -1291,7 +1291,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "clap",

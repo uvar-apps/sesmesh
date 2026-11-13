@@ -18,6 +18,7 @@ private (`publish = false`).
 
 | Version | Date | Notes |
 |---|---|---|
+| 1.1.0 | 2026-11-14 | Opt-in sub-grid fragment removal (`--drop-fragments`), memory guard fixed (estimate now an upper bound of the peak) and lower peak memory, CLI creates missing output directories, project website on GitHub Pages; default meshes unchanged. |
 | 1.0.0 | 2026-11-13 | First stable release: decimation, auto-coarsening, gzip PLY/MSMS, completions and man page, Ctrl-C, lower memory; spec criteria revised (NFR-MEM, NFR-ACC, NFR-PERF). |
 | 0.9.1 | 2026-11-13 | CLI: quiet exit when standard output is closed early (broken pipe). |
 | 0.9.0 | 2026-11-13 | First public release (release candidate for 1.0): crates `sesmesh` and `sesmesh-cli` on crates.io, binaries on the GitHub release `v0.9.0`. |

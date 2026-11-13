@@ -44,12 +44,15 @@ any deviation from the plan.
   `color/element_table.rs` (a test keeps both in sync). The root copy stays untracked.
 - The user reviews meshes in a viewer; the crambin SES was confirmed "perfect" (T4.10).
 
-## Repository state at handoff (2026-11-13)
+## Repository state at handoff (2026-11-14)
 
-- Latest release **1.0.0** (2026-11-13; 0.9.0 and 0.9.1 the same day): tags `v0.9.0`, `v0.9.1`,
-  `v1.0.0`, crates `sesmesh` and `sesmesh-cli` on crates.io (owner: the user's crates.io
-  account), GitHub releases with tier-1 binaries. `main` = `origin/main` = the 1.0.0 release
-  commit. Semantic versioning from 1.0 (`docs/api-review.md`).
+- Latest release **1.1.0** (2026-11-14; 1.0.0, 0.9.0 and 0.9.1 on 2026-11-13): tags `v0.9.0`,
+  `v0.9.1`, `v1.0.0`, `v1.1.0`, crates `sesmesh` and `sesmesh-cli` on crates.io (owner: the
+  user's crates.io account), GitHub releases with tier-1 binaries. `main` = `origin/main` = the
+  1.1.0 release commit (branch `release-1.1.0`). Semantic versioning from 1.0
+  (`docs/api-review.md`); 1.x keeps default output byte-identical (new behaviour is opt-in).
+- Website: https://uvar-apps.github.io/sesmesh/ (GitHub Pages, source "GitHub Actions",
+  deployed from `main` by `.github/workflows/pages.yml`; branch `website` holds its history).
 - The crates.io token lives in the user's `~/.cargo/credentials.toml` (never read or print it).
   Next releases follow `docs/release.md` (bump `[workspace.package] version` and the `sesmesh`
   workspace dependency, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).
@@ -127,7 +130,7 @@ any deviation from the plan.
 - v1.0 development: decimation (crambin 0.25 Å 111 k → 28 k triangles in ≈ 120 ms; 1AON
   0.25 Å ≈ 6.5 s), auto-coarsen, gzip PLY/MSMS, completions + man page, Ctrl-C, memory
   (field ≈ 560 B/atom, 1K4R capsid 1 Å peak 2.42 → 1.74 GB).
-- After 1.0 (unreleased): memory guard fixed (Design §8.6/§11.3 "after 1.0"): triangles
+- 1.1.0: memory guard fixed (Design §8.6/§11.3 "after 1.0"): triangles
   counted by MC cases on ≤ 512 sampled bricks, 0.5 Å pilot classification for finer grids,
   costs 16 MiB + 1 200 B/sphere + 150 B/triangle (+50 decimation, +50 smoothing) + 100 B per
   touched brick; lower transients (arrangement waves, packed touched keys, field freed before

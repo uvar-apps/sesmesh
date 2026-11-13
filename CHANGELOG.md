@@ -6,6 +6,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-14
+
+Opt-in removal of sub-grid fragments, a corrected memory guard with lower
+peak memory, missing output directories created by the CLI, and the project
+website. Default meshes are byte-identical to 1.0.0.
+
 ### Added
 
 - Optional removal of sub-grid fragments (Design §9.1): solid SES
@@ -331,7 +337,8 @@ listed in `docs/release.md` and GitHub issue #19).
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by
   fuzzing: a count of 377 777 773 requested 36 GB).
 
-[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/uvar-apps/sesmesh/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/uvar-apps/sesmesh/compare/v0.9.1...v1.0.0
 [0.9.1]: https://github.com/uvar-apps/sesmesh/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/uvar-apps/sesmesh/releases/tag/v0.9.0
