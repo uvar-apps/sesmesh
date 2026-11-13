@@ -132,11 +132,13 @@ column sums to the total area of the written mesh.
   "parameters": {"surface": "ses", "probe_radius": 1.4, "grid_spacing": 0.25,
                  "radii": "bondi", "refine": "exact", "cavities": "keep",
                  "min_cavity_volume": 0.0, "min_component_area": 0.0,
-                 "normals": "analytic", "brick_size": 10, "simd": "auto",
-                 "smoothing": 0, "decimation": null},
+                 "drop_fragments": false, "normals": "analytic",
+                 "brick_size": 10, "simd": "auto", "smoothing": 0,
+                 "decimation": null},
   "mesh": {"vertices": 55542, "triangles": 111076, "area": 2314.2,
            "volume": 4662.7, "euler": 4, "components": 2, "cavities": 1,
-           "removed_components": 0, "triangles_before_decimation": null},
+           "removed_components": 0, "removed_fragments": 0,
+           "triangles_before_decimation": null},
   "components": [{"index": 0, "cavity": false, "vertices": 54331,
                   "triangles": 108654, "first_triangle": 0, "area": 2269.4,
                   "volume": 4687.6, "euler": 2, "genus": 0}, "..."],
@@ -168,3 +170,9 @@ column sums to the total area of the written mesh.
   drops components with area < A. Anything inside a dropped cavity is dropped
   with it. The OBJ header and statistics report the number of removed
   components.
+* `--drop-fragments` drops sub-grid fragments — tiny solid SES components
+  without a vertex on a convex atom patch, cut off by the grid from reentrant
+  sheets thinner than the spacing (Design §9.1) — first, whatever the mode.
+  With it the OBJ header gains `drop_fragments: true` (before `normals`) and
+  `fragments_removed: N` (before `euler`); the statistics count them in
+  `mesh.removed_fragments`, apart from `removed_components`.

@@ -82,6 +82,77 @@ fn ring_of_atoms_has_genus_one() {
     assert_eq!(out.components[0].genus(), 1);
 }
 
+/// Three atoms of 4HHB (HEM D148 O1D, SER D44 OG, PHE D45 CE2): the two
+/// probe positions touching all three lie 1.371 Å from the atom plane,
+/// closer than the probe radius, so the SES spans the triangle with a sheet
+/// around a pinhole of radius 0.28 Å (genus 1), only 0.07 Å thick at the
+/// lattice node (−3, 10, 15.25). At 0.25 Å that node is inside while its six
+/// neighbours are not: an 8-triangle sub-grid fragment (Design §9.1).
+fn thin_sheet() -> Vec<Sphere> {
+    vec![
+        Sphere::new([-2.171, 7.406, 15.697], 1.52),
+        Sphere::new([-2.245, 11.599, 13.186], 1.52),
+        Sphere::new([-4.576, 11.056, 16.662], 1.7),
+    ]
+}
+
+#[test]
+fn sub_grid_fragments_are_dropped_on_request() {
+    let s = thin_sheet();
+    let base = SurfaceParams::ses(1.4).with_spacing(0.25);
+    // Kept by default (1.x output unchanged).
+    let kept = run(&s, &base);
+    assert_eq!(kept.stats.components, 2, "{:?}", kept.components);
+    assert_eq!(kept.stats.removed_fragments, 0);
+    assert_grouped(&kept);
+    let f = kept.components[1];
+    assert_eq!((f.vertices, f.triangles, f.euler), (6, 8, 2));
+    assert!(!f.is_cavity() && f.area < 0.1 && f.volume < 1e-3);
+    let m = &kept.mesh;
+    let patches = |c: usize| {
+        (0..m.vertex_count())
+            .filter(move |&v| m.vertex_component[v] as usize == c)
+            .map(|v| m.vertex_patch[v])
+    };
+    assert!(patches(1).all(|p| p == mesh::PatchKind::Concave));
+    assert!(patches(0).any(|p| p == mesh::PatchKind::Convex));
+
+    let drop = base.clone().with_remove_fragments(true);
+    let out = run(&s, &drop);
+    assert_eq!(out.stats.components, 1);
+    assert_eq!(out.stats.removed_fragments, 1);
+    assert_eq!(out.stats.removed_components, 0);
+    assert_eq!(out.components[0], kept.components[0]);
+    assert_eq!(out.components[0].genus(), 1, "the pinhole");
+    assert_eq!(out.mesh.triangle_count(), kept.mesh.triangle_count() - 8);
+    assert_eq!(out.mesh.vertex_count(), kept.mesh.vertex_count() - 6);
+    assert_eq!(out.mesh.vertex_component, vec![0; out.mesh.vertex_count()]);
+    assert_grouped(&out);
+    // Filters count separately; an area filter that also covers the
+    // fragment leaves it to the fragment count.
+    let filtered = run(&s, &drop.with_min_component_area(1.0));
+    assert_eq!(
+        (
+            filtered.stats.removed_components,
+            filtered.stats.removed_fragments
+        ),
+        (0, 1)
+    );
+    let filtered = run(&s, &base.clone().with_min_component_area(1.0));
+    assert_eq!(
+        (
+            filtered.stats.removed_components,
+            filtered.stats.removed_fragments
+        ),
+        (1, 0)
+    );
+    // SAS and vdW surfaces are unions of spheres: never fragments.
+    for p in [SurfaceParams::sas(1.4), SurfaceParams::vdw()] {
+        let out = run(&s, &p.with_spacing(0.25).with_remove_fragments(true));
+        assert_eq!(out.stats.removed_fragments, 0);
+    }
+}
+
 #[test]
 fn cavity_modes_and_filters() {
     let s = shell_with_core();
@@ -509,4 +580,38 @@ fn memory_guard_can_coarsen() {
     );
     assert!(used <= limit, "{used} > {limit}");
     assert_eq!(coarse.stats.components, full.stats.components);
+}
+
+/// The 4HHB report behind Design §9.1 "Sub-grid fragments": at 0.25 Å the
+/// outer surface, 31 cavities and one 8-triangle fragment (the sheet of
+/// [`thin_sheet`]), dropped on request.
+#[test]
+#[cfg(feature = "gzip")]
+#[ignore = "needs tests/data/cache (cargo xtask fetch --set small); slow in debug"]
+fn hemoglobin_fragment() {
+    use sesmesh::io::{ReadOptions, read_path};
+    use sesmesh::radii::{RadiusOptions, assign};
+    use sesmesh::{Diagnostics, Selection};
+    let path = fixture_path("cache/4HHB.cif.gz");
+    if !path.exists() {
+        eprintln!("skipping: 4HHB.cif.gz not in tests/data/cache");
+        return;
+    }
+    let structure = read_path(&path, &ReadOptions::default()).unwrap();
+    let mut diags = Diagnostics::new();
+    let atoms = structure.select(&Selection::default(), &mut diags).unwrap();
+    let radii = assign(&atoms, &RadiusOptions::default(), &mut diags).unwrap();
+    let spheres = Sphere::from_atoms(&atoms, &radii).unwrap();
+    let base = SurfaceParams::ses(1.4).with_spacing(0.25);
+    for (drop, components, removed) in [(false, 33, 0), (true, 32, 1)] {
+        let out = run(&spheres, &base.clone().with_remove_fragments(drop));
+        assert_eq!(
+            (
+                out.stats.components,
+                out.stats.cavities,
+                out.stats.removed_fragments
+            ),
+            (components, 31, removed)
+        );
+    }
 }
