@@ -492,3 +492,33 @@ fn assemblies() {
         1
     );
 }
+
+/// A reader that closes standard output early (`sesmesh … -o - | head`)
+/// stops the CLI quietly with success (fixed in 0.9.1).
+#[test]
+fn closed_stdout_is_not_an_error() {
+    use std::process::Stdio;
+    let crn = fixture("1CRN.cif.gz");
+    for format in ["obj", "ply"] {
+        let mut child = bin()
+            .args([
+                crn.to_str().unwrap(),
+                "-q",
+                "draft",
+                "-o",
+                "-",
+                "--output-format",
+                format,
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        // Close the read end before the CLI writes its (> 64 KiB) output.
+        drop(child.stdout.take());
+        let out = child.wait_with_output().unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(out.status.success(), "{format}: {:?} {stderr}", out.status);
+        assert!(!stderr.contains("error"), "{format}: {stderr}");
+    }
+}

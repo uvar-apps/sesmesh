@@ -46,9 +46,9 @@ any deviation from the plan.
 
 ## Repository state at handoff (2026-11-13)
 
-- Release **0.9.0** (2026-11-13): tag `v0.9.0`, crates `sesmesh` and `sesmesh-cli` on crates.io
-  (owner: the user's crates.io account), GitHub release with tier-1 binaries. `main` =
-  `origin/main` = the release commit.
+- Latest release **0.9.1** (2026-11-13; 0.9.0 the same day): tags `v0.9.0`, `v0.9.1`, crates
+  `sesmesh` and `sesmesh-cli` on crates.io (owner: the user's crates.io account), GitHub releases
+  with tier-1 binaries. `main` = `origin/main` = the release commit.
 - The crates.io token lives in the user's `~/.cargo/credentials.toml` (never read or print it).
   Next releases follow `docs/release.md` (bump `[workspace.package] version` and the `sesmesh`
   workspace dependency, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).

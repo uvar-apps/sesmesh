@@ -22,7 +22,7 @@ molecular surface) meshing for molecular structures, written in Rust.
 * Ships as a reusable library crate ([`sesmesh`](https://crates.io/crates/sesmesh))
   plus a command-line tool ([`sesmesh-cli`](https://crates.io/crates/sesmesh-cli)).
 
-> **Status: 0.9.0, release candidate for 1.0.** The remaining v1.0 items
+> **Status: 0.9.x, release candidate for 1.0.** The remaining v1.0 items
 > (decimation, performance targets on the reference machines, the long
 > fuzzing campaign, cross-tool references) are tracked in
 > [issue #19](https://github.com/uvar-apps/sesmesh/issues/19) and

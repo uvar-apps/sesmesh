@@ -378,11 +378,25 @@ enum Failure {
     Usage(String),
     Parse(String),
     Resource(String),
+    /// Standard output was closed by the reader (e.g. `| head`): stop
+    /// quietly with success, like other command-line tools.
+    BrokenPipe,
+}
+
+/// Maps a standard-output write error, treating a closed pipe as a quiet
+/// stop.
+fn stdout_error(e: &io::Error) -> Failure {
+    if e.kind() == io::ErrorKind::BrokenPipe {
+        Failure::BrokenPipe
+    } else {
+        Failure::Runtime(format!("standard output: {e}"))
+    }
 }
 
 impl Failure {
     fn code(&self) -> u8 {
         match self {
+            Self::BrokenPipe => 0,
             Self::Runtime(_) => 1,
             Self::Usage(_) => 2,
             Self::Parse(_) => 3,
@@ -397,18 +411,25 @@ impl Failure {
             Self::Usage(_) => Self::Usage(m),
             Self::Parse(_) => Self::Parse(m),
             Self::Resource(_) => Self::Resource(m),
+            Self::BrokenPipe => Self::BrokenPipe,
         }
     }
 
     fn message(&self) -> &str {
         match self {
             Self::Runtime(m) | Self::Usage(m) | Self::Parse(m) | Self::Resource(m) => m,
+            Self::BrokenPipe => "",
         }
     }
 }
 
 impl From<Error> for Failure {
     fn from(e: Error) -> Self {
+        if let Error::Io { path: None, source } = &e
+            && source.kind() == io::ErrorKind::BrokenPipe
+        {
+            return Self::BrokenPipe;
+        }
         let m = e.to_string();
         match e {
             Error::Parse { .. } | Error::Unsupported(_) => Self::Parse(m),
@@ -443,6 +464,7 @@ fn main() -> ExitCode {
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
+        Err(Failure::BrokenPipe) => ExitCode::SUCCESS,
         Err(f) => {
             eprintln!("sesmesh: error: {}", f.message());
             ExitCode::from(f.code())
@@ -814,8 +836,7 @@ fn surface_one(a: &SurfaceArgs, params: &SurfaceParams, job: &Job) -> CliResult<
         OutputFormat::Obj if to_stdout => {
             let mut w = BufWriter::with_capacity(1 << 20, io::stdout().lock());
             write_obj(&mut w, &out.mesh, &options)?;
-            w.flush()
-                .map_err(|e| Failure::Runtime(format!("standard output: {e}")))?;
+            w.flush().map_err(|e| stdout_error(&e))?;
         }
         OutputFormat::Obj => write_obj_path(&output, &out.mesh, &options)?,
         OutputFormat::Ply => {
@@ -826,8 +847,7 @@ fn surface_one(a: &SurfaceArgs, params: &SurfaceParams, job: &Job) -> CliResult<
             if to_stdout {
                 let mut w = BufWriter::with_capacity(1 << 20, io::stdout().lock());
                 write_ply(&mut w, &out.mesh, &ply)?;
-                w.flush()
-                    .map_err(|e| Failure::Runtime(format!("standard output: {e}")))?;
+                w.flush().map_err(|e| stdout_error(&e))?;
             } else {
                 write_ply_path(&output, &out.mesh, &ply)?;
             }
@@ -860,7 +880,7 @@ fn surface_one(a: &SurfaceArgs, params: &SurfaceParams, job: &Job) -> CliResult<
         let text = serde_json::to_string_pretty(&json)
             .map_err(|e| Failure::Runtime(format!("statistics: {e}")))?;
         if path.as_os_str() == "-" {
-            println!("{text}");
+            writeln!(io::stdout().lock(), "{text}").map_err(|e| stdout_error(&e))?;
         } else {
             write_text(path, |w| writeln!(w, "{text}"))?;
         }
@@ -1143,7 +1163,7 @@ fn info(a: &InfoArgs) -> CliResult<()> {
     }
     io::stdout()
         .write_all(out.as_bytes())
-        .map_err(|e| Failure::Runtime(format!("standard output: {e}")))
+        .map_err(|e| stdout_error(&e))
 }
 
 fn summarize_model(out: &mut String, structure: &Structure, model: &sesmesh::Model) {
@@ -1454,7 +1474,7 @@ fn radii(a: &RadiiArgs) -> CliResult<()> {
     }
     io::stdout()
         .write_all(out.as_bytes())
-        .map_err(|e| Failure::Runtime(format!("standard output: {e}")))
+        .map_err(|e| stdout_error(&e))
 }
 
 #[cfg(test)]

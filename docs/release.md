@@ -20,6 +20,7 @@ Until these are closed, releases are `0.x`.
 
 | Version | Date | Notes |
 |---|---|---|
+| 0.9.1 | 2026-11-13 | CLI: quiet exit when standard output is closed early (broken pipe). |
 | 0.9.0 | 2026-11-13 | First public release (release candidate for 1.0): crates `sesmesh` and `sesmesh-cli` on crates.io, binaries on the GitHub release `v0.9.0`. |
 
 ## Checklist
