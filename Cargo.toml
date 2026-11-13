@@ -33,6 +33,9 @@ sesmesh-testkit = { path = "crates/sesmesh-testkit" }
 # first needs them.
 anyhow = "1.0"
 clap = { version = "4.6", features = ["derive"] }
+clap_complete = "4.6"
+clap_mangen = "0.3"
+ctrlc = "3.5"
 criterion = "0.8"
 fast-float2 = "0.2"
 fearless_simd = { version = "1.2", features = ["force_support_fallback"] }

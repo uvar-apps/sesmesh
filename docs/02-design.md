@@ -752,6 +752,14 @@ reference ⇒ ≲ 100 B per triangle before final compaction (NFR-MEM).
   surface brick (measured 0.38–0.68), 100 bytes per triangle at peak
   (`estimate_memory`), `Error::ResourceLimit` above `max_memory` (refuse only;
   auto-coarsening is not implemented).
+* *As built (v1.0 development):* the estimate uses the Phase 9 costs
+  (150 B per triangle + 800 B per sphere). `SurfaceParams::auto_coarsen`
+  (CLI `--auto-coarsen`) turns the refusal into coarsening: since triangles
+  scale as $1/h^2$, $h \leftarrow 1.05\,h\sqrt{(E - A)/(L - A)}$ ($E$ the
+  estimate, $L$ the limit, $A$ the per-sphere part), the engine is rebuilt
+  on the existing field and the bricks re-classified; at most four attempts
+  and $h \le 10$ Å, else `ResourceLimit`. `SurfaceStats::spacing` reports the
+  spacing used (4HHB at 0.25 Å under a 40 MB limit: 0.696 Å).
 
 ---
 
@@ -820,6 +828,29 @@ is re-validated (manifoldness) afterwards. A pure-Rust QEM implementation
 can replace it later to drop the C++ build dependency.
 *Status (Phase 8):* not implemented yet (deferred: optional C++ dependency;
 spacing, density and smoothing cover level of detail meanwhile).
+
+*As built (v1.0 development, `mesh/decimate.rs`):* pure Rust, no `decimate`
+feature and no C++ build. `mesh::decimate(&mut Mesh, &Decimation)` with
+`Decimation { ratio, max_triangles, max_error }` (`SurfaceParams::decimation`,
+CLI `--decimate`, `--max-triangles`, `--decimate-error`):
+
+* Garland–Heckbert plane quadrics (unweighted) per vertex; *half-edge*
+  collapses `u → v` only, so no new positions are created and retained
+  vertices keep their exact SES position, analytic normal, atom and patch.
+* Pass-based instead of a global heap (a `BinaryHeap` with re-queued edges
+  took ≈ 20 s on 1AON at 0.25 Å, the passes 6.5 s): each pass builds one
+  candidate per live edge (cheaper direction, error ≤ `max_error`), sorts
+  them (parallel sort; ties by vertex index, so the result is deterministic),
+  and applies them in order, skipping a candidate when either endpoint's
+  1-ring was already touched in this pass. Passes repeat until the target
+  is reached or nothing collapses.
+* A collapse is applied only if both endpoints share exactly two triangles,
+  the link condition holds (two common neighbours), no triangle normal turns
+  by more than ≈ 78° (cos 0.2), no new triangle has quality below 0.05 and
+  the component keeps more than four triangles.
+* The mesh is then compacted, validated, and components recomputed and
+  regrouped. Crambin at 0.25 Å: 111 076 → 27 768 triangles in ≈ 120 ms,
+  vertices on the surface to f32 precision (`decimation_keeps_vertices_on_the_surface`).
 
 ### 9.6 Per-atom area (FR-OUT-7)
 
@@ -983,6 +1014,23 @@ stays scalar (≈ 2 % of a 1-thread profile: not worth SIMD, Plan T6.4).
 
 Example: 3J3Q at 1.0 Å — order 10⁷ triangles ⇒ ≈ 1.5 GB peak plus ≈ 0.5 GB
 for atom data; well within the 16 GB target.
+
+*As built (v1.0 development, issue #21; validation report §5):*
+
+* Steady field data ≈ 560 B per atom on the 1K4R capsid: neighbour rows
+  only for exposed spheres (the only ones the evaluator reads), no SAS arcs
+  (construction and tests only), `Circle` without its second basis vector
+  (`e2() = axis × e1`, bit-identical to the stored one; 120 → 96 B), exact
+  capacities. Input structure and spheres add ≈ 150 B per atom.
+* Peaks: per-sphere and per-brick vectors (millions of small allocations)
+  were freed but stayed resident in the allocator. The arrangement build,
+  `touched_bricks` and the brick meshes (`extract::ChunkMesh`,
+  `Engine::fold_brick_chunks_with`) now work on chunks of
+  `par::chunk_len(n) = clamp(n / 256, 1, 4096)` items with flat arrays,
+  concatenated in index order (results independent of the chunking);
+  `assemble` resolves triangles per chunk and frees each chunk once copied.
+* Peak RSS: 1K4R capsid at 1 Å 2.42 → 1.74 GB, 3J3Q at 1 Å 7.89 → 7.16 GB
+  (≈ 147 B per triangle), 1AON at 0.25 Å 2.38 → 2.14 GB.
 
 ---
 

@@ -1,10 +1,12 @@
 //! Triangle meshes: the [`Mesh`] type, isosurface extraction (Design §8),
 //! measurements, connected components and validation (Design §9.1, §9.3).
 
+mod decimate;
 pub(crate) mod extract;
 pub(crate) mod post;
 mod tables;
 
+pub use decimate::{Decimation, DecimationStats, decimate};
 pub use post::atom_areas;
 
 use std::sync::atomic::{AtomicU32, Ordering};

@@ -13,18 +13,20 @@ molecular surface) meshing for molecular structures, written in Rust.
   on a sparse, narrow-band brick grid; SAS and van der Waals surfaces too.
 * Writes closed, consistently oriented, edge-manifold triangle meshes with
   vertices on the exact surface and analytic normals: Wavefront OBJ, binary
-  PLY, MSMS `.vert`/`.face`; per-vertex colours, components, cavities,
-  per-atom areas, JSON statistics.
+  PLY, MSMS `.vert`/`.face` (each optionally gzip-compressed); per-vertex
+  colours, components, cavities, per-atom areas, JSON statistics.
 * Controls resolution and level of detail: grid spacing, quality presets,
-  vertex density, smoothing with exact re-projection.
+  vertex density, smoothing with exact re-projection, decimation that keeps
+  vertices on the exact surface, and a memory limit that can coarsen the
+  grid automatically.
 * Multi-threaded (rayon) and SIMD-accelerated with runtime CPU dispatch
   (AVX-512 / AVX2 / SSE4.2 / NEON); output identical for any thread count.
 * Ships as a reusable library crate ([`sesmesh`](https://crates.io/crates/sesmesh))
   plus a command-line tool ([`sesmesh-cli`](https://crates.io/crates/sesmesh-cli)).
 
 > **Status: 0.9.x, release candidate for 1.0.** The remaining v1.0 items
-> (decimation, performance targets on the reference machines, the long
-> fuzzing campaign, cross-tool references) are tracked in
+> (performance targets on the reference machines, the long fuzzing campaign,
+> cross-tool references) are tracked in
 > [issue #19](https://github.com/uvar-apps/sesmesh/issues/19) and
 > [docs/release.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/release.md).
 
@@ -56,6 +58,7 @@ sesmesh 4hhb.cif.gz -q high --timings         # 0.25 Å grid
 sesmesh ligand.xyz --radii alvarez --probe 1.2 -s 0.1 -o lig.obj
 sesmesh 1crn.cif --cavities remove --vertex-colors element --stats stats.json
 sesmesh 1k4r.cif.gz --assembly 1 -q draft -o capsid.ply   # 545k-atom capsid
+sesmesh 1aon.cif.gz -q high --decimate 0.25 -o groel.ply.gz # fine grid, 4× fewer triangles
 sesmesh *.cif.gz --output-dir meshes --keep-going          # batch
 sesmesh info 1crn.pdb
 sesmesh radii --set protor
@@ -64,7 +67,9 @@ sesmesh radii --set protor
 Run `sesmesh surface --help` for all options (selection, radii, surface kind,
 cavities, resolution, normals, colours, side files, threads). Output formats
 are described in [docs/04-output-formats.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/04-output-formats.md). Exit codes: 0 success, 1 runtime
-error, 2 usage error, 3 input parse error, 4 resource limit.
+error, 2 usage error, 3 input parse error, 4 resource limit, 130 interrupted
+(Ctrl-C). `sesmesh completions <shell>` prints a completion script and
+`sesmesh man` the manual page.
 
 As a library:
 

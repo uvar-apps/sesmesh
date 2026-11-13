@@ -53,7 +53,11 @@ any deviation from the plan.
   Next releases follow `docs/release.md` (bump `[workspace.package] version` and the `sesmesh`
   workspace dependency, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).
 - Root `atom-colors.json` and `out/` are untracked on purpose.
-- Open v1.0 items: #1, #3, #4, #5, #20, #22 (tracking issue #19).
+- Branch `v1-dev` (from `main` at 0.9.1) holds the v1.0 development items, unreleased: #1
+  decimation (`mesh/decimate.rs`, pure Rust), #3 `--auto-coarsen`, #15 gzip PLY/MSMS, #2
+  `completions`/`man`, #12 Ctrl-C (exit 130, `ctrlc`), #22 fuzz target `assembly` + assembly
+  size limits, #21 memory (arrangement compaction, chunked build/meshing via `par::chunk_len`).
+- Open v1.0 items after `v1-dev`: #4, #5, #20, #22 campaign, #21 budget decision (tracking #19).
 
 ## Layout (crates/sesmesh/src)
 
@@ -68,6 +72,7 @@ any deviation from the plan.
 - `mesh/` `Mesh`, `validate`, parallel `components` (lock-free union–find), packed edge keys
   (`mod.rs`); generated MC table (`mc_table.rs`, generator + exhaustive tests in `tables.rs`);
   per-brick MC, exact refinement, ulp-aware `edge_clamp`, parallel assembly (`extract.rs`)
+- `mesh/decimate.rs` QEM half-edge decimation (pass-based, deterministic)
 - `mesh/post.rs` grouping by component, cavity filtering + enclosure (ray parity), vertex
   compaction, face-averaged normals, `atom_areas`
 - `surface.rs` `SurfaceParams` (incl. `CavityMode`, `NormalMode`, filters),
@@ -83,8 +88,9 @@ any deviation from the plan.
 - `crates/sesmesh-cli/src/main.rs` CLI (`surface` default, `info`, `radii`; `--progress`,
   `--simd`, `-j`, `--timings`, `--cavities`, `--vertex-colors`, `--palette`, `--group-components`,
   `--face-normals`, `--vertex-data`, `--atom-areas`, `--stats`, `--density`, `--smooth`,
-  `--max-memory`, `--output-format`, `--assembly`; batch mode with `--output-dir` /
-  `--keep-going`), end-to-end tests in `crates/sesmesh-cli/tests/cli.rs`. Output formats:
+  `--max-memory`, `--auto-coarsen`, `--decimate`, `--max-triangles`, `--decimate-error`,
+  `--output-format`, `--assembly`; batch mode with `--output-dir` / `--keep-going`;
+  `completions`, `man` subcommands), end-to-end tests in `crates/sesmesh-cli/tests/cli.rs`. Output formats:
   `docs/04-output-formats.md`. Testkit has minimal OBJ and binary PLY readers.
 - Tests: unit tests next to the code; `crates/sesmesh/tests/{surface,features,determinism,structures}.rs`;
   data-dependent tests skip when `tests/data/cache` is missing (the nightly workflow fetches it)
@@ -108,6 +114,9 @@ any deviation from the plan.
 - Accuracy: the inscribed MC mesh underestimates area (0.4–0.65 %) and volume (0.8–1.35 %) at
   0.25 Å for atom-sized spheres, O(h²) (D§15 "Measured", spec NFR-ACC note).
 - Performance: D§7.7 and D§11.1 (1AON at 0.5 Å ≈ 3.1 s, 4HHB at 0.25 Å ≈ 0.54 s, 10 cores).
+- v1.0 development: decimation (crambin 0.25 Å 111 k → 28 k triangles in ≈ 120 ms; 1AON
+  0.25 Å ≈ 6.5 s), auto-coarsen, gzip PLY/MSMS, completions + man page, Ctrl-C, memory
+  (field ≈ 560 B/atom, 1K4R capsid 1 Å peak 2.42 → 1.74 GB).
 - Phase 9 (docs/validation-report.md): 53-entry accuracy study (area −0.20 %, volume −0.02 % at
   0.25 Å vs h → 0 extrapolation), density constant 1.4999 ± 0.0025, 200/200 sweep ok, large
   inputs (3J3Q 1 Å: 48.7 M triangles, 70 s, 5.3 GB). Open: cross-tool references (#5, #6), NFR-ACC

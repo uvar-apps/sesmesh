@@ -43,7 +43,8 @@ pub(crate) fn edge_clamp(engine: &Engine) -> f64 {
 const CODE_SHIFT: u32 = 28;
 const ID_MASK: u32 = (1 << CODE_SHIFT) - 1;
 
-/// The mesh of one brick before assembly.
+/// Brick meshes before assembly (one brick, or consecutive bricks
+/// concatenated, see [`ChunkMesh`]).
 #[derive(Debug, Default)]
 pub(crate) struct BrickMesh {
     /// Owned crossing edges (local ids), ascending; one vertex each.
@@ -58,22 +59,67 @@ pub(crate) struct BrickMesh {
     pub(crate) evals: u64,
 }
 
+/// The meshes of consecutive bricks in flat arrays (one allocation per
+/// array and chunk instead of per brick: per-brick vectors kept the
+/// assembly's peak memory high, issue #21).
+#[derive(Debug, Default)]
+pub(crate) struct ChunkMesh {
+    mesh: BrickMesh,
+    /// Per brick: end of its vertices (and owned edges) in `mesh`.
+    vertex_end: Vec<u32>,
+    /// Per brick: end of its triangles in `mesh`.
+    tri_end: Vec<u32>,
+}
+
+impl ChunkMesh {
+    /// Meshes brick `key` (see [`mesh_brick`]) and appends it.
+    pub(crate) fn push(
+        &mut self,
+        engine: &Engine,
+        key: [i32; 3],
+        values: &[f32],
+        refine: RefineMode,
+    ) {
+        mesh_brick(engine, key, values, refine, &mut self.mesh);
+        let end = |n: usize| u32::try_from(n).expect("fewer than 2^32 vertices per chunk");
+        self.vertex_end.push(end(self.mesh.edges.len()));
+        self.tri_end.push(end(self.mesh.tris.len()));
+    }
+
+    /// Exact field evaluations spent on vertices.
+    pub(crate) fn evals(&self) -> u64 {
+        self.mesh.evals
+    }
+
+    /// Range of brick `l` (index in the chunk) in `ends`.
+    fn range(ends: &[u32], l: usize) -> std::ops::Range<usize> {
+        let start = if l == 0 { 0 } else { ends[l - 1] as usize };
+        start..ends[l] as usize
+    }
+
+    /// Owned edges of brick `l`, ascending.
+    fn edges(&self, l: usize) -> &[u32] {
+        &self.mesh.edges[Self::range(&self.vertex_end, l)]
+    }
+}
+
 /// Meshes the cells of brick `key` from its samples (Engine layout: `(b+1)³`,
-/// x fastest). Only signs are used for case selection; crossing edges have
-/// exact sample values at both ends (Engine docs), refined further with the
-/// exact `f64` field.
-pub(crate) fn mesh_brick(
+/// x fastest) and appends the result to `out` (edge ids and triangle
+/// references are local to the brick). Only signs are used for case
+/// selection; crossing edges have exact sample values at both ends (Engine
+/// docs), refined further with the exact `f64` field.
+fn mesh_brick(
     engine: &Engine,
     key: [i32; 3],
     values: &[f32],
     refine: RefineMode,
-) -> BrickMesh {
+    out: &mut BrickMesh,
+) {
     let lat = &engine.lattice;
     let b = lat.b as usize;
     let s = b + 1;
     let stride = [1, s, s * s];
     let origin = lat.brick_origin(key);
-    let mut out = BrickMesh::default();
 
     // Vertex refinement evaluates the field against candidate lists
     // gathered once per sub-block (the 2×2×2 split of the sampling engine),
@@ -130,7 +176,7 @@ pub(crate) fn mesh_brick(
                         fb,
                         t_min,
                     };
-                    vertex(engine, &edge, refine, local, &mut out);
+                    vertex(engine, &edge, refine, local, out);
                     out.edges.push((((z * b + y) * b + x) * 3 + axis) as u32);
                 }
             }
@@ -175,7 +221,6 @@ pub(crate) fn mesh_brick(
             }
         }
     }
-    out
 }
 
 /// A crossing edge `pa → pb` with sampled values of opposite inside/outside
@@ -328,18 +373,23 @@ fn attributes(engine: &Engine, v: Vec3, e: &NearEval, outward: Vec3) -> (Vec3, P
     }
 }
 
-/// Concatenates brick meshes (in brick order) and resolves triangle
-/// references to global vertex indices.
+/// Concatenates brick meshes (chunks of `chunk` bricks, in brick order) and
+/// resolves triangle references to global vertex indices. Each chunk is
+/// freed once copied, so the parts and the result do not coexist in full.
 ///
 /// # Errors
 /// [`Error::ResourceLimit`] beyond `u32` vertex indices; [`Error::Internal`]
 /// for an unresolvable reference (a bug).
-pub(crate) fn assemble(bricks: &[[i32; 3]], parts: &[BrickMesh]) -> Result<Mesh> {
-    let mut base = Vec::with_capacity(parts.len() + 1);
+pub(crate) fn assemble(bricks: &[[i32; 3]], chunk: usize, parts: Vec<ChunkMesh>) -> Result<Mesh> {
+    debug_assert_eq!(parts.len(), bricks.len().div_ceil(chunk.max(1)));
+    // Global index of the first vertex of every brick.
+    let mut base = Vec::with_capacity(bricks.len());
     let mut total = 0usize;
-    for p in parts {
-        base.push(total);
-        total += p.edges.len();
+    for p in &parts {
+        base.extend(
+            (0..p.vertex_end.len()).map(|l| total + ChunkMesh::range(&p.vertex_end, l).start),
+        );
+        total += p.mesh.edges.len();
     }
     if total > u32::MAX as usize {
         return Err(Error::ResourceLimit {
@@ -352,41 +402,47 @@ pub(crate) fn assemble(bricks: &[[i32; 3]], parts: &[BrickMesh]) -> Result<Mesh>
         .enumerate()
         .map(|(i, k)| (pack(*k), i as u32))
         .collect();
-    let resolved = par::map(parts.len(), |bi| -> Result<Vec<[u32; 3]>> {
-        let key = bricks[bi];
-        let mut cache = [None::<usize>; 8];
-        cache[0] = Some(bi);
-        let mut target_of = |code: usize| -> Result<usize> {
-            if let Some(t) = cache[code] {
-                return Ok(t);
-            }
-            let nk = [0, 1, 2].map(|a| key[a] + ((code >> a) & 1) as i32);
-            let t = index.get(&pack(nk)).map(|&t| t as usize).ok_or_else(|| {
-                Error::Internal(format!(
-                    "triangle of brick {key:?} references edge of missing brick {nk:?}"
-                ))
-            })?;
-            cache[code] = Some(t);
-            Ok(t)
-        };
-        let mut tris = Vec::with_capacity(parts[bi].tris.len());
-        for tri in &parts[bi].tris {
-            let mut out = [0u32; 3];
-            for (o, &r) in out.iter_mut().zip(tri) {
-                let target = target_of((r >> CODE_SHIFT) as usize)?;
-                let id = r & ID_MASK;
-                let pos = parts[target].edges.binary_search(&id).map_err(|_| {
+    let edges_of = |bi: usize| parts[bi / chunk].edges(bi % chunk);
+    let resolved = par::map(parts.len(), |c| -> Result<Vec<[u32; 3]>> {
+        let part = &parts[c];
+        let mut tris = Vec::with_capacity(part.mesh.tris.len());
+        for l in 0..part.tri_end.len() {
+            let bi = c * chunk + l;
+            let key = bricks[bi];
+            let mut cache = [None::<usize>; 8];
+            cache[0] = Some(bi);
+            let mut target_of = |code: usize| -> Result<usize> {
+                if let Some(t) = cache[code] {
+                    return Ok(t);
+                }
+                let nk = [0, 1, 2].map(|a| key[a] + ((code >> a) & 1) as i32);
+                let t = index.get(&pack(nk)).map(|&t| t as usize).ok_or_else(|| {
                     Error::Internal(format!(
-                        "brick {key:?} references edge {id} without vertex in brick {:?}",
-                        bricks[target]
+                        "triangle of brick {key:?} references edge of missing brick {nk:?}"
                     ))
                 })?;
-                *o = (base[target] + pos) as u32;
+                cache[code] = Some(t);
+                Ok(t)
+            };
+            for tri in &part.mesh.tris[ChunkMesh::range(&part.tri_end, l)] {
+                let mut out = [0u32; 3];
+                for (o, &r) in out.iter_mut().zip(tri) {
+                    let target = target_of((r >> CODE_SHIFT) as usize)?;
+                    let id = r & ID_MASK;
+                    let pos = edges_of(target).binary_search(&id).map_err(|_| {
+                        Error::Internal(format!(
+                            "brick {key:?} references edge {id} without vertex in brick {:?}",
+                            bricks[target]
+                        ))
+                    })?;
+                    *o = (base[target] + pos) as u32;
+                }
+                tris.push(out);
             }
-            tris.push(out);
         }
         Ok(tris)
     });
+    drop(base);
     let mut mesh = Mesh {
         positions: Vec::with_capacity(total),
         normals: Vec::with_capacity(total),
@@ -400,7 +456,8 @@ pub(crate) fn assemble(bricks: &[[i32; 3]], parts: &[BrickMesh]) -> Result<Mesh>
         vertex_patch: Vec::with_capacity(total),
         vertex_component: Vec::new(),
     };
-    for (p, tris) in parts.iter().zip(resolved) {
+    for (p, tris) in parts.into_iter().zip(resolved) {
+        let p = p.mesh;
         mesh.positions.extend_from_slice(&p.positions);
         mesh.normals.extend_from_slice(&p.normals);
         mesh.vertex_atom.extend_from_slice(&p.atoms);

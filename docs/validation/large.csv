@@ -1,5 +1,5 @@
-entry,options,atoms,vertices,triangles,components,seconds,peak_rss_mb
-4V6X,"tests/data/cache/4V6X.cif.gz -s 0.5",237685,8999086,18009420,590,13.25,2646
-3J3Q,"tests/data/cache/3J3Q.cif.gz -s 1.0",2440800,24285582,48655876,6120,70.06,5308
-1K4R-assembly1,"tests/data/cache/1K4R.cif.gz --assembly 1 -s 1.0",545040,4937664,9883296,1123,14.87,2248
-1AON,"tests/data/cache/1AON.cif.gz -s 0.25",58870,8735182,17470772,380,9.32,2276
+entry,options,atoms,vertices,triangles,components,seconds,peak_rss_mb,peak_rss_mb_0.9.1_rerun,peak_rss_mb_v1dev
+4V6X,"tests/data/cache/4V6X.cif.gz -s 0.5",237685,8999086,18009420,590,13.25,2646,2752,2395
+3J3Q,"tests/data/cache/3J3Q.cif.gz -s 1.0",2440800,24285582,48655876,6120,70.06,5308,7891,7163
+1K4R-assembly1,"tests/data/cache/1K4R.cif.gz --assembly 1 -s 1.0",545040,4937664,9883296,1123,14.87,2248,2423,1739
+1AON,"tests/data/cache/1AON.cif.gz -s 0.25",58870,8735182,17470772,380,9.32,2276,2381,2144

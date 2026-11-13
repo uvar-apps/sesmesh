@@ -302,46 +302,56 @@ impl Engine {
         )
     }
 
-    /// [`Engine::map_bricks`] with cancellation (checked per brick),
-    /// progress reports for `stage`, and per-thread buffers taken from and
-    /// returned to `pool`.
+    /// Evaluates the bricks in consecutive chunks of `chunk`, in parallel:
+    /// `f` folds the bricks of one chunk, in order, into an accumulator made
+    /// by `init`; accumulators are returned in chunk order. With
+    /// cancellation (checked per brick), progress reports for `stage`, and
+    /// per-thread buffers taken from and returned to `pool`.
     ///
     /// # Errors
     /// [`Error::Cancelled`].
-    pub(crate) fn map_bricks_with<T, F>(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn fold_brick_chunks_with<A, I, F>(
         &self,
         bricks: &[[i32; 3]],
+        chunk: usize,
         control: &Control<'_>,
         stage: Stage,
         pool: &ScratchPool,
+        init: I,
         f: F,
-    ) -> Result<Vec<T>>
+    ) -> Result<Vec<A>>
     where
-        T: Send,
-        F: Fn([i32; 3], &[f32]) -> T + Sync + Send,
+        A: Send,
+        I: Fn() -> A + Sync + Send,
+        F: Fn(&mut A, [i32; 3], &[f32]) + Sync + Send,
     {
         let n = self.samples_per_brick();
         let total = bricks.len() as u64;
         let step = (total / 100).max(1);
         let done = AtomicU64::new(0);
         control.report(stage, 0, total);
+        let chunk = chunk.max(1);
         let out = par::map_init(
-            bricks.len(),
+            bricks.len().div_ceil(chunk),
             || pool.take(self),
-            |scratch, i| {
-                if control.is_cancelled() {
-                    return None;
-                }
-                let s = &mut scratch.scratch;
-                self.evaluate(bricks[i], s);
-                let r = f(bricks[i], &s.values[..n]);
-                if control.has_progress() {
-                    let d = done.fetch_add(1, Ordering::Relaxed) + 1;
-                    if d.is_multiple_of(step) && d < total {
-                        control.report(stage, d, total);
+            |scratch, c| {
+                let mut acc = init();
+                for i in par::chunk_range(bricks.len(), chunk, c) {
+                    if control.is_cancelled() {
+                        return None;
+                    }
+                    let s = &mut scratch.scratch;
+                    self.evaluate(bricks[i], s);
+                    f(&mut acc, bricks[i], &s.values[..n]);
+                    if control.has_progress() {
+                        let d = done.fetch_add(1, Ordering::Relaxed) + 1;
+                        if d.is_multiple_of(step) && d < total {
+                            control.report(stage, d, total);
+                        }
                     }
                 }
-                Some(r)
+                Some(acc)
             },
         );
         control.check()?;

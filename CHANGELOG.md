@@ -6,6 +6,48 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Mesh decimation (#1, FR-LOD-4): `mesh::decimate` with `mesh::Decimation`
+  (`ratio`, `max_triangles`, `max_error`) and `mesh::DecimationStats`;
+  `SurfaceParams::decimation` / `with_decimation`, `SurfaceStats::decimation`.
+  Pure-Rust quadric-error half-edge collapses: retained vertices keep their
+  exact surface position, analytic normal and attributes; the mesh stays a
+  closed, oriented manifold; deterministic. CLI: `--decimate R`,
+  `--max-triangles N`, `--decimate-error E`; the OBJ/PLY header and the
+  statistics JSON record the decimation (`triangles_before_decimation`).
+- Automatic coarsening under a memory limit (#3, FR-LOD-6):
+  `SurfaceParams::auto_coarsen` / `with_auto_coarsen`, CLI `--auto-coarsen`
+  (with `--max-memory`): the grid spacing grows until the estimate fits
+  instead of failing; `SurfaceStats::spacing` reports the spacing used.
+- gzip-compressed PLY and MSMS output (#15): `-o mesh.ply.gz`,
+  `-o mesh.vert.gz` (writes `mesh.vert.gz` and `mesh.face.gz`);
+  `export::write_msms_paths` takes explicit `.vert` / `.face` paths.
+- Shell completions and manual page (#2): `sesmesh completions
+  <bash|zsh|fish|powershell|elvish>` and `sesmesh man`; release archives
+  contain `sesmesh.1` and the bash, zsh, fish and PowerShell scripts.
+- Ctrl-C handling (#12): SIGINT cancels the computation through `Control`
+  within about 100 ms; the CLI exits with code 130 ("interrupted") and starts
+  no further batch input.
+- Fuzz target `assembly` (#22): mmCIF and PDB parsing with biological
+  assembly expansion.
+
+### Changed
+
+- Lower memory use (#21), output unchanged (byte-identical meshes): the
+  field keeps neither the SAS arcs nor the neighbour lists of buried spheres,
+  `Circle` no longer stores its second basis vector, the arrangement arrays
+  have exact capacities, and the arrangement build, brick classification
+  and per-brick meshes use flat per-chunk arrays instead of per-sphere and
+  per-brick vectors. Field data per atom: ≈ 1 150 → 560 bytes; peak memory
+  on the 1K4R capsid at 1 Å: 2.42 → 1.74 GB.
+
+### Fixed
+
+- Biological assemblies whose operator expressions expand to more than
+  100 000 copies or 500 million atoms are refused with `Error::ResourceLimit`
+  (exit code 4) instead of exhausting memory.
+
 ## [0.9.1] - 2026-11-13
 
 ### Fixed

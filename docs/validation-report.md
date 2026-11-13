@@ -98,6 +98,27 @@ tightened from ±25 % to ±5 %. Presets were not changed.
   (e.g. f32 circle data, dropping the neighbour lists after gathering).
 * The memory guard's estimate now uses 150 B/triangle + 800 B/sphere.
 
+**Update (v1.0 development, issue #21).** The arrangement was compacted and
+its build, the brick classification and the per-brick meshes were moved to
+flat per-chunk arrays (Design §11.3 "As built"); meshes are byte-identical.
+Re-measured in one session with the 0.9.1 code and the new code (same
+machine and load; macOS peak RSS varies between sessions with memory
+pressure, so only same-session pairs compare):
+
+| Input | Spacing | Triangles | Peak RSS 0.9.1 | Peak RSS v1-dev | Budget |
+|---|---|---|---|---|---|
+| 1AON | 0.25 Å | 17.5 M | 2.38 GB | 2.14 GB (−10 %) | 2.63 GB ✓ |
+| 4V6X | 0.5 Å | 18.0 M | 2.75 GB | 2.40 GB (−13 %) | 2.75 GB ✓ |
+| 1K4R assembly 1 | 1.0 Å | 9.9 M | 2.42 GB | 1.74 GB (−28 %) | 1.59 GB ✗ (+9 %) |
+| 3J3Q | 1.0 Å | 48.7 M | 7.89 GB | 7.16 GB (−9 %) | 7.79 GB ✓ |
+
+* Field data per atom (heap, counted with an allocating probe on the
+  capsid): ≈ 1 150 → 560 B (neighbour rows 296 → 95 B, circles 462 → 197 B,
+  blockers 162 → 132 B, arcs 81 → 0 B, triple points 67 → 58 B); the input
+  structure and spheres add ≈ 150 B. The 200 B/atom budget is not reachable
+  with exact f64 geometry; ≈ 700 B/atom steady (and the 800 B/sphere of the
+  memory guard) is the measured figure.
+
 ## 6. Performance (NFR-PERF, provisional targets)
 
 | Structure | Spacing | Target | Measured (10 cores, loaded) | Ratio |

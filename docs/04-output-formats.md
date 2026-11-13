@@ -9,7 +9,7 @@ volumes in Å³.
 ```
 # sesmesh 0.9.1
 # input: 1crn.cif  format: mmcif  model: 1  atoms: 327 selected / 327 read
-# surface: ses  probe_radius: 1.4000  grid_spacing: 0.2500  radii: bondi  refine: exact
+# surface: ses  probe_radius: 1.4000  grid_spacing: 0.2500  radii: bondi  refine: exact  smoothing: 0  decimation: none
 # cavities: keep  min_cavity_volume: 0  min_component_area: 0  normals: analytic
 # vertices: 55542  triangles: 111076  components: 2  cavities: 1  removed: 0  euler: 4
 # area_A2: 2314.2175  volume_A3: 4662.7007
@@ -26,7 +26,10 @@ g cavity_1
 f ...
 ```
 
-* `-o -` writes to standard output; a `.gz` suffix compresses.
+* `-o -` writes to standard output; a `.gz` suffix compresses (any format).
+* `grid_spacing` is the spacing actually used (`--auto-coarsen` may raise it);
+  `decimation` shows `T -> t triangles` after `--decimate` /
+  `--max-triangles`.
 * `--precision N` (0–9, default 4) sets the decimals of `v` and `vn`.
 * `--no-normals` drops `vn` and writes faces as `f a b c`;
   `--face-normals` writes area-weighted face-averaged normals instead of the
@@ -63,7 +66,8 @@ header):
 | `component` | uint | always (from `sesmesh`) |
 | `face`: `vertex_indices` | list uchar uint | always (triangles) |
 
-`-o -` writes PLY to standard output when `--output-format ply` is given.
+`-o -` writes PLY to standard output when `--output-format ply` is given;
+`-o name.ply.gz` writes it gzip-compressed.
 
 ## MSMS `.vert` / `.face` (`--output-format msms`, or `-o name.vert`)
 
@@ -85,6 +89,7 @@ M. Sanner's MSMS:
   reentrant (concave), 3 contact (convex); a triangle takes its vertices'
   common type, else 1.
 * The header density is vertices per Å² of the written mesh.
+* `-o name.vert.gz` writes `name.vert.gz` and `name.face.gz`.
 
 ## Batch mode
 
@@ -127,10 +132,11 @@ column sums to the total area of the written mesh.
   "parameters": {"surface": "ses", "probe_radius": 1.4, "grid_spacing": 0.25,
                  "radii": "bondi", "refine": "exact", "cavities": "keep",
                  "min_cavity_volume": 0.0, "min_component_area": 0.0,
-                 "normals": "analytic", "brick_size": 10, "simd": "auto"},
+                 "normals": "analytic", "brick_size": 10, "simd": "auto",
+                 "smoothing": 0, "decimation": null},
   "mesh": {"vertices": 55542, "triangles": 111076, "area": 2314.2,
            "volume": 4662.7, "euler": 4, "components": 2, "cavities": 1,
-           "removed_components": 0},
+           "removed_components": 0, "triangles_before_decimation": null},
   "components": [{"index": 0, "cavity": false, "vertices": 54331,
                   "triangles": 108654, "first_triangle": 0, "area": 2269.4,
                   "volume": 4687.6, "euler": 2, "genus": 0}, "..."],
@@ -142,6 +148,9 @@ column sums to the total area of the written mesh.
 }
 ```
 
+* With decimation, `parameters.decimation` is
+  `{"ratio": 0.25, "max_triangles": null, "max_error": null}` and
+  `mesh.triangles_before_decimation` the triangle count before it.
 * `volume` is signed: outer components count positive, cavities negative; the
   mesh total is their sum.
 * `genus` is `(2 − euler) / 2` per closed component (tunnels through the

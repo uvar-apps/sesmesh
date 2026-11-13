@@ -95,32 +95,45 @@ pub(crate) fn unpack(packed: u64) -> [i32; 3] {
 pub(crate) fn touched_bricks(field: &SesField, lattice: &Lattice) -> Result<Vec<[i32; 3]>> {
     let a = &field.arr;
     let n = a.centers.len();
-    let per_sphere: Vec<Result<Vec<u64>>> = par::map(n, |i| {
-        if a.status[i] == Status::Contained {
-            return Ok(Vec::new());
-        }
-        let r = a.expanded[i] + CLASSIFY_EPS;
-        let c = a.centers[i];
-        let lo = [c.x - r, c.y - r, c.z - r].map(|v| lattice.brick_of(v));
-        let hi = [c.x + r, c.y + r, c.z + r].map(|v| lattice.brick_of(v));
-        if lo.iter().chain(&hi).any(|k| k.abs() >= KEY_BIAS - 1) {
-            return Err(Error::InvalidInput(format!(
-                "coordinates too far from the origin for grid spacing {} Å",
-                lattice.h
-            )));
-        }
+    // Chunks of spheres with flat, locally deduplicated key arrays
+    // (`par::chunk_len`); the global sort and dedup make the result
+    // independent of the chunking.
+    let chunk = par::chunk_len(n);
+    let per_chunk: Vec<Result<Vec<u64>>> = par::map(n.div_ceil(chunk), |c| {
         let mut keys = Vec::new();
-        for z in lo[2]..=hi[2] {
-            for y in lo[1]..=hi[1] {
-                for x in lo[0]..=hi[0] {
-                    keys.push(pack([x as i32, y as i32, z as i32]));
+        for i in par::chunk_range(n, chunk, c) {
+            if a.status[i] == Status::Contained {
+                continue;
+            }
+            let r = a.expanded[i] + CLASSIFY_EPS;
+            let c = a.centers[i];
+            let lo = [c.x - r, c.y - r, c.z - r].map(|v| lattice.brick_of(v));
+            let hi = [c.x + r, c.y + r, c.z + r].map(|v| lattice.brick_of(v));
+            if lo.iter().chain(&hi).any(|k| k.abs() >= KEY_BIAS - 1) {
+                return Err(Error::InvalidInput(format!(
+                    "coordinates too far from the origin for grid spacing {} Å",
+                    lattice.h
+                )));
+            }
+            for z in lo[2]..=hi[2] {
+                for y in lo[1]..=hi[1] {
+                    for x in lo[0]..=hi[0] {
+                        keys.push(pack([x as i32, y as i32, z as i32]));
+                    }
                 }
             }
         }
+        keys.sort_unstable();
+        keys.dedup();
         Ok(keys)
     });
-    let mut keys = Vec::new();
-    for part in per_sphere {
+    let mut keys = Vec::with_capacity(
+        per_chunk
+            .iter()
+            .map(|k| k.as_ref().map_or(0, Vec::len))
+            .sum(),
+    );
+    for part in per_chunk {
         keys.extend(part?);
     }
     par::sort_unstable(&mut keys);

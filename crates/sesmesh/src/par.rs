@@ -39,6 +39,22 @@ where
     }
 }
 
+/// Items per task when `n` items are processed in chunks with flat
+/// per-chunk arrays: about 256 tasks for large inputs, whose chunk arrays
+/// are then big allocations the allocator returns to the system when they
+/// are freed (per-item vectors kept peak memory high, issue #21); one item
+/// per task below 512 items, so small inputs keep their parallelism. It
+/// depends on `n` only; callers concatenate in item order, so results do
+/// not depend on it either.
+pub(crate) fn chunk_len(n: usize) -> usize {
+    (n / 256).clamp(1, 4096)
+}
+
+/// The index range of chunk `c` (see [`chunk_len`]).
+pub(crate) fn chunk_range(n: usize, chunk: usize, c: usize) -> std::ops::Range<usize> {
+    c * chunk..n.min((c + 1) * chunk)
+}
+
 /// Unstable sort, in parallel when enabled.
 pub(crate) fn sort_unstable<T: Ord + Send>(v: &mut [T]) {
     #[cfg(feature = "parallel")]

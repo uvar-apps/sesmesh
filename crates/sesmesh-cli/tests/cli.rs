@@ -522,3 +522,28 @@ fn closed_stdout_is_not_an_error() {
         assert!(!stderr.contains("error"), "{format}: {stderr}");
     }
 }
+
+/// Ctrl-C (SIGINT) cancels a running computation: exit code 130 (#12).
+#[cfg(unix)]
+#[test]
+fn sigint_cancels() {
+    use std::process::Stdio;
+    let crn = fixture("1CRN.cif.gz");
+    // A fine grid keeps the computation busy for a while.
+    let child = bin()
+        .args([crn.to_str().unwrap(), "-s", "0.04", "-o", "-"])
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    let killed = Command::new("kill")
+        .args(["-INT", &child.id().to_string()])
+        .status()
+        .unwrap();
+    assert!(killed.success());
+    let out = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(130), "{stderr}");
+    assert!(stderr.contains("interrupted"), "{stderr}");
+}

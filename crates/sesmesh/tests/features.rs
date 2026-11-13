@@ -406,6 +406,7 @@ fn msms_files() {
     }
 }
 
+#[cfg(feature = "gzip")]
 fn fixture_path(rel: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/data")
@@ -413,6 +414,7 @@ fn fixture_path(rel: &str) -> std::path::PathBuf {
 }
 
 #[test]
+#[cfg(feature = "gzip")] // reads cached .cif.gz files
 fn identity_assembly_keeps_the_deposited_atoms() {
     use sesmesh::io::{ReadOptions, read_assemblies, read_path};
     for rel in ["fixtures/1CRN.pdb.gz", "fixtures/1CRN.cif.gz"] {
@@ -432,6 +434,7 @@ fn identity_assembly_keeps_the_deposited_atoms() {
 
 /// 1K4R assembly 1 is the 60-copy capsid (≈ 545 k atoms, Spec R15).
 #[test]
+#[cfg(feature = "gzip")] // reads cached .cif.gz files
 fn capsid_assembly() {
     use sesmesh::io::{ReadOptions, read_path};
     let path = fixture_path("cache/1K4R.cif.gz");
@@ -446,4 +449,64 @@ fn capsid_assembly() {
     opts.assembly = Some("1".into());
     let s = read_path(&path, &opts).unwrap();
     assert_eq!(s.atom_count(), 9_084 * 60);
+}
+
+/// Decimation through `compute_surface` (FR-LOD-4): target reached, mesh
+/// valid, components kept, retained vertices still on the exact SES.
+#[test]
+fn decimation_keeps_vertices_on_the_surface() {
+    use sesmesh::mesh::Decimation;
+    let s = shell_with_core();
+    let p = SurfaceParams::ses(1.4).with_spacing(0.4);
+    let full = run(&s, &p);
+    let half = run(&s, &p.clone().with_decimation(Decimation::ratio(0.3)));
+    let d = half.stats.decimation.expect("decimation stats");
+    assert_eq!(d.triangles_before, full.stats.triangles);
+    assert!(half.stats.triangles <= (full.stats.triangles as f64 * 0.3).ceil() as usize + 2);
+    assert_eq!(half.stats.components, full.stats.components);
+    assert_eq!(half.stats.cavities, full.stats.cavities);
+    assert_grouped(&half);
+    assert!((half.stats.area / full.stats.area - 1.0).abs() < 0.03);
+    let field = sesmesh::SesField::new(&s, 1.4, sesmesh::SurfaceKind::Ses).unwrap();
+    let worst = half
+        .mesh
+        .positions
+        .iter()
+        .map(|q| field.value(q.map(f64::from)).abs())
+        .fold(0.0, f64::max);
+    assert!(worst < 1e-4, "{worst}");
+    // An error bound wins over the target.
+    let bounded = run(
+        &s,
+        &p.clone()
+            .with_decimation(Decimation::ratio(0.05).with_max_error(0.01)),
+    );
+    assert!(bounded.stats.triangles > half.stats.triangles);
+    // Deterministic.
+    let again = run(&s, &p.clone().with_decimation(Decimation::ratio(0.3)));
+    assert_eq!(again.mesh, half.mesh);
+    assert!(compute_surface(&s, &p.with_decimation(Decimation::ratio(1.5))).is_err());
+}
+
+/// FR-LOD-6: with auto-coarsening the memory limit is met by a coarser grid
+/// instead of an error.
+#[test]
+fn memory_guard_can_coarsen() {
+    let s = shell_with_core();
+    let p = SurfaceParams::ses(1.4).with_spacing(0.25);
+    let full = run(&s, &p);
+    let (_, bytes) =
+        sesmesh::estimate_memory(full.stats.surface_bricks, p.brick_size, 0.25, s.len());
+    let limit = bytes / 4;
+    assert!(compute_surface(&s, &p.clone().with_max_memory(limit)).is_err());
+    let coarse = run(&s, &p.with_max_memory(limit).with_auto_coarsen(true));
+    assert!(coarse.stats.spacing > 0.25, "{}", coarse.stats.spacing);
+    let (_, used) = sesmesh::estimate_memory(
+        coarse.stats.surface_bricks,
+        10,
+        coarse.stats.spacing,
+        s.len(),
+    );
+    assert!(used <= limit, "{used} > {limit}");
+    assert_eq!(coarse.stats.components, full.stats.components);
 }

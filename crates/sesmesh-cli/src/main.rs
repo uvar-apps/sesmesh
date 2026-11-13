@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use sesmesh::color::{self, ElementPalette};
-use sesmesh::export::msms::{MsmsHeader, write_msms_files};
+use sesmesh::export::msms::{MsmsHeader, write_msms_paths};
 use sesmesh::export::obj::{ObjOptions, write_obj, write_obj_path};
 use sesmesh::export::ply::{PlyOptions, write_ply, write_ply_path};
 use sesmesh::io::{Format, ReadOptions};
@@ -56,6 +56,16 @@ enum Command {
     Info(Box<InfoArgs>),
     /// Print a built-in radius table.
     Radii(RadiiArgs),
+    /// Print a shell completion script (e.g. `sesmesh completions zsh >
+    /// ~/.zfunc/_sesmesh`).
+    Completions {
+        /// Target shell.
+        #[arg(value_enum)]
+        shell: clap_complete::Shell,
+    },
+    /// Print the manual page in roff format (e.g. `sesmesh man >
+    /// sesmesh.1`).
+    Man,
 }
 
 #[derive(Debug, Args)]
@@ -165,10 +175,25 @@ struct SurfaceArgs {
     /// Taubin smoothing rounds, then exact re-projection onto the surface.
     #[arg(long, default_value_t = 0, help_heading = "Resolution")]
     smooth: u32,
+    /// Decimate to this fraction of the triangles (0–1]; retained vertices
+    /// stay on the exact surface.
+    #[arg(long, help_heading = "Resolution")]
+    decimate: Option<f64>,
+    /// Decimate to at most this many triangles.
+    #[arg(long, help_heading = "Resolution")]
+    max_triangles: Option<usize>,
+    /// Decimation error bound (Å): no collapse moves the surface farther;
+    /// wins over the target (default: no bound).
+    #[arg(long, help_heading = "Resolution")]
+    decimate_error: Option<f64>,
     /// Refuse inputs whose estimated mesh memory exceeds this (bytes; K, M,
     /// G suffixes, e.g. `8G`); exit code 4.
     #[arg(long, value_parser = parse_bytes, help_heading = "Performance")]
     max_memory: Option<u64>,
+    /// With `--max-memory`: coarsen the grid until the estimate fits instead
+    /// of refusing.
+    #[arg(long, requires = "max_memory", help_heading = "Performance")]
+    auto_coarsen: bool,
     /// Quality preset: draft (1.0 Å), low (0.7), medium (0.5), high (0.25),
     /// ultra (0.1).
     #[arg(short = 'q', long, value_enum, default_value_t = QualityArg::Medium, help_heading = "Resolution")]
@@ -179,7 +204,8 @@ struct SurfaceArgs {
     /// Brick edge in grid cells (expert).
     #[arg(long, default_value_t = 10, help_heading = "Resolution")]
     brick_size: usize,
-    /// Output file (`-`: standard output; a `.gz` suffix compresses OBJ).
+    /// Output file (`-`: standard output; a `.gz` suffix compresses the
+    /// output, e.g. `x.obj.gz`, `x.ply.gz`, `x.vert.gz`).
     /// Default: the input name with the format's extension, in
     /// `--output-dir`.
     #[arg(short = 'o', long, help_heading = "Output")]
@@ -381,7 +407,12 @@ enum Failure {
     /// Standard output was closed by the reader (e.g. `| head`): stop
     /// quietly with success, like other command-line tools.
     BrokenPipe,
+    /// Interrupted by Ctrl-C (exit code 130, as for SIGINT).
+    Interrupted,
 }
+
+/// Set by the Ctrl-C handler; checked by the library (`Control`).
+static INTERRUPTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Maps a standard-output write error, treating a closed pipe as a quiet
 /// stop.
@@ -397,6 +428,7 @@ impl Failure {
     fn code(&self) -> u8 {
         match self {
             Self::BrokenPipe => 0,
+            Self::Interrupted => 130,
             Self::Runtime(_) => 1,
             Self::Usage(_) => 2,
             Self::Parse(_) => 3,
@@ -412,6 +444,7 @@ impl Failure {
             Self::Parse(_) => Self::Parse(m),
             Self::Resource(_) => Self::Resource(m),
             Self::BrokenPipe => Self::BrokenPipe,
+            Self::Interrupted => Self::Interrupted,
         }
     }
 
@@ -419,6 +452,7 @@ impl Failure {
         match self {
             Self::Runtime(m) | Self::Usage(m) | Self::Parse(m) | Self::Resource(m) => m,
             Self::BrokenPipe => "",
+            Self::Interrupted => "interrupted",
         }
     }
 }
@@ -429,6 +463,9 @@ impl From<Error> for Failure {
             && source.kind() == io::ErrorKind::BrokenPipe
         {
             return Self::BrokenPipe;
+        }
+        if matches!(e, Error::Cancelled) {
+            return Self::Interrupted;
         }
         let m = e.to_string();
         match e {
@@ -441,7 +478,7 @@ impl From<Error> for Failure {
 
 type CliResult<T> = Result<T, Failure>;
 
-const SUBCOMMANDS: [&str; 4] = ["surface", "info", "radii", "help"];
+const SUBCOMMANDS: [&str; 6] = ["surface", "info", "radii", "completions", "man", "help"];
 
 /// Inserts the default `surface` subcommand when the first argument is not
 /// a subcommand or a top-level flag.
@@ -461,6 +498,19 @@ fn main() -> ExitCode {
         Command::Surface(a) => surface(&a),
         Command::Info(a) => info(&a),
         Command::Radii(a) => radii(&a),
+        Command::Completions { shell } => {
+            let mut cmd = <Cli as clap::CommandFactory>::command();
+            let mut out = Vec::new();
+            clap_complete::generate(shell, &mut cmd, "sesmesh", &mut out);
+            io::stdout().write_all(&out).map_err(|e| stdout_error(&e))
+        }
+        Command::Man => {
+            let mut out = Vec::new();
+            clap_mangen::Man::new(<Cli as clap::CommandFactory>::command())
+                .render(&mut out)
+                .map_err(|e| Failure::Runtime(format!("man page: {e}")))
+                .and_then(|()| io::stdout().write_all(&out).map_err(|e| stdout_error(&e)))
+        }
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
@@ -601,8 +651,20 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
             SimdArg::Avx512 => SimdLevel::Avx512,
             SimdArg::Neon => SimdLevel::Neon,
         });
+    let p = if a.decimate.is_some() || a.max_triangles.is_some() {
+        let mut d = mesh::Decimation::ratio(a.decimate.unwrap_or(1.0));
+        if let Some(e) = a.decimate_error {
+            d = d.with_max_error(e);
+        }
+        if let Some(t) = a.max_triangles {
+            d = d.with_max_triangles(t);
+        }
+        p.with_decimation(d)
+    } else {
+        p
+    };
     let p = match a.max_memory {
-        Some(bytes) => p.with_max_memory(bytes),
+        Some(bytes) => p.with_max_memory(bytes).with_auto_coarsen(a.auto_coarsen),
         None => p,
     };
     p.validate().map_err(|e| Failure::Usage(e.to_string()))?;
@@ -666,11 +728,14 @@ struct Job {
 
 fn output_format(a: &SurfaceArgs) -> OutputFormat {
     a.output_format.unwrap_or_else(|| {
-        let ext = a
-            .output
-            .as_ref()
-            .and_then(|o| o.extension())
-            .map(|e| e.to_string_lossy().to_ascii_lowercase());
+        // The extension before an optional `.gz`.
+        let ext = a.output.as_ref().and_then(|o| {
+            let name = o.file_name()?.to_string_lossy().to_ascii_lowercase();
+            let name = name.strip_suffix(".gz").unwrap_or(&name).to_string();
+            Path::new(&name)
+                .extension()
+                .map(|e| e.to_string_lossy().into_owned())
+        });
         match ext.as_deref() {
             Some("ply") => OutputFormat::Ply,
             Some("vert" | "face") => OutputFormat::Msms,
@@ -742,13 +807,24 @@ fn surface(a: &SurfaceArgs) -> CliResult<()> {
             .build_global()
             .map_err(|e| Failure::Runtime(format!("thread pool: {e}")))?;
     }
+    // Ctrl-C cancels the computation cooperatively (the library checks the
+    // flag per brick); a second Ctrl-C while writing is not intercepted.
+    let _ = ctrlc::set_handler(|| {
+        INTERRUPTED.store(true, std::sync::atomic::Ordering::Relaxed);
+    });
     let jobs = jobs(a)?;
     if jobs.len() == 1 {
         return surface_one(a, &params, &jobs[0]);
     }
     let mut failed: Vec<Failure> = Vec::new();
     for job in &jobs {
+        if INTERRUPTED.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(Failure::Interrupted);
+        }
         if let Err(f) = surface_one(a, &params, job) {
+            if matches!(f, Failure::Interrupted) {
+                return Err(f);
+            }
             let name = job.input.display().to_string();
             let msg = f.message();
             if msg.starts_with(&name) {
@@ -785,7 +861,7 @@ fn surface_one(a: &SurfaceArgs, params: &SurfaceParams, job: &Job) -> CliResult<
     let read_time = start.elapsed();
     let reporter = ProgressLine::new(io::stderr().is_terminal());
     let report = |p: Progress| reporter.update(p);
-    let mut control = Control::new();
+    let mut control = Control::new().with_cancel(&INTERRUPTED);
     if a.progress && !a.quiet {
         control = control.with_progress(&report);
     }
@@ -860,7 +936,15 @@ fn surface_one(a: &SurfaceArgs, params: &SurfaceParams, job: &Job) -> CliResult<
                 density,
                 params.effective_probe(),
             );
-            write_msms_files(&output, &out.mesh, &header)?;
+            // `x.vert[.gz]` → `x.vert[.gz]` + `x.face[.gz]`.
+            let text = output.to_string_lossy();
+            let (base, gz) = match text.strip_suffix(".gz") {
+                Some(b) => (PathBuf::from(b), ".gz"),
+                None => (output.clone(), ""),
+            };
+            let vert = PathBuf::from(format!("{}{gz}", base.with_extension("vert").display()));
+            let face = PathBuf::from(format!("{}{gz}", base.with_extension("face").display()));
+            write_msms_paths(&vert, &face, &out.mesh, &header)?;
         }
     }
     let write_time = write_start.elapsed();
@@ -1008,13 +1092,17 @@ fn header(
             atoms.model().atoms.len(),
         ),
         format!(
-            "surface: {}  probe_radius: {:.4}  grid_spacing: {:.4}  radii: {}  refine: {}  smoothing: {}",
+            "surface: {}  probe_radius: {:.4}  grid_spacing: {:.4}  radii: {}  refine: {}  smoothing: {}  decimation: {}",
             kind_name(s.kind),
             params.effective_probe(),
             s.spacing,
             a.radius.radii,
             params.refine.name(),
             params.smoothing,
+            s.decimation.map_or_else(
+                || "none".to_string(),
+                |d| format!("{} -> {} triangles", d.triangles_before, d.triangles_after)
+            ),
         ),
         format!(
             "cavities: {}  min_cavity_volume: {}  min_component_area: {}  normals: {}",
@@ -1403,6 +1491,11 @@ fn stats_json(
             "min_component_area": params.min_component_area,
             "normals": params.normals.name(),
             "smoothing": params.smoothing,
+            "decimation": params.decimation.map(|d| serde_json::json!({
+                "ratio": d.ratio,
+                "max_triangles": d.max_triangles,
+                "max_error": d.max_error,
+            })),
             "brick_size": params.brick_size,
             "simd": params.simd.name(),
         },
@@ -1415,6 +1508,7 @@ fn stats_json(
             "components": s.components,
             "cavities": s.cavities,
             "removed_components": s.removed_components,
+            "triangles_before_decimation": s.decimation.map(|d| d.triangles_before),
         },
         "components": out.components.iter().enumerate().map(|(i, c)| serde_json::json!({
             "index": i,

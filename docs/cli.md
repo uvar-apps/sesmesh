@@ -4,6 +4,8 @@
 sesmesh [surface] <INPUTS>... [OPTIONS]     compute surfaces (default command)
 sesmesh info <INPUT> [OPTIONS]              summarize a structure
 sesmesh radii [--set bondi|alvarez|protor]  print a radius table
+sesmesh completions bash|zsh|fish|powershell|elvish   shell completion script
+sesmesh man                                 manual page (roff)
 sesmesh --help | --version
 ```
 
@@ -20,6 +22,8 @@ sesmesh 4hhb.cif.gz -q high -o hb.ply              # 0.25 Å, binary PLY
 sesmesh 1aon.cif.gz --cavities remove --group-components --vertex-colors element
 sesmesh ligand.xyz --radii alvarez --probe 1.2 -s 0.1 -o ligand.obj
 sesmesh 1k4r.cif.gz --assembly 1 -q draft -o capsid.obj   # 545 k-atom capsid
+sesmesh 1aon.cif.gz -q high --decimate 0.25 -o gro.ply  # fine grid, 4× fewer triangles
+sesmesh 3j3q.cif.gz --max-memory 4G --auto-coarsen # coarsen until it fits
 sesmesh 2ptn.pdb --stats - -o /dev/null            # statistics only (JSON)
 sesmesh *.cif.gz --output-dir meshes --keep-going  # batch
 sesmesh info 1k4r.cif.gz                           # models, chains, assemblies
@@ -92,6 +96,9 @@ Fe = 2.0
 | `-s, --grid-spacing H` | | Grid spacing in Å (overrides `-q`) |
 | `--density D` | | Target vertices per Å² (h = √(1.5/D); overrides `-q`) |
 | `--smooth N` | 0 | Taubin smoothing rounds, then exact re-projection onto the surface |
+| `--decimate R` | | Decimate to the fraction R (0–1] of the triangles |
+| `--max-triangles N` | | Decimate to at most N triangles (with `--decimate`: the smaller target wins) |
+| `--decimate-error E` | no bound | Never collapse an edge whose quadric error exceeds E Å; wins over the targets |
 | `--refine exact\|linear` | `exact` | Vertex placement: exact root on each grid edge, or linear interpolation (faster) |
 | `--brick-size N` | 10 | Brick edge in cells (expert) |
 
@@ -99,12 +106,20 @@ Errors decrease as h²: on proteins about −0.2 % area and −0.02 % volume at
 0.25 Å, −0.8 % / −0.08 % at 0.5 Å. Triangles grow as 1/h² (≈ 3 per Å² at
 1.0 Å, 48 at 0.25 Å).
 
+Decimation runs after smoothing: quadric-error half-edge collapses, so no
+new positions are created and every retained vertex keeps its exact place on
+the surface, its analytic normal and its atom. The result stays a closed,
+oriented manifold; collapses that would flip a triangle, create a sliver or
+shrink a component below a tetrahedron are skipped, so a target may not be
+reached exactly. A fine grid decimated (`-q high --decimate 0.25`) keeps
+small features better than a coarse grid with the same triangle count.
+
 ## Output
 
 | Option | Default | Meaning |
 |---|---|---|
-| `-o, --output PATH` | `<input stem>.<ext>` in `--output-dir` | Output file; `-` for standard output (OBJ, PLY); `.gz` compresses OBJ |
-| `--output-format obj\|ply\|msms` | from the `-o` extension | `.ply` → PLY, `.vert`/`.face` → MSMS, otherwise OBJ |
+| `-o, --output PATH` | `<input stem>.<ext>` in `--output-dir` | Output file; `-` for standard output (OBJ, PLY); a `.gz` suffix compresses any format |
+| `--output-format obj\|ply\|msms` | from the `-o` extension (without `.gz`) | `.ply` → PLY, `.vert`/`.face` → MSMS, otherwise OBJ |
 | `--output-dir DIR` | current directory | Output directory for default names (batch mode) |
 | `--precision N` | 4 | Decimals in OBJ (0–9) |
 | `--no-normals` | off | Omit normals |
@@ -131,12 +146,17 @@ input is tried and the summary reports "N of M inputs failed".
 | `-j, --threads N` | all logical cores | Worker threads (output is identical for any N) |
 | `--simd auto\|scalar\|sse4.2\|avx2\|avx512\|neon` | `auto` | Field kernel instruction set; x86 levels are capped at what the CPU supports |
 | `--max-memory BYTES` | | Refuse inputs whose estimated memory exceeds the limit (`8G`, `512M`); exit code 4 |
+| `--auto-coarsen` | off | With `--max-memory`: grow the grid spacing until the estimate fits instead of refusing (the spacing used is reported) |
 | `--quiet` | off | Print errors only |
 | `--progress` | off | Progress on standard error |
 | `--timings` | off | Stage timings and the kernel used |
 
 Standard error shows warnings (e.g. unknown radii), a summary (atoms,
 vertices, triangles, components, cavities, area, volume) and the output path.
+
+Ctrl-C (SIGINT) cancels the computation within about 100 ms and exits with
+code 130; in batch mode no further input is started. A closed standard
+output (`sesmesh x.cif -o - | head`) is not an error.
 
 ## Exit codes
 
@@ -146,7 +166,8 @@ vertices, triangles, components, cavities, area, volume) and the output path.
 | 1 | Runtime error (I/O, empty selection, invalid input data, batch failure) |
 | 2 | Usage error (unknown option, invalid value, conflicting options) |
 | 3 | Input parse error (malformed file, unknown format, invalid palette) |
-| 4 | Resource limit exceeded (`--max-memory`, decompression limit) |
+| 4 | Resource limit exceeded (`--max-memory`, decompression limit, assembly size) |
+| 130 | Interrupted (Ctrl-C) |
 
 ## `sesmesh info`
 
@@ -160,3 +181,16 @@ options of `surface`.
 
 Prints the element table of a radius set (`Z symbol radius`) and, for
 `protor`, the per-atom classes.
+
+## `sesmesh completions` and `sesmesh man`
+
+`sesmesh completions <SHELL>` prints a completion script for bash, zsh, fish,
+PowerShell or elvish; `sesmesh man` prints the manual page (roff). Release
+archives contain `sesmesh.1` and the bash, zsh, fish and PowerShell scripts.
+
+```bash
+sesmesh completions zsh > ~/.zfunc/_sesmesh        # zsh (with fpath+=~/.zfunc)
+sesmesh completions bash > ~/.local/share/bash-completion/completions/sesmesh
+sesmesh completions fish > ~/.config/fish/completions/sesmesh.fish
+sesmesh man > ~/.local/share/man/man1/sesmesh.1
+```

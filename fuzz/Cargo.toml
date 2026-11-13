@@ -56,3 +56,9 @@ path = "fuzz_targets/detect.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "assembly"
+path = "fuzz_targets/assembly.rs"
+test = false
+doc = false

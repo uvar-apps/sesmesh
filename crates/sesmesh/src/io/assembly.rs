@@ -355,6 +355,12 @@ pub(crate) fn parse_pdb(data: &[u8]) -> AssemblyData {
     out
 }
 
+/// Most copies one assembly may generate (real assemblies have at most a
+/// few thousand; malformed expressions could ask for 10¹²).
+const MAX_COPIES: usize = 100_000;
+/// Most atoms an expanded model may hold.
+const MAX_ATOMS: usize = 500_000_000;
+
 /// Replaces every model of `structure` by assembly `id`.
 pub(crate) fn expand(mut structure: Structure, data: &AssemblyData, id: &str) -> Result<Structure> {
     let gens: Vec<&Generator> = data
@@ -373,8 +379,18 @@ pub(crate) fn expand(mut structure: Structure, data: &AssemblyData, id: &str) ->
     // Transforms per generator: Cartesian product, applied right to left.
     let mut plans: Vec<(Vec<Transform>, &[String])> = Vec::new();
     for g in gens {
+        let factors = parse_expression(&g.expression)?;
+        let copies = factors
+            .iter()
+            .try_fold(1usize, |n, f| n.checked_mul(f.len()))
+            .filter(|&n| n <= MAX_COPIES)
+            .ok_or_else(|| Error::ResourceLimit {
+                what: format!("assembly {id}: operator expression {:?}", g.expression),
+                limit: MAX_COPIES as u64,
+            })?;
+        let _ = copies;
         let mut combos = vec![Transform::IDENTITY];
-        for factor in parse_expression(&g.expression)? {
+        for factor in factors {
             let mut next = Vec::with_capacity(combos.len() * factor.len());
             for c in &combos {
                 for op in &factor {
@@ -389,6 +405,32 @@ pub(crate) fn expand(mut structure: Structure, data: &AssemblyData, id: &str) ->
         plans.push((combos, &g.chains));
     }
     let strings = &structure.strings;
+    for m in &structure.models {
+        let atoms: usize = plans
+            .iter()
+            .map(|(transforms, chains)| {
+                let n = m
+                    .atoms
+                    .iter()
+                    .filter(|a| {
+                        let sym = if data.label_chains {
+                            a.label_chain
+                        } else {
+                            a.chain
+                        };
+                        chains.iter().any(|c| c == strings.get(sym))
+                    })
+                    .count();
+                n.saturating_mul(transforms.len())
+            })
+            .fold(0usize, usize::saturating_add);
+        if atoms > MAX_ATOMS {
+            return Err(Error::ResourceLimit {
+                what: format!("assembly {id} with {atoms} atoms"),
+                limit: MAX_ATOMS as u64,
+            });
+        }
+    }
     let models = structure
         .models
         .iter()
@@ -438,6 +480,28 @@ mod tests {
         for bad in ["", "(1", "(1-)", "3-1", "1,,2", "(1)x"] {
             assert!(parse_expression(bad).is_err(), "{bad}");
         }
+    }
+
+    #[test]
+    fn huge_expressions_are_refused() {
+        let cif = "data_x\nloop_\n_pdbx_struct_assembly_gen.assembly_id\n\
+                   _pdbx_struct_assembly_gen.oper_expression\n_pdbx_struct_assembly_gen.asym_id_list\n\
+                   1 '(1-1000)(1-1000)' A\n";
+        let d = parse_cif(cif.as_bytes(), None).unwrap();
+        let s = Structure {
+            models: vec![Model::new(1)],
+            strings: crate::structure::StringPool::new(),
+            source: crate::structure::Source {
+                format: crate::io::Format::Mmcif,
+                path: None,
+                data_block: None,
+            },
+            diagnostics: crate::diag::Diagnostics::new(),
+        };
+        assert!(matches!(
+            expand(s, &d, "1"),
+            Err(Error::ResourceLimit { .. })
+        ));
     }
 
     #[test]

@@ -62,8 +62,14 @@ jobs:
           [[ "${{ matrix.target }}" == *windows* ]] && exe=sesmesh.exe
           cp "target/${{ matrix.target }}/dist/$exe" "dist/$name/"
           cp README.md CHANGELOG.md LICENSE-MIT LICENSE-APACHE "dist/$name/"
-          mkdir -p "dist/$name/docs"
+          mkdir -p "dist/$name/docs" "dist/$name/completions"
           cp docs/cli.md docs/04-output-formats.md "dist/$name/docs/"
+          bin="target/${{ matrix.target }}/dist/$exe"
+          "$bin" man > "dist/$name/sesmesh.1"
+          "$bin" completions bash > "dist/$name/completions/sesmesh.bash"
+          "$bin" completions zsh > "dist/$name/completions/_sesmesh"
+          "$bin" completions fish > "dist/$name/completions/sesmesh.fish"
+          "$bin" completions powershell > "dist/$name/completions/_sesmesh.ps1"
           cd dist
           if [[ "${{ matrix.archive }}" == zip ]]; then
             7z a -tzip "$name.zip" "$name" > /dev/null

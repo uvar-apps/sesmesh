@@ -202,9 +202,16 @@ pub struct SurfaceParams {
     /// Limit on the estimated peak memory of the mesh stages (bytes), checked
     /// after brick classification. Default `None`.
     pub max_memory: Option<u64>,
+    /// With `max_memory`: coarsen the grid until the estimate fits instead of
+    /// refusing (Spec FR-LOD-6); `SurfaceStats::spacing` reports the spacing
+    /// used. Default `false`.
+    pub auto_coarsen: bool,
     /// Taubin smoothing rounds followed by exact re-projection (Spec
     /// FR-LOD-5). Default 0 (off).
     pub smoothing: u32,
+    /// Decimation after smoothing (Spec FR-LOD-4); retained vertices stay
+    /// on the exact surface. Default `None`.
+    pub decimation: Option<mesh::Decimation>,
 }
 
 impl Default for SurfaceParams {
@@ -228,7 +235,9 @@ impl SurfaceParams {
             min_component_area: 0.0,
             normals: NormalMode::Analytic,
             max_memory: None,
+            auto_coarsen: false,
             smoothing: 0,
+            decimation: None,
         }
     }
 
@@ -319,12 +328,28 @@ impl SurfaceParams {
         self
     }
 
+    /// With [`SurfaceParams::with_max_memory`]: coarsen the grid until the
+    /// memory estimate fits instead of refusing.
+    #[must_use]
+    pub fn with_auto_coarsen(mut self, on: bool) -> Self {
+        self.auto_coarsen = on;
+        self
+    }
+
     /// Smooths the mesh for `rounds` Taubin rounds and re-projects every
     /// vertex onto the exact surface (better-shaped triangles, vertices still
     /// on the surface).
     #[must_use]
     pub fn with_smoothing(mut self, rounds: u32) -> Self {
         self.smoothing = rounds;
+        self
+    }
+
+    /// Decimates the mesh (quadric-error half-edge collapses; vertices stay
+    /// on the exact surface).
+    #[must_use]
+    pub fn with_decimation(mut self, decimation: mesh::Decimation) -> Self {
+        self.decimation = Some(decimation);
         self
     }
 
@@ -372,6 +397,20 @@ impl SurfaceParams {
             return Err(Error::InvalidInput(format!(
                 "probe radius must be within 0..=100 Å, got {p}"
             )));
+        }
+        if let Some(d) = &self.decimation {
+            if !(d.ratio.is_finite() && d.ratio > 0.0 && d.ratio <= 1.0) {
+                return Err(Error::InvalidInput(format!(
+                    "decimation ratio must be within (0, 1], got {}",
+                    d.ratio
+                )));
+            }
+            if d.max_error.is_nan() || d.max_error < 0.0 {
+                return Err(Error::InvalidInput(format!(
+                    "decimation error bound must be >= 0, got {}",
+                    d.max_error
+                )));
+            }
         }
         for (name, v) in [
             ("minimum cavity volume", self.min_cavity_volume),
@@ -424,7 +463,7 @@ pub struct SurfaceStats {
     pub spheres: usize,
     /// Surface kind actually computed (an SES with probe 0 is a vdW surface).
     pub kind: SurfaceKind,
-    /// Grid spacing used, Å.
+    /// Grid spacing used, Å (larger than requested after auto-coarsening).
     pub spacing: f64,
     /// Bricks overlapping the molecule.
     pub touched_bricks: usize,
@@ -444,6 +483,8 @@ pub struct SurfaceStats {
     pub cavities: usize,
     /// Components dropped by the cavity mode and filters.
     pub removed_components: usize,
+    /// Decimation result, when decimation was requested.
+    pub decimation: Option<mesh::DecimationStats>,
     /// Euler characteristic of the whole mesh.
     pub euler: i64,
     /// Exact field evaluations spent on vertex placement.
@@ -642,42 +683,60 @@ fn run(
     control.report(Stage::Geometry, 0, 1);
     let field = SesField::new_with(spheres, params.effective_probe(), params.kind, control)?;
     let kind = field.kind();
-    let engine = Engine::new(field, params.spacing(), params.brick_size, params.simd)?;
+    let mut engine = Engine::new(field, params.spacing(), params.brick_size, params.simd)?;
     control.report(Stage::Geometry, 1, 1);
     lap(&mut timings.geometry);
 
     control.report(Stage::Classify, 0, 1);
-    let (touched, bricks) = engine.surface_bricks()?;
+    let mut spacing = params.spacing();
+    let (mut touched, mut bricks) = engine.surface_bricks()?;
     control.check()?;
     if let Some(limit) = params.max_memory {
-        let (triangles, bytes) = estimate_memory(
-            bricks.len(),
-            params.brick_size,
-            params.spacing(),
-            spheres.len(),
-        );
-        if bytes > limit {
-            return Err(Error::ResourceLimit {
-                what: format!(
-                    "estimated mesh memory ({bytes} bytes for about {triangles} triangles at {} Å)",
-                    params.spacing()
-                ),
-                limit,
-            });
+        // Refuse, or (auto_coarsen) grow the spacing until the estimate fits:
+        // triangles scale as 1/h², so one corrected pass usually suffices.
+        let mut attempts = 0;
+        loop {
+            let (triangles, bytes) =
+                estimate_memory(bricks.len(), params.brick_size, spacing, spheres.len());
+            if bytes <= limit {
+                break;
+            }
+            let atom_bytes = spheres.len() as u64 * 800;
+            if !params.auto_coarsen || attempts == 4 || limit <= atom_bytes || spacing >= 10.0 {
+                return Err(Error::ResourceLimit {
+                    what: format!(
+                        "estimated mesh memory ({bytes} bytes for about {triangles} triangles at {spacing} Å)"
+                    ),
+                    limit,
+                });
+            }
+            let factor = ((bytes - atom_bytes) as f64 / (limit - atom_bytes) as f64).sqrt();
+            spacing = (spacing * factor * 1.05).min(10.0);
+            let field = engine.field;
+            engine = Engine::new(field, spacing, params.brick_size, params.simd)?;
+            (touched, bricks) = engine.surface_bricks()?;
+            control.check()?;
+            attempts += 1;
         }
     }
     control.report(Stage::Classify, 1, 1);
     lap(&mut timings.classify);
 
-    let parts = engine.map_bricks_with(&bricks, control, Stage::Mesh, pool, |key, values| {
-        extract::mesh_brick(&engine, key, values, params.refine)
-    })?;
+    let chunk = crate::par::chunk_len(bricks.len());
+    let parts = engine.fold_brick_chunks_with(
+        &bricks,
+        chunk,
+        control,
+        Stage::Mesh,
+        pool,
+        extract::ChunkMesh::default,
+        |part, key, values| part.push(&engine, key, values, params.refine),
+    )?;
     lap(&mut timings.mesh);
 
     control.report(Stage::Assemble, 0, 1);
-    let refine_evaluations = parts.iter().map(|p| p.evals).sum();
-    let mesh = extract::assemble(&bricks, &parts)?;
-    drop(parts);
+    let refine_evaluations = parts.iter().map(extract::ChunkMesh::evals).sum();
+    let mesh = extract::assemble(&bricks, chunk, parts)?;
     control.check()?;
     control.report(Stage::Assemble, 1, 1);
     lap(&mut timings.assemble);
@@ -723,6 +782,21 @@ fn run(
             c.volume = volume;
         }
     }
+    let mut decimation = None;
+    if let Some(d) = &params.decimation {
+        mesh.vertex_component = vertex_component;
+        decimation = Some(mesh::decimate(&mut mesh, d));
+        let check = mesh::validate(&mesh);
+        if !check.is_ok() {
+            return Err(Error::Internal(format!(
+                "decimated mesh failed validation: {check:?}"
+            )));
+        }
+        let (vc, comps) = mesh::components(&mesh);
+        vertex_component = vc;
+        components = comps;
+        post::group_by_component(&mut mesh, &vertex_component, &mut components);
+    }
     match params.normals {
         NormalMode::Analytic => {}
         NormalMode::FaceAverage => post::face_average_normals(&mut mesh),
@@ -735,7 +809,7 @@ fn run(
     let stats = SurfaceStats {
         spheres: spheres.len(),
         kind,
-        spacing: params.spacing(),
+        spacing,
         touched_bricks: touched,
         surface_bricks: bricks.len(),
         vertices: mesh.vertex_count(),
@@ -745,6 +819,7 @@ fn run(
         components: components.len(),
         cavities: components.iter().filter(|c| c.is_cavity()).count(),
         removed_components,
+        decimation,
         euler: components.iter().map(|c| c.euler).sum(),
         refine_evaluations,
         simd: engine.simd_name(),

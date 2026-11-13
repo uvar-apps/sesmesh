@@ -12,8 +12,7 @@
 //! share, or 1 when they differ.
 
 use std::fmt::Write as _;
-use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::path::Path;
 
 use crate::error::{Error, Result};
@@ -139,26 +138,33 @@ pub fn write_msms<V: Write, F: Write>(
     Ok(())
 }
 
-/// Writes `<stem>.vert` and `<stem>.face`.
+/// Writes `<stem>.vert` and `<stem>.face` (for compressed files pass
+/// `x.vert.gz` / `x.face.gz` to [`write_msms_paths`]).
 ///
 /// # Errors
 /// As [`write_msms`], with the path in I/O errors.
 pub fn write_msms_files(stem: impl AsRef<Path>, mesh: &Mesh, header: &MsmsHeader) -> Result<()> {
     let stem = stem.as_ref();
-    let (vp, fp) = (stem.with_extension("vert"), stem.with_extension("face"));
-    let open = |p: &Path| {
-        File::create(p)
-            .map(|f| BufWriter::with_capacity(1 << 20, f))
-            .map_err(|source| Error::Io {
-                path: Some(p.to_path_buf()),
-                source,
-            })
-    };
-    let (mut v, mut f) = (open(&vp)?, open(&fp)?);
+    write_msms_paths(
+        &stem.with_extension("vert"),
+        &stem.with_extension("face"),
+        mesh,
+        header,
+    )
+}
+
+/// Writes the `.vert` and `.face` files to the given paths; a path ending in
+/// `.gz` is gzip-compressed (feature `gzip`).
+///
+/// # Errors
+/// As [`write_msms`], with the path in I/O errors; [`Error::Unsupported`]
+/// for a `.gz` path without the `gzip` feature.
+pub fn write_msms_paths(vert: &Path, face: &Path, mesh: &Mesh, header: &MsmsHeader) -> Result<()> {
+    let (mut v, mut f) = (super::Sink::create(vert)?, super::Sink::create(face)?);
     write_msms(&mut v, &mut f, mesh, header)?;
-    for (w, p) in [(&mut v, &vp), (&mut f, &fp)] {
-        w.flush().map_err(|source| Error::Io {
-            path: Some(p.clone()),
+    for (w, p) in [(v, vert), (f, face)] {
+        w.finish().map_err(|source| Error::Io {
+            path: Some(p.to_path_buf()),
             source,
         })?;
     }

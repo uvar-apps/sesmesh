@@ -403,6 +403,19 @@ Exit (v1.0): Spec §6.2 release criteria.
 >   crates.io (2026-11-13). Not tagged or published: v1.0 criteria open
 >   (`docs/release.md`).
 > * T10.5: README citations and documentation links; no screenshots yet.
+>
+> Status (v1.0 development, after 0.9.1; branch `v1-dev`):
+> * T8.4 decimation done in pure Rust (#1; Design §9.5 "As built"): no
+>   `meshopt`/C++ dependency, no `decimate` feature.
+> * Auto-coarsening under `max_memory` (#3; Design §8.6), gzip PLY/MSMS
+>   (#15), shell completions and man page (#2, in the release archives),
+>   Ctrl-C → exit 130 (#12), fuzz target `assembly` plus assembly size
+>   limits (#22).
+> * Memory (#21): arrangement compaction and chunked build/meshing
+>   (Design §11.3 "As built"); meshes byte-identical.
+> * Still open for v1.0: performance targets on the reference machines,
+>   the 24 h fuzzing campaign, cross-tool references, the NFR-ACC decision
+>   (`docs/release.md`).
 
 ---
 

@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [pdb, mmcif, cif_lexer, xyz, pqr, detect]
+        target: [pdb, mmcif, cif_lexer, xyz, pqr, detect, assembly]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@nightly

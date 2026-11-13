@@ -44,13 +44,46 @@ pub(crate) struct Csr {
 }
 
 impl Csr {
+    /// An empty table with room for `rows` rows of `items` entries in all.
+    fn with_capacity(rows: usize, items: usize) -> Self {
+        let mut offsets = Vec::with_capacity(rows + 1);
+        offsets.push(0);
+        Self {
+            offsets,
+            items: Vec::with_capacity(items),
+        }
+    }
+
     fn push_row(&mut self, row: impl IntoIterator<Item = u32>) {
+        self.items.extend(row);
+        self.close_row();
+    }
+
+    /// Ends the current row: the entries pushed to `items` since the last
+    /// row end.
+    fn close_row(&mut self) {
         if self.offsets.is_empty() {
             self.offsets.push(0);
         }
-        self.items.extend(row);
         self.offsets
             .push(u32::try_from(self.items.len()).expect("fewer than 2^32 entries"));
+    }
+
+    /// Appends the rows of `other`.
+    fn append(&mut self, other: &Csr) {
+        if self.offsets.is_empty() {
+            self.offsets.push(0);
+        }
+        let base = *self.offsets.last().expect("offsets start with 0");
+        self.items.extend_from_slice(&other.items);
+        u32::try_from(self.items.len()).expect("fewer than 2^32 entries");
+        self.offsets
+            .extend(other.offsets.iter().skip(1).map(|&o| base + o));
+    }
+
+    /// Number of rows.
+    fn rows(&self) -> usize {
+        self.offsets.len().saturating_sub(1)
     }
 
     pub(crate) fn row(&self, i: usize) -> &[u32] {
@@ -59,6 +92,29 @@ impl Csr {
 
     pub(crate) fn total(&self) -> usize {
         self.items.len()
+    }
+
+    /// Empties the rows for which `keep` is `false`, in place, and releases
+    /// the freed capacity.
+    pub(crate) fn retain_rows(&mut self, keep: impl Fn(usize) -> bool) {
+        let (mut start, mut write) = (0, 0);
+        for i in 0..self.offsets.len().saturating_sub(1) {
+            // `start` is the row's original start: `offsets[i]` was rewritten.
+            let end = self.offsets[i + 1] as usize;
+            if keep(i) {
+                self.items.copy_within(start..end, write);
+                write += end - start;
+            }
+            self.offsets[i + 1] = u32::try_from(write).expect("fewer than 2^32 entries");
+            start = end;
+        }
+        self.items.truncate(write);
+        self.items.shrink_to_fit();
+    }
+
+    /// Heap bytes in use.
+    pub(crate) fn heap_bytes(&self) -> usize {
+        (self.offsets.capacity() + self.items.capacity()) * size_of::<u32>()
     }
 }
 
@@ -71,8 +127,8 @@ pub(crate) struct Circle {
     pub(crate) center: Vec3,
     /// Unit normal of the circle plane, from sphere `i` to sphere `j`.
     pub(crate) axis: Vec3,
+    /// In-plane unit vector; `e2() = axis × e1` completes the frame.
     pub(crate) e1: Vec3,
-    pub(crate) e2: Vec3,
     pub(crate) radius: f64,
     /// Range into [`Arrangement::arcs`]; empty when the whole circle is
     /// exposed.
@@ -80,9 +136,16 @@ pub(crate) struct Circle {
 }
 
 impl Circle {
+    /// Second in-plane unit vector, `axis × e1` (recomputed rather than
+    /// stored: it is bit-identical to the one [`orthonormal_basis`] returns).
+    #[inline]
+    pub(crate) fn e2(&self) -> Vec3 {
+        self.axis.cross(self.e1)
+    }
+
     /// Point at angle `theta` (`center + radius (cos θ e1 + sin θ e2)`).
     pub(crate) fn point(&self, theta: f64) -> Vec3 {
-        self.center + (self.e1 * theta.cos() + self.e2 * theta.sin()) * self.radius
+        self.center + (self.e1 * theta.cos() + self.e2() * theta.sin()) * self.radius
     }
 
     /// `true` if no other sphere cuts the circle.
@@ -174,7 +237,7 @@ fn cut(circle: &Circle, center: Vec3, expanded: f64) -> Cut {
     // inside iff a cos θ + b sin θ < rhs, i.e. cos(θ − φ) < rhs / amp.
     let g = circle.center - center;
     let a = 2.0 * circle.radius * circle.e1.dot(g);
-    let b = 2.0 * circle.radius * circle.e2.dot(g);
+    let b = 2.0 * circle.radius * circle.e2().dot(g);
     let rhs = expanded * expanded - g.norm2() - circle.radius * circle.radius;
     let amp = (a * a + b * b).sqrt();
     if amp <= rhs {
@@ -434,27 +497,36 @@ impl Arrangement {
         stats.contained = contained.iter().filter(|&&c| c).count();
         control.check()?;
 
-        let rows: Vec<Vec<u32>> = par::map(n, |i| {
-            let mut row = Vec::new();
-            if !contained[i] {
-                cells.for_each_near(centers[i], expanded[i] + max_expanded, |j| {
-                    let ju = j as usize;
-                    if ju != i
-                        && !contained[ju]
-                        && centers[i].dist(centers[ju]) < expanded[i] + expanded[ju] - EPS
-                    {
-                        row.push(j);
-                    }
-                });
-                row.sort_unstable();
+        // Both stages below run over chunks of spheres with flat per-chunk
+        // arrays (`par::chunk_len`), concatenated in sphere order.
+        let chunk = par::chunk_len(n);
+        let chunks = n.div_ceil(chunk);
+        let range = |c: usize| par::chunk_range(n, chunk, c);
+        let parts: Vec<Csr> = par::map(chunks, |c| {
+            let mut part = Csr::with_capacity(chunk, 0);
+            for i in range(c) {
+                let start = part.items.len();
+                if !contained[i] {
+                    cells.for_each_near(centers[i], expanded[i] + max_expanded, |j| {
+                        let ju = j as usize;
+                        if ju != i
+                            && !contained[ju]
+                            && centers[i].dist(centers[ju]) < expanded[i] + expanded[ju] - EPS
+                        {
+                            part.items.push(j);
+                        }
+                    });
+                    part.items[start..].sort_unstable();
+                }
+                part.close_row();
             }
-            row
+            part
         });
-        let mut neighbors = Csr::default();
-        for row in &rows {
-            neighbors.push_row(row.iter().copied());
+        let mut neighbors = Csr::with_capacity(n, parts.iter().map(Csr::total).sum());
+        for part in parts {
+            neighbors.append(&part);
         }
-        drop(rows);
+        debug_assert_eq!(neighbors.rows(), n);
         stats.neighbour_pairs = neighbors.total() / 2;
         control.check()?;
 
@@ -465,34 +537,41 @@ impl Arrangement {
             expanded: &expanded,
             neighbors: &neighbors,
         };
-        let per_sphere: Vec<PerSphere> = par::map_init(n, Scratch::default, |scratch, i| {
-            if contained[i] || !with_circles || control.is_cancelled() {
-                PerSphere::default()
-            } else {
-                geometry.circles_of(i, scratch)
+        let parts: Vec<Part> = par::map_init(chunks, Scratch::default, |scratch, c| {
+            let mut part = Part::default();
+            if with_circles {
+                for i in range(c) {
+                    if !contained[i] && !control.is_cancelled() {
+                        geometry.circles_of(i, scratch, &mut part);
+                    }
+                }
             }
+            part
         });
         control.check()?;
         let mut exposed: Vec<bool> = (0..n)
             .map(|i| !contained[i] && (!with_circles || neighbors.row(i).is_empty()))
             .collect();
-        let mut circles = Vec::new();
-        let mut arcs = Vec::new();
-        let mut circle_blockers = Csr::default();
-        circle_blockers.offsets.push(0);
-        let mut vertices = Vec::new();
-        for part in per_sphere {
+        // Exact capacities: these arrays live as long as the field.
+        let total = |f: fn(&Part) -> usize| parts.iter().map(f).sum::<usize>();
+        let mut circles = Vec::with_capacity(total(|p| p.circles.len()));
+        let mut arcs = Vec::with_capacity(total(|p| p.arcs.len()));
+        let mut circle_blockers =
+            Csr::with_capacity(circles.capacity(), total(|p| p.blockers.total()));
+        let mut vertices = Vec::with_capacity(total(|p| p.vertices.len()));
+        for part in parts {
             let base = u32::try_from(arcs.len()).expect("fewer than 2^32 arcs");
-            for (mut circle, blockers) in part.circles.into_iter().zip(part.blockers) {
+            for mut circle in part.circles {
                 exposed[circle.i as usize] = true;
                 exposed[circle.j as usize] = true;
                 circle.arcs = (circle.arcs.0 + base, circle.arcs.1 + base);
                 circles.push(circle);
-                circle_blockers.push_row(blockers);
             }
+            circle_blockers.append(&part.blockers);
             arcs.extend(part.arcs);
             vertices.extend(part.vertices);
         }
+        debug_assert_eq!(circle_blockers.rows(), circles.len());
 
         let status: Vec<Status> = (0..n)
             .map(|i| {
@@ -543,20 +622,20 @@ struct Scratch {
     blockers: Vec<u32>,
 }
 
-/// Circles of one sphere with arcs (ranges relative to `arcs`), blocker
-/// lists and triple points.
+/// Circles of a chunk of spheres with arcs (ranges relative to `arcs`),
+/// blocker lists (one row per circle) and triple points.
 #[derive(Default)]
-struct PerSphere {
+struct Part {
     circles: Vec<Circle>,
     arcs: Vec<Arc>,
-    blockers: Vec<Vec<u32>>,
+    blockers: Csr,
     vertices: Vec<SasVertex>,
 }
 
 impl SphereGeometry<'_> {
-    fn circles_of(&self, i: usize, scratch: &mut Scratch) -> PerSphere {
+    /// Appends the circles of sphere `i` (with `j > i`) to `out`.
+    fn circles_of(&self, i: usize, scratch: &mut Scratch, out: &mut Part) {
         let (centers, expanded) = (self.centers, self.expanded);
-        let mut out = PerSphere::default();
         for &j in self.neighbors.row(i).iter().filter(|&&j| j as usize > i) {
             let ju = j as usize;
             let d = centers[i].dist(centers[ju]);
@@ -573,7 +652,6 @@ impl SphereGeometry<'_> {
                 center: centers[i] + axis * t,
                 axis,
                 e1,
-                e2,
                 radius: rho2.sqrt(),
                 arcs: (0, 0),
             };
@@ -612,7 +690,7 @@ impl SphereGeometry<'_> {
                     continue;
                 };
                 for [c, s] in [leave, enter] {
-                    let q = circle.center + (circle.e1 * c + circle.e2 * s) * circle.radius;
+                    let q = circle.center + (circle.e1 * c + e2 * s) * circle.radius;
                     let free = self.neighbors.row(i).iter().all(|&l| {
                         l == j
                             || l == k
@@ -627,9 +705,8 @@ impl SphereGeometry<'_> {
                 }
             }
             out.circles.push(circle);
-            out.blockers.push(scratch.blockers.clone());
+            out.blockers.push_row(scratch.blockers.iter().copied());
         }
-        out
     }
 }
 
@@ -785,6 +862,42 @@ mod tests {
         #[test]
         fn arrangement_matches_oracle(c in cluster_strategy(24)) {
             check(&c, 600, 720).map_err(TestCaseError::fail)?;
+        }
+    }
+
+    #[test]
+    fn csr_retain_rows_compacts_in_place() {
+        let rows: [&[u32]; 5] = [&[1, 2], &[], &[3], &[4, 5, 6], &[7]];
+        let mut csr = Csr::with_capacity(rows.len(), 7);
+        for row in rows {
+            csr.push_row(row.iter().copied());
+        }
+        csr.retain_rows(|i| i != 0 && i != 3);
+        let got: Vec<&[u32]> = (0..rows.len()).map(|i| csr.row(i)).collect();
+        assert_eq!(got, [&[][..], &[], &[3], &[], &[7]]);
+        assert_eq!(csr.total(), 2);
+        csr.retain_rows(|_| false);
+        assert!((0..rows.len()).all(|i| csr.row(i).is_empty()));
+    }
+
+    #[test]
+    fn circle_e2_matches_the_basis() {
+        for axis in [
+            Vec3::X,
+            Vec3::new(0.3, -0.8, 0.52).normalized(),
+            Vec3::Z * -1.0,
+        ] {
+            let (e1, e2) = orthonormal_basis(axis);
+            let c = Circle {
+                i: 0,
+                j: 1,
+                center: Vec3::new(0.0, 0.0, 0.0),
+                axis,
+                e1,
+                radius: 1.0,
+                arcs: (0, 0),
+            };
+            assert_eq!(c.e2(), e2);
         }
     }
 

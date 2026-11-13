@@ -17,8 +17,7 @@
 //! end_header
 //! ```
 
-use std::fs::File;
-use std::io::{BufWriter, Write};
+use std::io::Write;
 use std::path::Path;
 
 use crate::error::{Error, Result};
@@ -59,20 +58,21 @@ pub fn write_ply<W: Write>(w: W, mesh: &Mesh, options: &PlyOptions) -> Result<()
     })
 }
 
-/// Writes `mesh` as PLY to `path`.
+/// Writes `mesh` as PLY to `path` (gzip-compressed if the path ends in
+/// `.gz` and the `gzip` feature is enabled).
 ///
 /// # Errors
-/// As [`write_ply`], with the path in I/O errors.
+/// As [`write_ply`], with the path in I/O errors; [`Error::Unsupported`] for
+/// a `.gz` path without the `gzip` feature.
 pub fn write_ply_path(path: impl AsRef<Path>, mesh: &Mesh, options: &PlyOptions) -> Result<()> {
     let path = path.as_ref();
     let io = |source| Error::Io {
         path: Some(path.to_path_buf()),
         source,
     };
-    let file = File::create(path).map_err(io)?;
-    let mut w = BufWriter::with_capacity(1 << 20, file);
+    let mut w = super::Sink::create(path)?;
     write_impl(&mut w, mesh, options)
-        .and_then(|()| w.flush().map_err(Failure::Io))
+        .and_then(|()| w.finish().map_err(Failure::Io))
         .map_err(|e| match e {
             Failure::Io(source) => io(source),
             Failure::Lib(e) => e,

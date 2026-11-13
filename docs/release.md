@@ -8,10 +8,10 @@ private (`publish = false`).
 
 | Criterion | Status |
 |---|---|
-| All Must and Should requirements implemented | Missing: decimation (FR-LOD-4, issue #1); auto-coarsening (FR-LOD-6, #3) |
+| All Must and Should requirements implemented | Done on `v1-dev` (unreleased): decimation (FR-LOD-4, #1), auto-coarsening (FR-LOD-6, #3); NFR-MEM per-atom budget (#21) reduced, decision open |
 | NFR-PERF met or revised with justification | Open (#20) |
 | NFR-ACC met on the validation corpus, report published | Internal references met (`docs/validation-report.md`); cross-tool numbers open (#5), analytic bound decision open (#4) |
-| Zero robustness failures; ≥ 24 CPU-hours fuzzing per parser | Sweep 200/200 ok; fuzz campaign open (#22) |
+| Zero robustness failures; ≥ 24 CPU-hours fuzzing per parser | Sweep 200/200 ok; fuzz targets incl. `assembly` in the nightly workflow; 24 h campaign open (#22) |
 | API docs, examples, CLI manual, changelog; crates published | Done except publishing |
 
 Until these are closed, releases are `0.x`.
