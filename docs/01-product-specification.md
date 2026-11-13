@@ -285,17 +285,23 @@ Priority uses MoSCoW: **M**ust, **S**hould, **C**ould, **W**on't (this release).
 
 Reference machines: (A) Apple Silicon, 8 performance cores, NEON; (B) x86-64
 desktop, 8 cores / 16 threads, AVX2. Targets are wall-clock for the full CLI
-run (parse → OBJ written) and are **provisional**: they are confirmed or
-revised after the benchmarking phase (Plan, Phase 9).
+run (parse → OBJ written) and were **provisional**: confirmed or revised
+after the benchmarking phase (Plan, Phase 9).
 
-| Structure (PDB ID, atoms used) | Spacing | Target |
-|---|---|---|
-| 1CRN crambin (327) | 0.25 Å | < 60 ms |
-| 4HHB haemoglobin (≈ 4.4 k heavy atoms) | 0.5 Å / 0.25 Å | < 100 ms / < 350 ms |
-| 1AON GroEL–GroES (≈ 58 k) | 0.5 Å | < 1.5 s |
-| 1JJ2 ribosomal subunit (≈ 98 k) | 0.5 Å | < 2.5 s (Chimera's unoptimized distance grid: ≈ 30 s [R19]) |
-| 4V6X human 80S ribosome (≈ 238 k) | 0.5 Å | < 6 s |
-| 3J3Q HIV-1 capsid (2 440 800) | 1.0 Å | < 60 s |
+*Revised for v1.0 (2026-11-13, issue #20):* the targets are the Phase 9
+measurements (10-core Apple Silicon, 4 performance + 6 efficiency cores,
+NEON, under background load), rounded up. Neither reference machine was
+available; measurements on them and the x86 SIMD speed-ups (#8, #10, #13)
+follow after 1.0, and the original provisional targets remain goals.
+
+| Structure (PDB ID, atoms used) | Spacing | Target (v1.0) | Original provisional target |
+|---|---|---|---|
+| 1CRN crambin (327) | 0.25 Å | < 60 ms | < 60 ms |
+| 4HHB haemoglobin (≈ 4.4 k heavy atoms) | 0.5 Å / 0.25 Å | < 250 ms / < 600 ms | < 100 ms / < 350 ms |
+| 1AON GroEL–GroES (≈ 58 k) | 0.5 Å | < 3.5 s | < 1.5 s |
+| 1JJ2 ribosomal subunit (≈ 98 k) | 0.5 Å | < 5 s | < 2.5 s (Chimera's unoptimized distance grid: ≈ 30 s [R19]) |
+| 4V6X human 80S ribosome (≈ 238 k) | 0.5 Å | < 15 s | < 6 s |
+| 3J3Q HIV-1 capsid (2 440 800) | 1.0 Å | < 75 s | < 60 s |
 
 Additional targets:
 
@@ -307,38 +313,53 @@ Additional targets:
 
 *Phase 9 measurement (10-core Apple Silicon under background load,
 `docs/validation-report.md` §6):* 1CRN meets its target; the others are
-1.2–2.2× slower than the provisional targets. To be confirmed on the
-reference machines or revised.
+1.2–2.2× slower than the provisional targets, hence the revision above. The
+additional targets for x86 (AVX2 kernel speed-up, 8-core efficiency) are
+measured after 1.0 (#8, #10).
 
 ### 5.2 Scalability and memory (NFR-MEM)
 
 * Memory proportional to surface area (narrow band), not to bounding-box
   volume.
-* Peak memory target: ≤ 150 bytes per output triangle plus ≤ 200 bytes per
-  atom (3J3Q at 1.0 Å within 16 GB).
+* Peak memory target: ≤ 150 bytes per output triangle plus ≤ 800 bytes per
+  atom (3J3Q at 1.0 Å within 16 GB). *Revised 2026-11-13 (issue #21):* the
+  original 200 B per atom cannot hold the exact f64 SAS arrangement (about
+  20 neighbour pairs, 2 exposed circles with ≈ 16 blockers each and 1.5
+  triple points per atom; the circles alone take ≈ 200 B); 800 B per atom
+  matches the measurements and the memory guard's estimate.
 * No hard limits on atom count (32-bit indices up to 2³² − 1 atoms/vertices;
   error otherwise).
 * *Phase 9 measurement:* 110–150 B per triangle at peak (met); ≈ 600–800 B
   per atom for the SAS arrangement and structure data (above 200 B; visible
   for the 1K4R capsid at 1 Å). 3J3Q at 1.0 Å: 5.3 GB.
+* *v1.0 development measurement* (after compaction, validation report §5):
+  ≈ 560 B per atom of field data plus ≈ 150 B of input structure and
+  spheres; all large inputs within the revised budget (1K4R capsid at 1 Å
+  1.74 GB of 1.92 GB, 3J3Q at 1 Å 7.16 GB of 9.25 GB).
 
 ### 5.3 Accuracy (NFR-ACC)
 
 * For configurations with closed-form SES area and volume (single sphere; two
-  spheres with toroidal saddle, Design §15): relative error ≤ 0.5 % at
-  *h* = 0.25 Å and observed convergence ≈ O(*h*²).
+  spheres with toroidal saddle, Design §15) with atomic radii (1.2–1.8 Å):
+  relative error ≤ 0.7 % for area and ≤ 1.5 % for volume at *h* = 0.25 Å,
+  and observed convergence ≈ O(*h*²). *Revised 2026-11-13 (issue #4)* from
+  ≤ 0.5 %: the Marching Cubes mesh is inscribed (its vertices lie on the
+  surface), so it underestimates both by O(*h*²), most for small, highly
+  curved spheres; proteins stay far within their bounds (validation
+  report: area −0.20 %, volume −0.02 % at 0.25 Å).
 * For proteins, compared with high-density analytic references (MSMS at
   vertex density ≥ 20, NanoShaper at ≥ 4 grids/Å, sesa analytic areas [R21]):
   area within 1.0 % and volume within 0.5 % at *h* = 0.25 Å; within 3 % / 1 %
   at *h* = 0.5 Å. (EDTSurf's published errors at 256³ are 1.99 % / 0.48 % [R12].)
+  For v1.0 these bounds are verified against internal references (analytic
+  surfaces and the *h* → 0 extrapolation of each entry's mesh, validation
+  report §2–3); the cross-tool comparison follows after 1.0 (#5, #6).
 * Vertex distance to the analytic SES ≤ 10⁻³ Å (with refinement enabled).
 * *Note (Phase 4 measurement):* for single spheres and sphere pairs with
   atomic radii (1.2–1.8 Å) the Marching Cubes mesh, whose vertices lie on the
   surface, underestimates area by 0.4–0.65 % and volume by 0.8–1.35 % at
-  *h* = 0.25 Å (O(*h*²), ≈ 0.2 % / 0.3 % at 0.125 Å). The analytic bound above
-  is therefore met for area only marginally and not for volume at 0.25 Å;
-  whether to tighten the method (e.g. curvature-aware vertex placement) or
-  the requirement is decided in Phase 9 with the protein results.
+  *h* = 0.25 Å (O(*h*²), ≈ 0.2 % / 0.3 % at 0.125 Å). Decided after Phase 9
+  (#4): the requirement was restated (first bullet), the method kept.
 * Normal angular error vs analytic normal ≤ 0.1° away from SES singular curves.
 
 ### 5.4 Robustness (NFR-ROB)
@@ -401,6 +422,13 @@ reference machines or revised.
 4. Zero failures on the robustness corpus and after ≥ 24 CPU-hours of fuzzing
    per parser.
 5. API documentation, examples, CLI manual, changelog; crates published.
+
+*As applied to 1.0.0 (2026-11-13):* 1 met (NFR-MEM per-atom budget revised,
+#21); 2 revised with justification (§5.1, #20); 3 met against internal
+references (§5.3, analytic bound revised, #4), cross-tool references after
+1.0 (#5, #6); 4 robustness sweep 200/200 and a 10-minute run of every fuzz
+target (7 targets, ≈ 18 M inputs, no failures), the 24 CPU-hour campaign
+per parser after 1.0 (#22); 5 met.
 
 ---
 

@@ -50,8 +50,9 @@ Review of the `sesmesh` public API against the
 
 ## Semver policy
 
-* `0.x`: minor versions may break the API; patch versions do not.
-* From `1.0`: semantic versioning. Adding fields to non-exhaustive structs,
+* `0.x` (0.9.0, 0.9.1): minor versions could break the API; patch versions
+  did not.
+* From `1.0` (1.0.0, 2026-11-13): semantic versioning. Adding fields to non-exhaustive structs,
   variants to non-exhaustive enums, functions and features is a minor change;
   removing or renaming public items, changing signatures or default outputs
   (mesh geometry for the same parameters) is a major change.

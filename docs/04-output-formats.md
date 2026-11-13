@@ -7,7 +7,7 @@ volumes in Å³.
 ## OBJ mesh (`-o <path>`)
 
 ```
-# sesmesh 0.9.1
+# sesmesh 1.0.0
 # input: 1crn.cif  format: mmcif  model: 1  atoms: 327 selected / 327 read
 # surface: ses  probe_radius: 1.4000  grid_spacing: 0.2500  radii: bondi  refine: exact  smoothing: 0  decimation: none
 # cavities: keep  min_cavity_volume: 0  min_component_area: 0  normals: analytic
@@ -126,7 +126,7 @@ column sums to the total area of the written mesh.
 
 ```json
 {
-  "sesmesh": "0.9.1",
+  "sesmesh": "1.0.0",
   "input": {"path": "1crn.cif", "format": "mmcif", "model": 1,
             "atoms_selected": 327, "atoms_in_model": 327},
   "parameters": {"surface": "ses", "probe_radius": 1.4, "grid_spacing": 0.25,

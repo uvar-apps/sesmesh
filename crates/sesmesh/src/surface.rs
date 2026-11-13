@@ -612,9 +612,9 @@ impl SurfaceEngine {
 /// `spheres` input spheres (Design §8.4, §8.6): area ≤ 0.7·(B·h)² per
 /// surface brick (measured 0.38–0.68 on 1CRN, 4HHB, 1AON), `2 · 1.5 / h²`
 /// triangles per Å², and peak memory of 150 bytes per triangle plus 800 bytes
-/// per sphere (Phase 9 measurements: 110–150 B per triangle on 1AON, 4V6X,
-/// 3J3Q; ≈ 600–800 B per atom for the SAS arrangement and structure data,
-/// docs/validation-report.md).
+/// per sphere (the Spec NFR-MEM budget; measured 110–150 B per triangle on
+/// 1AON, 4V6X, 3J3Q and ≈ 700 B per atom for the SAS arrangement and
+/// structure data, docs/validation-report.md).
 pub fn estimate_memory(
     surface_bricks: usize,
     brick_size: usize,

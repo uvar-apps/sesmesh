@@ -376,7 +376,9 @@ Exit (v0.3): all Must/Should requirements implemented.
 > * T9.5: density constant confirmed (1.4999 ± 0.0025), test tightened to
 >   ±5 %; brick tuning done in Phase 6; memory estimate recalibrated.
 > * T9.7: 4V6X, 3J3Q, 1K4R assembly, 1AON — within NFR-MEM except the
->   per-atom budget (≈ 600–800 B/atom vs 200).
+>   per-atom budget (≈ 600–800 B/atom vs 200). Resolved in v1.0
+>   development (#21): compaction to ≈ 700 B/atom and the budget revised
+>   to 800 B/atom (Spec §5.2).
 > * T9.8: left to the nightly fuzz job.
 > * NFR-PERF provisional targets missed by up to ≈ 2× on this machine.
 
@@ -412,10 +414,12 @@ Exit (v1.0): Spec §6.2 release criteria.
 >   Ctrl-C → exit 130 (#12), fuzz target `assembly` plus assembly size
 >   limits (#22).
 > * Memory (#21): arrangement compaction and chunked build/meshing
->   (Design §11.3 "As built"); meshes byte-identical.
-> * Still open for v1.0: performance targets on the reference machines,
->   the 24 h fuzzing campaign, cross-tool references, the NFR-ACC decision
->   (`docs/release.md`).
+>   (Design §11.3 "As built"); meshes byte-identical; NFR-MEM per-atom
+>   budget revised to 800 B (decision 2026-11-13).
+> * Released as 1.0.0 (2026-11-13) with the spec revisions for NFR-MEM
+>   (#21), NFR-ACC (#4) and NFR-PERF (#20); after 1.0: reference-machine
+>   measurements, the 24 h fuzzing campaign, cross-tool references
+>   (`docs/release.md`, #19).
 
 ---
 

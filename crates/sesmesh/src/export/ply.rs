@@ -4,7 +4,7 @@
 //! ```text
 //! ply
 //! format binary_little_endian 1.0
-//! comment sesmesh 0.9.1
+//! comment sesmesh 1.0.0
 //! element vertex N
 //! property float x            (y, z)
 //! property float nx           (ny, nz; when the mesh has normals)

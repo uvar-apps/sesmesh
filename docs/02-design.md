@@ -1031,6 +1031,8 @@ for atom data; well within the 16 GB target.
   `assemble` resolves triangles per chunk and frees each chunk once copied.
 * Peak RSS: 1K4R capsid at 1 Å 2.42 → 1.74 GB, 3J3Q at 1 Å 7.89 → 7.16 GB
   (≈ 147 B per triangle), 1AON at 0.25 Å 2.38 → 2.14 GB.
+* Budget revised (Spec §5.2, #21): 150 B per triangle + 800 B per atom,
+  the same costs `estimate_memory` uses.
 
 ---
 

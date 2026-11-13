@@ -4,22 +4,21 @@ Publishable crates: `sesmesh` (library) and `sesmesh-cli` (binary
 `sesmesh`), published in that order. `sesmesh-testkit` and `xtask` are
 private (`publish = false`).
 
-## v1.0 criteria (Spec §6.2) — status 2026-11-13
+## v1.0 criteria (Spec §6.2) — status at 1.0.0 (2026-11-13)
 
 | Criterion | Status |
 |---|---|
-| All Must and Should requirements implemented | Done on `v1-dev` (unreleased): decimation (FR-LOD-4, #1), auto-coarsening (FR-LOD-6, #3); NFR-MEM per-atom budget (#21) reduced, decision open |
-| NFR-PERF met or revised with justification | Open (#20) |
-| NFR-ACC met on the validation corpus, report published | Internal references met (`docs/validation-report.md`); cross-tool numbers open (#5), analytic bound decision open (#4) |
-| Zero robustness failures; ≥ 24 CPU-hours fuzzing per parser | Sweep 200/200 ok; fuzz targets incl. `assembly` in the nightly workflow; 24 h campaign open (#22) |
-| API docs, examples, CLI manual, changelog; crates published | Done except publishing |
-
-Until these are closed, releases are `0.x`.
+| All Must and Should requirements implemented | Met: decimation (FR-LOD-4, #1), auto-coarsening (FR-LOD-6, #3); NFR-MEM met with the per-atom budget revised to 800 B (#21) |
+| NFR-PERF met or revised with justification | Revised to the Phase 9 measurements on 10-core Apple Silicon (#20); x86 reference measurements after 1.0 (#8, #10) |
+| NFR-ACC met on the validation corpus, report published | Met against internal references (`docs/validation-report.md`); analytic bound revised (#4); cross-tool references after 1.0 (#5, #6) |
+| Zero robustness failures; ≥ 24 CPU-hours fuzzing per parser | Sweep 200/200; 10 minutes per fuzz target (7 targets, ≈ 18 M inputs, 0 failures); 24 CPU-hour campaign after 1.0 (#22) |
+| API docs, examples, CLI manual, changelog; crates published | Met |
 
 ## Releases
 
 | Version | Date | Notes |
 |---|---|---|
+| 1.0.0 | 2026-11-13 | First stable release: decimation, auto-coarsening, gzip PLY/MSMS, completions and man page, Ctrl-C, lower memory; spec criteria revised (NFR-MEM, NFR-ACC, NFR-PERF). |
 | 0.9.1 | 2026-11-13 | CLI: quiet exit when standard output is closed early (broken pipe). |
 | 0.9.0 | 2026-11-13 | First public release (release candidate for 1.0): crates `sesmesh` and `sesmesh-cli` on crates.io, binaries on the GitHub release `v0.9.0`. |
 

@@ -24,11 +24,11 @@ molecular surface) meshing for molecular structures, written in Rust.
 * Ships as a reusable library crate ([`sesmesh`](https://crates.io/crates/sesmesh))
   plus a command-line tool ([`sesmesh-cli`](https://crates.io/crates/sesmesh-cli)).
 
-> **Status: 0.9.x, release candidate for 1.0.** The remaining v1.0 items
-> (performance targets on the reference machines, the long fuzzing campaign,
-> cross-tool references) are tracked in
-> [issue #19](https://github.com/uvar-apps/sesmesh/issues/19) and
-> [docs/release.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/release.md).
+> **Status: 1.0.** Stable API under semantic versioning
+> ([docs/api-review.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/api-review.md)).
+> Work after 1.0 (measurements on x86 reference machines, a long fuzzing
+> campaign, cross-tool references) is tracked in
+> [issue #19](https://github.com/uvar-apps/sesmesh/issues/19).
 
 ## Install
 
@@ -45,7 +45,7 @@ Library:
 
 ```toml
 [dependencies]
-sesmesh = "0.9"
+sesmesh = "1"
 ```
 
 Rust 1.89 or newer.

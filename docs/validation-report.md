@@ -22,8 +22,8 @@ available, so — by decision — the references are internal:
 
 This measures the **discretization** error of the mesh. It does not detect
 differences in surface *definition* (radii handling, probe-region details)
-from other tools; those need the cross-tool comparison of issue #5, still
-open.
+from other tools; those need the cross-tool comparison of issue #5, moved
+to after 1.0.
 
 ## 2. Accuracy (T9.3)
 
@@ -50,7 +50,8 @@ DNA, nucleosomes, antibodies, spike trimer, GroEL–GroES, ribosomal subunits,
   show this bias. **Recommendation for issue #4:** restate the analytic bound
   as an O(h²) convergence requirement (area ≤ 0.7 %, volume ≤ 1.5 % for
   1.2–1.8 Å spheres at 0.25 Å) and keep the protein bounds; no method
-  change needed. Decision pending.
+  change needed. **Decided 2026-11-13 (#4):** adopted (Spec §5.3), encoded
+  in `two_spheres_match_reference`.
 
 ## 3. Density calibration (T9.5)
 
@@ -105,21 +106,23 @@ Re-measured in one session with the 0.9.1 code and the new code (same
 machine and load; macOS peak RSS varies between sessions with memory
 pressure, so only same-session pairs compare):
 
-| Input | Spacing | Triangles | Peak RSS 0.9.1 | Peak RSS v1-dev | Budget |
-|---|---|---|---|---|---|
-| 1AON | 0.25 Å | 17.5 M | 2.38 GB | 2.14 GB (−10 %) | 2.63 GB ✓ |
-| 4V6X | 0.5 Å | 18.0 M | 2.75 GB | 2.40 GB (−13 %) | 2.75 GB ✓ |
-| 1K4R assembly 1 | 1.0 Å | 9.9 M | 2.42 GB | 1.74 GB (−28 %) | 1.59 GB ✗ (+9 %) |
-| 3J3Q | 1.0 Å | 48.7 M | 7.89 GB | 7.16 GB (−9 %) | 7.79 GB ✓ |
+| Input | Spacing | Triangles | Peak RSS 0.9.1 | Peak RSS v1-dev | Old budget (200 B/atom) | Revised budget (800 B/atom) |
+|---|---|---|---|---|---|---|
+| 1AON | 0.25 Å | 17.5 M | 2.38 GB | 2.14 GB (−10 %) | 2.63 GB ✓ | 2.67 GB ✓ |
+| 4V6X | 0.5 Å | 18.0 M | 2.75 GB | 2.40 GB (−13 %) | 2.75 GB ✓ | 2.89 GB ✓ |
+| 1K4R assembly 1 | 1.0 Å | 9.9 M | 2.42 GB | 1.74 GB (−28 %) | 1.59 GB ✗ (+9 %) | 1.92 GB ✓ |
+| 3J3Q | 1.0 Å | 48.7 M | 7.89 GB | 7.16 GB (−9 %) | 7.79 GB ✓ | 9.25 GB ✓ |
 
 * Field data per atom (heap, counted with an allocating probe on the
   capsid): ≈ 1 150 → 560 B (neighbour rows 296 → 95 B, circles 462 → 197 B,
   blockers 162 → 132 B, arcs 81 → 0 B, triple points 67 → 58 B); the input
   structure and spheres add ≈ 150 B. The 200 B/atom budget is not reachable
-  with exact f64 geometry; ≈ 700 B/atom steady (and the 800 B/sphere of the
-  memory guard) is the measured figure.
+  with exact f64 geometry (the circles alone take ≈ 200 B).
+* **Decision (2026-11-13, #21):** NFR-MEM revised to 150 B per triangle +
+  800 B per atom (Spec §5.2), the measured figure and the memory guard's
+  estimate; every large input is within it.
 
-## 6. Performance (NFR-PERF, provisional targets)
+## 6. Performance (NFR-PERF)
 
 | Structure | Spacing | Target | Measured (10 cores, loaded) | Ratio |
 |---|---|---|---|---|
@@ -135,15 +138,21 @@ The provisional targets are missed by up to ≈ 2× on this machine under
 load; the reference machines of the spec (8 performance cores; x86 AVX2)
 were not available. Levers, in order: the SIMD sampling kernel's validity
 tests (issue #13, ≈ 38 % of the time), x86 SIMD widths (issue #8), quieter
-and homogeneous hardware for the measurement itself (issue #10). The
-targets should be confirmed on the reference machines or revised.
+and homogeneous hardware for the measurement itself (issue #10).
+
+**Decision (2026-11-13, #20):** for 1.0 the targets are these measurements,
+rounded up (Spec §5.1: 1CRN < 60 ms, 4HHB < 250 / 600 ms, 1AON < 3.5 s,
+1JJ2 < 5 s, 4V6X < 15 s, 3J3Q < 75 s); the provisional targets remain goals
+for the work after 1.0.
 
 ## 7. Not done in this phase
 
 * Cross-tool references (T9.2) and the benchmark comparison with other tools
   (T9.6): no tools installed — issues #5, #6.
-* The 24 CPU-hour fuzzing campaign per parser (T9.8): left to the nightly CI
-  fuzz job.
+* The 24 CPU-hour fuzzing campaign per parser (T9.8): moved to after 1.0
+  (#22). For 1.0 every target ran 10 minutes (pdb, mmcif, cif_lexer, xyz,
+  pqr, detect, assembly; ≈ 18 M inputs from the fixture corpus) without a
+  crash, timeout or out-of-memory report.
 * Brick size, culling and refinement tuning (T9.5) was done in Phase 6
   (Design §7.5, §7.7); not repeated.
 

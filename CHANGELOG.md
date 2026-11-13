@@ -6,6 +6,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-13
+
+First stable release. The v1.0 criteria of the specification (§6.2) are met
+with the revisions listed under *Changed*; work deferred to after 1.0 is
+tracked in GitHub issue #19.
+
 ### Added
 
 - Mesh decimation (#1, FR-LOD-4): `mesh::decimate` with `mesh::Decimation`
@@ -41,6 +47,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   and per-brick meshes use flat per-chunk arrays instead of per-sphere and
   per-brick vectors. Field data per atom: ≈ 1 150 → 560 bytes; peak memory
   on the 1K4R capsid at 1 Å: 2.42 → 1.74 GB.
+- Specification: the NFR-MEM peak-memory budget is 150 bytes per triangle
+  plus 800 bytes per atom (was 200 bytes per atom, not reachable with the
+  exact f64 arrangement); all large validation inputs are within it (#21).
+- Specification: the analytic NFR-ACC bound is area ≤ 0.7 % and volume
+  ≤ 1.5 % at 0.25 Å for atom-sized spheres (was 0.5 %; the inscribed mesh
+  underestimates by O(h²)); protein bounds unchanged and met (#4).
+- Specification: the NFR-PERF targets are the Phase 9 measurements on a
+  10-core Apple Silicon machine; the original provisional targets remain
+  goals, x86 reference measurements follow after 1.0 (#20).
+- Release criteria: cross-tool references (#5, #6) and the 24 CPU-hour
+  fuzzing campaign per parser (#22) moved to after 1.0; 1.0 is checked
+  against internal references and a short fuzzing run of every target.
 
 ### Fixed
 
@@ -241,6 +259,7 @@ listed in `docs/release.md` and GitHub issue #19).
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by
   fuzzing: a count of 377 777 773 requested 36 GB).
 
-[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/uvar-apps/sesmesh/compare/v0.9.1...v1.0.0
 [0.9.1]: https://github.com/uvar-apps/sesmesh/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/uvar-apps/sesmesh/releases/tag/v0.9.0

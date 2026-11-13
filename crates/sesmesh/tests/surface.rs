@@ -95,7 +95,8 @@ fn two_spheres_match_reference() {
         let out = run(&s, &params);
         let want = analytic::two_spheres(r1, r2, d, 1.4);
         assert_eq!(out.stats.components, want.components, "{r1} {r2} {d}");
-        // Measured at 0.25 Å: area −0.4…−0.65 %, volume −0.8…−1.35 % (small
+        // Spec NFR-ACC (revised, issue #4): area ≤ 0.7 %, volume ≤ 1.5 % at
+        // 0.25 Å. Measured: area −0.4…−0.65 %, volume −0.8…−1.35 % (small
         // radii are the worst case for an inscribed mesh; docs/02 §15).
         let (ea, ev) = (
             rel(out.stats.area, want.area),

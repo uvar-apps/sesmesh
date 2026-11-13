@@ -46,18 +46,23 @@ any deviation from the plan.
 
 ## Repository state at handoff (2026-11-13)
 
-- Latest release **0.9.1** (2026-11-13; 0.9.0 the same day): tags `v0.9.0`, `v0.9.1`, crates
-  `sesmesh` and `sesmesh-cli` on crates.io (owner: the user's crates.io account), GitHub releases
-  with tier-1 binaries. `main` = `origin/main` = the release commit.
+- Latest release **1.0.0** (2026-11-13; 0.9.0 and 0.9.1 the same day): tags `v0.9.0`, `v0.9.1`,
+  `v1.0.0`, crates `sesmesh` and `sesmesh-cli` on crates.io (owner: the user's crates.io
+  account), GitHub releases with tier-1 binaries. `main` = `origin/main` = the 1.0.0 release
+  commit. Semantic versioning from 1.0 (`docs/api-review.md`).
 - The crates.io token lives in the user's `~/.cargo/credentials.toml` (never read or print it).
   Next releases follow `docs/release.md` (bump `[workspace.package] version` and the `sesmesh`
   workspace dependency, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).
 - Root `atom-colors.json` and `out/` are untracked on purpose.
-- Branch `v1-dev` (from `main` at 0.9.1) holds the v1.0 development items, unreleased: #1
-  decimation (`mesh/decimate.rs`, pure Rust), #3 `--auto-coarsen`, #15 gzip PLY/MSMS, #2
-  `completions`/`man`, #12 Ctrl-C (exit 130, `ctrlc`), #22 fuzz target `assembly` + assembly
+- 1.0.0 contains the v1.0 development items (branch `v1-dev`): #1 decimation
+  (`mesh/decimate.rs`, pure Rust), #3 `--auto-coarsen`, #15 gzip PLY/MSMS, #2
+  `completions`/`man`, #12 Ctrl-C (exit 130, `ctrlc`), fuzz target `assembly` + assembly
   size limits, #21 memory (arrangement compaction, chunked build/meshing via `par::chunk_len`).
-- Open v1.0 items after `v1-dev`: #4, #5, #20, #22 campaign, #21 budget decision (tracking #19).
+- Spec decisions for 1.0 (2026-11-13): NFR-MEM 150 B/triangle + 800 B/atom (#21), NFR-ACC
+  analytic bound area ≤ 0.7 % / volume ≤ 1.5 % at 0.25 Å (#4), NFR-PERF = Phase 9
+  measurements (#20). After 1.0 (tracking #19): cross-tool references #5/#6, 24 CPU-h fuzz
+  campaign #22 (only 10 min per target before 1.0), x86 measurements #8/#9/#10, #13, #14,
+  #18, #23.
 
 ## Layout (crates/sesmesh/src)
 
@@ -124,19 +129,19 @@ any deviation from the plan.
 
 ## Next
 
-Open items are GitHub issues #1–#18 and #20–#23, collected in the tracking issue #19
-("Roadmap: open items after Phase 9"; Phase 9 results are posted on #4, #5, #7, #11). Labels: `type:` (feature, performance, validation, ci, docs, decision,
-tracking), `area:` (io, field, mesh, engine, export, cli, ci), `phase:` (8, 9, 10, backlog),
+Work after 1.0 is collected in the tracking issue #19 ("Roadmap after v1.0"). Labels: `type:`
+(feature, performance, validation, ci, docs, decision, tracking), `area:` (io, field, mesh,
+engine, export, cli, ci), `phase:` (8, 9, 10, backlog; deferred items carry `phase: backlog`),
 `priority:` (must/should/could = spec MoSCoW). Close issues from commits/PRs (`Fixes #N`) and
 tick them in #19. Summary:
 
-1. Optional T8.4 decimation (D§9.5): `meshopt` behind a `decimate` feature (C++ build) or a
-   pure-Rust quadric edge collapse; keep retained vertices on the SES, re-validate, compact.
-2. Phase 9 (plan §3): validation corpus vs reference tools (MSMS/NanoShaper/EDTSurf/sesa
-   numbers stored in `tests/data/reference/*.toml`, D§15), density constant calibration (T9.5),
-   NFR-ACC decision for small-sphere volume bias, x86 SIMD speed-ups, 3J3Q scale test, 2PTN
-   cavity comparison (deferred from T7.2).
-3. Phase 10: docs (user guide), packaging, release `v1.0`.
+1. Fuzzing campaign ≥ 24 CPU-hours per target (#22): a manual GitHub Actions workflow with one
+   job per target and shard (4 vCPU × ≈ 5.5 h each) was sketched, not committed; local
+   cargo-fuzz lives in the session scratchpad only (`cargo install cargo-fuzz` for a new one).
+2. Cross-tool references (#5, #6): MSMS/NanoShaper/EDTSurf/sesa numbers stored in
+   `tests/data/reference/*.toml` (D§15), CI comparison without external tools.
+3. Performance on the reference machines and x86 SIMD (#8, #9, #10, #13), robustness sweep to
+   1 000 entries (#23), Ubuntu 26 CI image (#18), optional marching tetrahedra (#14).
 
 ## Gotchas learned
 
