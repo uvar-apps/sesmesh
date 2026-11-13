@@ -131,6 +131,8 @@ tick them in #19. Summary:
   (`--save-baseline` / `--baseline`), repeat runs. Single-thread runs are steadier.
 - zsh does not word-split `$var`; use `${=var}` in loops. Foreground `sleep` is blocked; run
   long jobs in the background.
+- CI's clippy job uses the latest stable Rust: keep the local `stable` toolchain current, or new
+  lints break `main` (Phase 8: `needless_range_loop` on 1.100, unseen on 1.99).
 - Clippy here is strict (pedantic subset): `is_multiple_of`, method paths instead of closures,
   `;` after unit expressions, `clamp`. Code under `#[cfg(target_arch = "x86_64")]` is only
   linted by the x86 target command above.

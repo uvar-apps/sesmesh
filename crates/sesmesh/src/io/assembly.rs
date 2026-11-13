@@ -256,15 +256,15 @@ pub(crate) fn parse_cif(
         };
         let mut t = Transform::IDENTITY;
         let mut ok = true;
-        for i in 0..3 {
-            for j in 0..3 {
+        for (i, (row_r, row_t)) in t.r.iter_mut().zip(t.t.iter_mut()).enumerate() {
+            for (j, cell) in row_r.iter_mut().enumerate() {
                 match num(&format!("matrix[{}][{}]", i + 1, j + 1)) {
-                    Some(v) => t.r[i][j] = v,
+                    Some(v) => *cell = v,
                     None => ok = false,
                 }
             }
             match num(&format!("vector[{}]", i + 1)) {
-                Some(v) => t.t[i] = v,
+                Some(v) => *row_t = v,
                 None => ok = false,
             }
         }
