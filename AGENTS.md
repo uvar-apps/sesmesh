@@ -43,6 +43,10 @@ any deviation from the plan.
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Then, when asked, fast-forward
   `main` (`git merge --ff-only`). Push only when asked: `origin` =
   https://github.com/uvar-apps/sesmesh (private); push `main` and the phase branches.
+- Validate locally before every push (full list: `docs/release.md`, *Local validation*: fmt,
+  both clippy commands, debug + release `--include-ignored` tests, examples, rustdoc, MSRV,
+  cargo-deny, publish dry run); never push and rely on GitHub CI, which is manual-only
+  (`workflow_dispatch`). Release tags only on a locally validated commit.
 - Never commit `out/` (review meshes: prototype files plus `*-sesmesh.obj` from the real CLI).
 - `atom-colors.json` (user-provided, 118 element colours,
   `{"format":"eigenvista-atom-colors","version":1,"colors":[{"z","symbol","color":"#rrggbb"}]}`)

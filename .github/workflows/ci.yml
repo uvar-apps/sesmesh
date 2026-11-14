@@ -4,10 +4,9 @@
 
 name: CI
 
+# Manual only (Actions → CI → Run workflow): every push is validated locally
+# first with the same steps (docs/release.md, "Local validation").
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 
 permissions:

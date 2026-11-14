@@ -14,6 +14,28 @@ private (`publish = false`).
 | Zero robustness failures; ≥ 24 CPU-hours fuzzing per parser | Sweep 200/200; 10 minutes per fuzz target (7 targets, ≈ 18 M inputs, 0 failures); 24 CPU-hour campaign after 1.0 (#22) |
 | API docs, examples, CLI manual, changelog; crates published | Met |
 
+## Local validation
+
+Run before every push, not only releases; push only when all pass. The same
+steps as `.github/workflows/ci.yml`, which runs only by hand:
+
+```bash
+cargo fmt --all --check
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo clippy -p sesmesh -p sesmesh-cli --lib --bins --target x86_64-unknown-linux-gnu --locked -- -D warnings
+cargo test --workspace --locked
+cargo test --workspace --locked --release -- --include-ignored
+for e in file_to_obj spheres_to_mesh trajectory custom_radii field_queries; do cargo run -q --release --locked -p sesmesh --example $e; done
+RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked
+cargo +1.89 check --package sesmesh --package sesmesh-cli --locked
+cargo deny check
+cargo publish --workspace --dry-run --locked
+```
+
+This covers the host only (macOS arm64 here). Linux x86-64, Linux arm64 and
+Windows are covered by running the CI workflow by hand, or by testing on
+such a machine.
+
 ## Releases
 
 | Version | Date | Notes |
@@ -26,8 +48,8 @@ private (`publish = false`).
 
 ## Checklist
 
-1. Green CI on `main` (tests on all tier-1 targets, clippy on the latest
-   stable, MSRV, rustdoc, cargo-deny).
+1. Local validation passes on the commit to release, before anything is
+   pushed (GitHub CI is manual-only; see *Local validation* below).
 2. Set the version in `Cargo.toml` (`[workspace.package] version` and the
    `sesmesh` entry of `[workspace.dependencies]`), run
    `cargo update -w`. Also set `version` and `date-released` in
