@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- sesmesh — Solvent Excluded Surface meshes for molecules
+     Copyright (c) 2026 Ugo Varetto
+     SPDX-License-Identifier: MIT OR Apache-2.0 -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://uvar-apps.github.io/sesmesh/</loc></url>
+  <url><loc>https://uvar-apps.github.io/sesmesh/cli.html</loc></url>
+  <url><loc>https://uvar-apps.github.io/sesmesh/library.html</loc></url>
+  <url><loc>https://uvar-apps.github.io/sesmesh/tutorials.html</loc></url>
+  <url><loc>https://uvar-apps.github.io/sesmesh/gallery.html</loc></url>
+</urlset>

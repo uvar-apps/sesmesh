@@ -29,7 +29,10 @@ private (`publish = false`).
    stable, MSRV, rustdoc, cargo-deny).
 2. Set the version in `Cargo.toml` (`[workspace.package] version` and the
    `sesmesh` entry of `[workspace.dependencies]`), run
-   `cargo update -w`.
+   `cargo update -w`. Also set `version` and `date-released` in
+   `CITATION.cff` and the version shown on the website
+   (`grep -n 'X.Y.Z' site/*.html` with the old version: the header badges, the
+   home page label and `softwareVersion` in its JSON-LD block).
 3. In `CHANGELOG.md`, rename *Unreleased* to `## [X.Y.Z] - YYYY-MM-DD` and
    open a new *Unreleased* section.
 4. Dry runs:

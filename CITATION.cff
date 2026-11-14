@@ -1,0 +1,35 @@
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+cff-version: 1.2.0
+message: >-
+  If you use sesmesh in your work, please cite the software as below and the
+  methods it implements (README, "How it works and what to cite").
+type: software
+title: "sesmesh: Solvent Excluded Surface meshes for molecules"
+abstract: >-
+  Rust library and command-line tool that computes Solvent Excluded
+  (Connolly) surfaces, solvent accessible surfaces and van der Waals surfaces
+  of molecules from PDB, mmCIF, XYZ and PQR files as closed, oriented triangle
+  meshes with vertices on the exact surface and analytic normals (OBJ, PLY,
+  MSMS).
+authors:
+  - given-names: Ugo
+    family-names: Varetto
+version: 1.1.0
+date-released: "2026-11-14"
+license:
+  - MIT
+  - Apache-2.0
+repository-code: "https://github.com/uvar-apps/sesmesh"
+url: "https://uvar-apps.github.io/sesmesh/"
+keywords:
+  - solvent excluded surface
+  - Connolly surface
+  - molecular surface
+  - protein structure
+  - structural biology
+  - computational chemistry
+  - mesh generation
+  - Rust

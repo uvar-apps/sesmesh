@@ -6,6 +6,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Crate metadata: `homepage` points to the website, category
+  `science::bioinformatics` added, keyword `ses` replaced by `protein`.
+- `CITATION.cff` added (GitHub "Cite this repository", Zenodo).
+- Website: canonical links, Open Graph tags on every page, JSON-LD
+  software description on the home page, `sitemap.xml`; the 404 page is not
+  indexed.
+
 ## [1.1.0] - 2026-11-14
 
 Opt-in removal of sub-grid fragments, a corrected memory guard with lower

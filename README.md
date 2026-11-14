@@ -151,7 +151,9 @@ exact surface and takes normals from the closest point. Optional smoothing
 uses Taubin's λ|μ filter [6] followed by exact re-projection. The SES itself
 goes back to Lee & Richards [7] and Richards [8].
 
-If you use sesmesh in published work, please cite the methods above:
+If you use sesmesh in published work, please cite the software
+([CITATION.cff](https://github.com/uvar-apps/sesmesh/blob/main/CITATION.cff);
+GitHub: *Cite this repository*) and the methods above:
 
 1. C. Quan, B. Stamm, "Mathematical analysis and calculation of molecular
    surfaces," *J. Comput. Phys.* 322:760–782, 2016.

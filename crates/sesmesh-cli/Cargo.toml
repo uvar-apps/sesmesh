@@ -6,14 +6,15 @@
 name = "sesmesh-cli"
 description = "Command-line tool computing Solvent Excluded Surfaces (Connolly surfaces) of molecules as triangle meshes (OBJ, PLY, MSMS)"
 readme = "../../README.md"
-keywords = ["molecular-surface", "ses", "connolly", "mesh", "cli"]
-categories = ["science", "command-line-utilities"]
+keywords = ["molecular-surface", "protein", "connolly", "mesh", "cli"]
+categories = ["science", "science::bioinformatics", "command-line-utilities"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
 
 [[bin]]
 name = "sesmesh"

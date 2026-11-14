@@ -6,14 +6,15 @@
 name = "sesmesh"
 description = "Solvent Excluded Surface (Connolly surface) meshing for molecular structures"
 readme = "../../README.md"
-keywords = ["molecular-surface", "ses", "connolly", "mesh", "pdb"]
-categories = ["science", "graphics"]
+keywords = ["molecular-surface", "protein", "connolly", "mesh", "pdb"]
+categories = ["science", "science::bioinformatics", "graphics"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
+homepage.workspace = true
 documentation = "https://docs.rs/sesmesh"
 
 [package.metadata.docs.rs]

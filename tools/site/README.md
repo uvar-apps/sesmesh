@@ -12,7 +12,8 @@ and the two fonts load from jsDelivr and Google Fonts.
 | `site/tutorials.html` | Four walkthroughs with real inputs and outputs |
 | `site/gallery.html` | Live viewer + figures with the command behind each |
 | `site/render.html` | Still renderer for the display meshes (not linked from the menu) |
-| `site/404.html` | Not-found page (absolute `/sesmesh/` links) |
+| `site/404.html` | Not-found page (absolute `/sesmesh/` links, `noindex`) |
+| `site/sitemap.xml` | Public pages for search engines (add new pages here) |
 | `site/assets/` | `site.css` (all styles), `site.js` (theme, copy buttons, missing-image slots), `viewer.js` (WebGL viewer), favicon |
 | `site/models/*.sesm.gz` | Compact display meshes for the viewer |
 | `site/img/gallery/*.webp` | Figures; `site/img/og.png` social preview card |
@@ -22,6 +23,25 @@ and the two fonts load from jsDelivr and Google Fonts.
 Repository **Settings → Pages → Build and deployment → Source: GitHub
 Actions**. The workflow then deploys on the next push to `main` (or run it by
 hand: Actions → pages → Run workflow).
+
+## Search engines
+
+Every public page has a canonical link, a description and Open Graph tags
+(title, description, `img/og.png`); the home page also has a JSON-LD
+`SoftwareApplication` block (keep `softwareVersion` current, see
+`docs/release.md`). `render.html` and `404.html` are `noindex`. A
+`robots.txt` here would be ignored: crawlers only read it at the domain root
+(`uvar-apps.github.io/robots.txt`), so the sitemap is submitted in Google
+Search Console instead (URL-prefix property
+`https://uvar-apps.github.io/sesmesh/`; its HTML verification file goes in
+`site/`, then submit `sitemap.xml`). Bing Webmaster Tools can import the
+Search Console property.
+
+Repository metadata that helps people find the project: the description and
+topics (`gh repo edit --add-topic …`), the social preview image (Settings →
+General → Social preview: upload `site/img/og.png`; no API), `CITATION.cff`
+(cite button, Zenodo) and the crates' `homepage`, keywords and categories
+(changed only by publishing a new version).
 
 ## Preview locally
 

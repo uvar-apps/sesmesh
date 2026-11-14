@@ -26,6 +26,7 @@ rust-version = "1.89"
 license = "MIT OR Apache-2.0"
 authors = ["Ugo Varetto"]
 repository = "https://github.com/uvar-apps/sesmesh"
+homepage = "https://uvar-apps.github.io/sesmesh/"
 # Only `sesmesh` and `sesmesh-cli` are publishable (Plan T10.4); `cargo
 # publish` is run by hand or by the release workflow, never implicitly.
 

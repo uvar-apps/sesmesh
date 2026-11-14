@@ -63,6 +63,10 @@ any deviation from the plan.
   Next releases follow `docs/release.md` (bump `[workspace.package] version` and the `sesmesh`
   workspace dependency, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).
 - Root `atom-colors.json` and `out/` are untracked on purpose.
+- Discoverability (2026-11-14): repo description + 13 topics set, `CITATION.cff` (bump
+  `version`/`date-released` per release), crates' `homepage` + `science::bioinformatics`
+  (on crates.io from the next publish). Left to the user: social preview upload, Google
+  Search Console / Bing verification, Zenodo switch, announcements.
 - 1.0.0 contains the v1.0 development items (branch `v1-dev`): #1 decimation
   (`mesh/decimate.rs`, pure Rust), #3 `--auto-coarsen`, #15 gzip PLY/MSMS, #2
   `completions`/`man`, #12 Ctrl-C (exit 130, `ctrlc`), fuzz target `assembly` + assembly
@@ -99,7 +103,8 @@ any deviation from the plan.
 - Website: `site/` (static HTML/CSS/JS, brutalist style, deployed by `.github/workflows/pages.yml`
   from `main`; Pages source must be "GitHub Actions"), helper scripts and instructions in
   `tools/site/README.md` (`ply2web.py` display meshes, `gallery-meshes.sh`, `render.html` +
-  `capture.py` on port 8777, `og-card.py`). Library-page snippets were compiled against 1.1.0;
+  `capture.py` on port 8777, `og-card.py`), search-engine notes (canonical, Open Graph, JSON-LD,
+  `sitemap.xml`). Library-page snippets were compiled against 1.1.0;
   re-check them when the API changes.
 - Docs: `docs/cli.md` (CLI manual), `docs/api-review.md` (API checklist, semver policy),
   `docs/release.md` (release process, v1.0 status), `.github/workflows/release.yml`
