@@ -682,6 +682,29 @@ blocker ordering), reuse of the sampling gather for refinement (≈ 5 %).
      Illinois needed 3.2–3.6). Evaluations are scalar `f64` per vertex inside
      the parallel brick tasks, against per-sub-block candidate lists since
      Phase 6 (§7.5).
+     *Fixed after 1.1.0 (cross-tool comparison, issues #5/#6):* in 1.1.0 the
+     bisection only replaced an Illinois step that left the bracket, and an
+     edge that had not converged after 8 evaluations got the *next,
+     unevaluated* iterate as its vertex, with the attributes of the previous
+     evaluation. Where $g$ is not monotone along the edge — a concave or
+     saddle patch dipping to within $10^{-4}$ Å of zero next to the sign
+     change, or two concave patches meeting at a kink — Newton and Illinois
+     both stall in the dip (Illinois halves the far end's value each step and
+     creeps), so such vertices were up to 0.094 Å off the SES (1AON at
+     0.5 Å; 4HHB 2.4·10⁻³ Å, 6VXX at 0.25 Å 0.083 Å). The candidate lists
+     were not at fault: local, global and brute-force oracle values agree to
+     the last digit along these edges. Now an edge still unconverged after 8
+     evaluations is bisected on the preserved bracket until $|g| \le 10^{-5}$
+     Å or the bracket spans ≤ $2\cdot10^{-5}$ Å ($F$ is 1-Lipschitz, so the
+     midpoint is then within $10^{-5}$ Å of the root), and the vertex is
+     always an evaluated point. Converged edges are untouched (same
+     iterates, byte-identical vertices); 0.001–0.011 % of the vertices change
+     (1CRN none, 4HHB 17/10, 1AON 158/107, 6VXX 74/42 at 0.5/0.25 Å), at
+     ≈ 7.5 extra evaluations each (+0.02 % in total). Vertices not on the
+     edge clamp (step 3) are now within 2.4·10⁻⁵ Å of the SES on these
+     structures (refinement tolerance plus `f32` storage); regression test
+     `refinement_converges_on_non_monotone_edges` (4- and 3-atom sets reduced
+     from 1AON and 4HHB).
      `RefineMode::Linear` skips this (fast preview, one evaluation for the
      normal);
   3. clamp $t \in [10^{-4}, 1-10^{-4}]$ so vertices from edges meeting at a

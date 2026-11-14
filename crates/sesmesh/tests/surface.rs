@@ -188,6 +188,36 @@ fn brick_sizes_agree() {
     }
 }
 
+/// Exact refinement converges where F is not monotone along an edge.
+/// Reduced from 1AON (edge x = 44.5, z = −22, y −78 → −77.5) and 4HHB
+/// (x = −6, z = 42.5, y 28 → 28.5) at 0.5 Å: F has a near-tangent dip next
+/// to the sign change (two concave patches meeting at a kink, or a saddle
+/// rising just inside a concave patch), Newton and Illinois stalled in it,
+/// and 1.1.0 placed the vertex at the unchecked next iterate, 0.076 Å and
+/// 0.0024 Å off the surface.
+#[test]
+fn refinement_converges_on_non_monotone_edges() {
+    let cases: [&[Sphere]; 2] = [
+        &[
+            Sphere::new([42.580, -79.518, -23.569], 1.52),
+            Sphere::new([45.767, -76.655, -20.023], 1.7),
+            Sphere::new([46.735, -77.095, -22.324], 1.7),
+            Sphere::new([45.949, -76.134, -21.455], 1.7),
+        ],
+        &[
+            Sphere::new([-6.673, 27.709, 45.944], 1.7),
+            Sphere::new([-7.086, 29.017, 45.404], 1.7),
+            Sphere::new([-5.941, 27.687, 40.494], 1.7),
+        ],
+    ];
+    for s in cases {
+        let params = SurfaceParams::ses(1.4).with_spacing(0.5);
+        let out = run(s, &params);
+        let (f, _) = accuracy(s, &params, &out);
+        assert!(f < max_f(0.5), "|F| {f}");
+    }
+}
+
 #[test]
 fn linear_refinement_is_close() {
     let s = [

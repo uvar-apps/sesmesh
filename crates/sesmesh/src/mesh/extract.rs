@@ -23,8 +23,12 @@ use crate::geom::Vec3;
 use crate::par;
 use crate::surface::RefineMode;
 
-/// Field evaluations per edge (at most).
+/// Field evaluations of the Newton / Illinois phase per edge (at most).
 const MAX_ITER: usize = 8;
+/// Bisection steps after an unconverged Newton / Illinois phase (at most;
+/// the bracket test ends bisection within `log2(|edge| / TOL)` steps, 16 at
+/// 0.5 Å, so this cap only guards against non-finite input).
+const MAX_BISECT: usize = 64;
 /// Stop refining when `|F| ≤ TOL` (Å).
 const TOL: f64 = 1e-5;
 /// Edge parameter clamp: vertices of edges meeting at a sample never
@@ -291,12 +295,14 @@ fn vertex(
         // regula falsi). The bracket [t0, t1] always holds the sign change.
         let (mut t0, mut g0, mut t1, mut g1) = (0.0, fa, 1.0, fb);
         let mut side = 0i8;
+        let mut converged = false;
         for _ in 0..MAX_ITER {
             let e = field.eval_local(pa + d * t, band, local);
             out.evals += 1;
             last = Some(e);
             let g = e.value;
             if g.abs() <= TOL {
+                converged = true;
                 break;
             }
             if (g < 0.0) == (g0 < 0.0) {
@@ -326,6 +332,33 @@ fn vertex(
                     0.5 * (t0 + t1)
                 }
             };
+        }
+        if !converged {
+            // Newton and Illinois assume F is close to linear along the edge.
+            // Where it is not monotone (a patch dipping almost to zero beside
+            // the crossing, two concave patches meeting at a kink) both can
+            // stall in the dip and use up MAX_ITER far from the root; the
+            // iterate computed after the last evaluation is unchecked (1.1.0
+            // placed the vertex there, up to 0.09 Å off the surface). Bisect
+            // the bracket instead: F is 1-Lipschitz and has a root in
+            // [t0, t1], so the midpoint is within TOL of the surface once the
+            // bracket spans ≤ 2·TOL. The vertex is an evaluated point.
+            let len = d.norm();
+            let neg0 = g0 < 0.0;
+            for _ in 0..MAX_BISECT {
+                t = 0.5 * (t0 + t1);
+                let e = field.eval_local(pa + d * t, band, local);
+                out.evals += 1;
+                last = Some(e);
+                if e.value.abs() <= TOL || (t1 - t0) * len <= 2.0 * TOL {
+                    break;
+                }
+                if (e.value < 0.0) == neg0 {
+                    t0 = t;
+                } else {
+                    t1 = t;
+                }
+            }
         }
     }
     let v = pa + d * t.clamp(t_min, 1.0 - t_min);
