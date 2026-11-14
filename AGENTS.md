@@ -52,10 +52,10 @@ any deviation from the plan.
 
 ## Repository state at handoff (2026-11-14)
 
-- Latest release **1.1.0** (2026-11-14; 1.0.0, 0.9.0 and 0.9.1 on 2026-11-13): tags `v0.9.0`,
-  `v0.9.1`, `v1.0.0`, `v1.1.0`, crates `sesmesh` and `sesmesh-cli` on crates.io (owner: the
+- Latest release **1.1.1** (2026-11-14; 1.1.0 the same day; 1.0.0, 0.9.0 and 0.9.1 on
+  2026-11-13): tags `v0.9.0`, `v0.9.1`, `v1.0.0`, `v1.1.0`, `v1.1.1`, crates `sesmesh` and `sesmesh-cli` on crates.io (owner: the
   user's crates.io account), GitHub releases with tier-1 binaries. `main` = `origin/main` = the
-  1.1.0 release commit (branch `release-1.1.0`). Semantic versioning from 1.0
+  1.1.1 release commit (branch `release-1.1.1`). Semantic versioning from 1.0
   (`docs/api-review.md`); 1.x keeps default output byte-identical (new behaviour is opt-in),
   except correctness fixes that bring output to what the spec and design promise (user's
   decision, 2026-11-14): patch release, CHANGELOG names the meshes that change and by how much.
@@ -168,12 +168,12 @@ tick them in #19. Summary:
 2. Cross-tool comparison (#5, #6) done 2026-11-14, merged into `main`:
    `tools/compare/` (README there), `docs/comparison.md`, `docs/validation/compare/`,
    `tests/data/reference/*.toml`, `tests/references.rs`. Close #5/#6 (and report #8/#10
-   numbers) when it is pushed. Paper draft in `paper/` (`make`; README lists the open items).
+   numbers). Paper draft in `paper/` (`make`; README lists the open items).
 3. Rare 1.1.0 refinement outliers on non-monotone edges, found by the comparison
    (`docs/validation/compare/runs.csv`, sesmesh `dist_max`): 0.22 Å on sweep entry 1RCL,
    0.19 Å 2IEM, 0.17 Å 1GZM, 0.16 Å 8Y7M (all at 0.5 Å), 0.094 Å 1AON at 0.5 Å, 0.083 Å 6VXX
-   at 0.25 Å. Fixed in d358dcf + c97a0bb (merged into `main`, unreleased);
-   release it as 1.1.1, then update `paper/` (§7, §3.5) and the site's accuracy wording ("≤ 1e-4·h"
+   at 0.25 Å. Fixed in d358dcf + c97a0bb, released in 1.1.1;
+   still to do: update `paper/` (§7, §3.5) and the site's accuracy wording ("≤ 1e-4·h"
    holds near the origin; the edge clamp is ≥ 4 f32 ulps farther out).
 4. Apple Silicon 8-P-core reference timings, x86 kernel work (#9, #13), robustness sweep to
    1 000 entries (#23), Ubuntu 26 CI image (#18), optional marching tetrahedra (#14).

@@ -6,6 +6,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-14
+
+A correctness fix for exact vertex refinement on rare non-monotone grid
+edges (default meshes change on those vertices only; every other vertex is
+bit-identical to 1.1.0), the cross-tool comparison with six SES programs, a
+paper draft and project metadata for search engines and citation.
+
 ### Added
 
 - Cross-tool comparison (#5, #6; x86 measurements for #8, #10):
@@ -387,7 +394,8 @@ listed in `docs/release.md` and GitHub issue #19).
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by
   fuzzing: a count of 377 777 773 requested 36 GB).
 
-[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/uvar-apps/sesmesh/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/uvar-apps/sesmesh/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/uvar-apps/sesmesh/compare/v0.9.1...v1.0.0
 [0.9.1]: https://github.com/uvar-apps/sesmesh/compare/v0.9.0...v0.9.1

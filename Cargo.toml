@@ -18,7 +18,7 @@ default-members = [
 ]
 
 [workspace.package]
-version = "1.1.0"
+version = "1.1.1"
 edition = "2024"
 # Highest MSRV among planned dependencies (fearless_simd 1.2: 1.89).
 # See docs/03-implementation-plan.md §2. Checked by the `msrv` CI job.
@@ -31,7 +31,7 @@ homepage = "https://uvar-apps.github.io/sesmesh/"
 # publish` is run by hand or by the release workflow, never implicitly.
 
 [workspace.dependencies]
-sesmesh = { path = "crates/sesmesh", version = "1.1.0" }
+sesmesh = { path = "crates/sesmesh", version = "1.1.1" }
 sesmesh-testkit = { path = "crates/sesmesh-testkit" }
 
 # Versions follow docs/03-implementation-plan.md §2; add entries when a phase
