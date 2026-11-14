@@ -447,6 +447,49 @@ def comparison() -> None:
         val(f"cmp-synth-fail-{t}", str(y[1]))
     write("tab-cmp-validity.tex", "\n".join(lines) + "\n")
 
+    # sesmesh 1.1.0 before the refinement fix of 1.1.1 (campaigns acc110 and
+    # sw110: the same corpus and sweep runs, kept for the defect in the text).
+    old = [r for r in rows if r["campaign"] in ("acc110", "sw110") and r["tool"] == "sesmesh"]
+    if old:
+        def off(camp, d):
+            return sum(1 for r in old if r["campaign"] == camp and (fnum(r["dist_max"]) or 0) > d)
+        val("cmp-worst-sesmesh-110", f"{max(fnum(r['dist_max']) or 0 for r in old):.2g}")
+        val("cmp-acc-off-sesmesh-110", str(off("acc110", 0.1)))
+        val("cmp-sweep-off-sesmesh-110", str(off("sw110", 0.1)))
+        val("cmp-acc-off1-sesmesh-110", str(off("acc110", 0.01)))
+        val("cmp-sweep-off1-sesmesh-110", str(off("sw110", 0.01)))
+        val("cmp-frac-sesmesh-110", pct_plain(max(fnum(r["frac_gt_0.01"]) or 0 for r in old), 3))
+    # The two capsids at 1 A: 1.1.0 in the x86 performance runs, 1.1.1 rerun
+    # on arm64 (campaign large).
+    for camp, key in (("perf", "110"), ("large", "111")):
+        rs = [r for r in rows if r["campaign"] == camp and r["tool"] == "sesmesh" and r["h"] == 1.0
+              and not r["opts"] and fnum(r["dist_max"]) is not None]
+        if rs:
+            val(f"cmp-capsid-worst-{key}", f"{max(fnum(r['dist_max']) for r in rs):.2g}")
+    # Architecture: 1.1.0 on arm64 (campaign arm110) against the x86-64 runs
+    # of the same corpus entries at 0.5 A (acc110).
+    x86 = {r["entry"]: r for r in rows if r["campaign"] == "acc110" and r["tool"] == "sesmesh" and r["h"] == 0.5}
+    arm = {r["entry"]: r for r in rows if r["campaign"] == "arm110" and r["tool"] == "sesmesh"}
+    both = sorted(set(x86) & set(arm))
+    if both:
+        val("cmp-arch-n", str(len(both)))
+        # The text says "different files for all entries, same counts".
+        assert not any(x86[e]["sha256"] == arm[e]["sha256"] for e in both), "update §7.4 wording"
+        assert all((x86[e]["vertices"], x86[e]["triangles"], x86[e]["cavities"])
+                   == (arm[e]["vertices"], arm[e]["triangles"], arm[e]["cavities"]) for e in both), "update §7.4 wording"
+        val("cmp-arch-identical", str(sum(1 for e in both if x86[e]["sha256"] == arm[e]["sha256"])))
+        val("cmp-arch-samecounts", str(sum(1 for e in both if (x86[e]["vertices"], x86[e]["triangles"], x86[e]["cavities"])
+                                           == (arm[e]["vertices"], arm[e]["triangles"], arm[e]["cavities"]))))
+        da = max(abs(fnum(arm[e]["area"]) / fnum(x86[e]["area"]) - 1) for e in both)
+        val("cmp-arch-darea", f"{da:.0e}" if da else "0")
+    # Wall time of 1.1.0 against 1.1.1 on arm64 (median of alternating runs).
+    ab = CMP / "ab-refinement-fix.txt"
+    if ab.exists():
+        for line in ab.read_text().splitlines():
+            if line.strip() and not line.startswith("#"):
+                e, h, ver, med = line.split()[:4]
+                val(f"ab-{e}-{h}-{ver.replace('.', '')}", f"{float(med):.2f}")
+
     # Cavities.
     if (CMP / "cavities.csv").exists():
         lines = []

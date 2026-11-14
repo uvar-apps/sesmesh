@@ -238,7 +238,22 @@ the exact gradient, of unit length, so one step from the linear guess
 usually lands within tolerance; steps that leave the bracket fall back to
 the Illinois method and then to bisection. With a tolerance of
 $10^{-5}$\Ang{} and at most eight evaluations, refinement needs 2.2--2.5
-field evaluations per vertex (pure Illinois needed 3.2--3.6). Evaluations
+field evaluations per vertex (pure Illinois needed 3.2--3.6). Where $g$ is
+not monotone along the edge (a concave or saddle patch dipping to within
+$10^{-4}$\Ang{} of zero next to the sign change, or two concave patches
+meeting at a kink), Newton and Illinois steps can both stall in the dip; an
+edge still unconverged after eight evaluations is therefore bisected on the
+preserved bracket until $|g| \le 10^{-5}$\Ang{} or the bracket spans at
+most $2\cdot10^{-5}$\Ang{} (at most 15 steps at $h = 0.5$\Ang). Because $F$
+is 1-Lipschitz, the vertex, always the last evaluated point, then lies
+within $10^{-5}$\Ang{} of the sign change, plus the single-precision sample
+error ($\approx 3\cdot10^{-5}$\Ang) where a bracket end is still a lattice
+node. This fallback was added in version 1.1.1 after the comparison of
+\cref{sec:cmp-validity} found vertices up to
+\val{cmp-worst-sesmesh-110}\Ang{} off the surface in 1.1.0, which used the
+next, unevaluated iterate on such edges. It changes 0.001--0.011\,\% of the
+vertices, at about 7.5 extra evaluations each (0.02\,\% more in total);
+converged edges keep their 1.1.0 vertices bit for bit. Evaluations
 are scalar double precision against per-sub-block candidate lists whose
 blockers are restricted to the spheres within reach; one evaluation costs
 about 0.5\,\textmu s, about the SIMD kernel's cost per sample, so a

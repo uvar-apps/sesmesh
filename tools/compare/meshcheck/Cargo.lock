@@ -175,7 +175,7 @@ dependencies = [
 
 [[package]]
 name = "sesmesh"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "fast-float2",
  "fearless_simd",

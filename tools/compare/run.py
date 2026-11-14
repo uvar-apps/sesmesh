@@ -5,7 +5,9 @@
 """Cross-tool comparison harness (GitHub issues #5, #6).
 
 Runs inside the sesmesh-compare container (tools/compare/Containerfile) with
-the bench directory mounted at /work. Standard library only.
+the bench directory mounted at /work. Standard library only. Outside the
+container (the sesmesh-only reruns on macOS), BENCH_DIR names the bench
+directory and GNU_TIME="" runs without GNU time (no wall/RSS fields).
 
   run.py prepare ENTRY...                 sphere files for structures
   run.py run --tool T --spacing H ENTRY... [--threads N] [--repeat R]
@@ -32,7 +34,7 @@ import time
 import tomllib
 from pathlib import Path
 
-W = Path("/work")
+W = Path(os.environ.get("BENCH_DIR", "/work"))
 BIN = W / "opt" / "bin"
 DATA = W / "data"
 SPH = DATA / "spheres"
@@ -308,7 +310,9 @@ def run_one(tool, entry, h, n, repeat, timeout, keep, opts, scratch):
            "repeat": repeat, "opts": opts, "cmd": " ".join(cmd)}
     t0 = time.time()
     try:
-        p = subprocess.run(["/usr/bin/time", "-f", "%e %U %S %M", "-o", "time.txt"] + cmd, cwd=wd,
+        gnu_time = os.environ.get("GNU_TIME", "/usr/bin/time")
+        wrap = [gnu_time, "-f", "%e %U %S %M", "-o", "time.txt"] if gnu_time else []
+        p = subprocess.run(wrap + cmd, cwd=wd,
                            capture_output=True, text=True, timeout=timeout,
                            env={**os.environ, **env})
         rec["exit"] = p.returncode
@@ -368,7 +372,7 @@ def main():
     p2.add_argument("--threads", type=int, default=os.cpu_count())
     p2.add_argument("--repeat", type=int, default=1)
     p2.add_argument("--timeout", type=float, default=1800)
-    p2.add_argument("--out", default="/work/runs/results.jsonl")
+    p2.add_argument("--out", default=str(W / "runs" / "results.jsonl"))
     p2.add_argument("--keep", action="store_true")
     p2.add_argument("--opt", action="append", default=[], help="extra program option(s)")
     p2.add_argument("entries", nargs="+")
@@ -383,7 +387,7 @@ def main():
             except Exception as ex:  # noqa: BLE001 - report and continue
                 print(e, "ERROR", ex)
         return
-    scratch = Path(os.environ.get("SCRATCH", "/work/scratch"))
+    scratch = Path(os.environ.get("SCRATCH", str(W / "scratch")))
     scratch.mkdir(parents=True, exist_ok=True)
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)

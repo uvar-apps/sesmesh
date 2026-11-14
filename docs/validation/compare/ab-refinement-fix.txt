@@ -1,0 +1,15 @@
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# Wall time of sesmesh 1.1.0 and 1.1.1 (refinement fix) on the same sphere files
+# (tools/compare meshcheck spheres), 8 threads, OBJ written to /dev/null, 9 runs
+# each, the two versions alternating. 10-core Apple Silicon development machine
+# with background load (1-minute load average 14.5 before, 16.6 after).
+# Both release builds from the v1.1.0 and v1.1.1 tags.
+#
+# entry h_A version median_s min_s runs_s
+1AON 0.5 1.1.0 3.040 2.716 2.716,3.012,3.033,3.021,3.040,3.077,3.100,3.156,3.307
+1AON 0.5 1.1.1 3.045 2.804 2.804,2.952,3.042,3.029,3.045,3.071,3.149,3.167,3.276
+4HHB 0.25 1.1.0 0.571 0.558 0.565,0.568,0.558,0.573,0.566,0.592,0.607,0.571,0.587
+4HHB 0.25 1.1.1 0.563 0.558 0.558,0.571,0.572,0.558,0.563,0.565,0.563,0.562,0.574

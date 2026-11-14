@@ -20,7 +20,7 @@ table is uniform, the same code path yields closed manifold meshes for
 every input tried, without perturbation or restarts. Exactness also makes
 the mesh testable: measuring every vertex against the exact field revealed
 both other programs' defects and a rare root-finding failure in \sesmesh{}
-1.1.0 (\cref{sec:cmp-validity}).
+1.1.0, fixed in 1.1.1 (\cref{sec:refine,sec:cmp-validity}).
 
 \paragraph{Limitations.}
 \begin{itemize}
@@ -51,7 +51,11 @@ both other programs' defects and a rare root-finding failure in \sesmesh{}
   \item \emph{Determinism scope.} Byte-identical output holds for the same
     binary and SIMD level. Across SIMD levels, sampled field values agree
     within $2\cdot10^{-5}$\Ang{} in the tests, so the mesh topology can
-    differ only at samples that close to the surface.
+    differ only at samples that close to the surface; in the comparison the
+    four x86-64 levels wrote identical files. Builds for arm64 and x86-64
+    write files that differ in the last bits of positions or normals, with
+    the same vertex, triangle and cavity counts and areas
+    (\cref{sec:cmp-robustness}).
 \end{itemize}
 
 \paragraph{Open measurements.}

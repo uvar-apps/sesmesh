@@ -1,7 +1,8 @@
 # sesmesh compared with other SES programs
 
-Status: measured 2026-11-14 with sesmesh 1.1.0 (GitHub issues #5, #6; also
-the x86 measurements of #8 and #10). Harness, container and raw numbers:
+Status: measured 2026-11-14 with sesmesh 1.1.0; the sesmesh accuracy,
+robustness and determinism runs were repeated with 1.1.1 the same day (§2,
+§5). GitHub issues #5, #6; also the x86 measurements of #8 and #10. Harness, container and raw numbers:
 [`tools/compare/`](../tools/compare/README.md),
 [`docs/validation/compare/`](validation/compare/), stored references in
 [`tests/data/reference/`](../tests/data/reference/). Section 7 is generated
@@ -11,7 +12,7 @@ by `tools/compare/report.py`; the text around it is written by hand.
 
 | Program | Version used | Method | Licence | Built from |
 |---|---|---|---|---|
-| **sesmesh** | 1.1.0 | Exact implicit SES field (Quan–Stamm) sampled on a sparse narrow-band grid, Marching Cubes, exact vertex refinement | MIT or Apache-2.0 | this repository |
+| **sesmesh** | 1.1.1 (timings: 1.1.0) | Exact implicit SES field (Quan–Stamm) sampled on a sparse narrow-band grid, Marching Cubes, exact vertex refinement | MIT or Apache-2.0 | this repository |
 | **MSMS** | 2.6.2 (2026-11-06) | Analytic reduced surface, template triangulation of the patches | Sannerlab non-commercial source-available | static Linux binary |
 | **NanoShaper** | 0.7.5 | Analytic patches (CGAL alpha shapes), ray casting along grid lines, Marching Cubes tables | GPL-3 | source (github.com/shi-scala/NanoShaper @ 107d844), CGAL 5.6, Boost 1.83 |
 | **ESES** | git 0b4cd51 (2020) | Exact SES intersections with a Cartesian grid, Marching Cubes "Lagrangian" mesh | none stated | source (github.com/WeilabMSU/ESES), OpenMP |
@@ -60,7 +61,11 @@ without a documented way to export its mesh, so it is not measured.
   Ubuntu 24.04 container (`tools/compare/Containerfile`). Accuracy and
   robustness runs shared a host (several programs at once, each pinned to
   its own cores, memory caps recorded per run); performance runs had a host
-  to themselves.
+  to themselves. The sesmesh 1.1.1 reruns (corpus, sweep, synthetic,
+  determinism, the two capsids at 1 Å) and a 1.1.0 run of the corpus at
+  0.5 Å used the 10-core Apple Silicon development machine (`host-c` in the
+  data) with the same sphere files and checker, outside the container
+  (`tools/compare/README.md`); they have no wall time or peak RSS.
 * **References.** sesmesh's h → 0 extrapolation of each corpus entry
   (`docs/validation/accuracy.csv`), MSMS's analytic area, and — the decisive
   check — NanoShaper and ESES, which also put their vertices on the exact
@@ -134,11 +139,25 @@ radii and are not comparable. Exact figures: `validation/compare/summary.md`.)
   99th-percentile vertex error 0.6 Å at 0.5 Å.
 * **EDTSurf**: closed meshes; its own radii, so distances are not
   comparable.
-* **sesmesh 1.1.0 defect found here**: on edges where F is not monotone
-  (two concave patches meeting at a kink), the root finder could stop at an
-  unevaluated point, up to 0.22 Å off (one corpus entry at 0.5 Å, three
-  sweep entries, ≤ 0.011 % of the vertices of a mesh). Fixed after 1.1.0 by
-  bisecting such edges (branch `claude/intelligent-pasteur-0b9022`).
+* **sesmesh 1.1.0 defect found here, fixed in 1.1.1**: on edges where F is
+  not monotone (a concave or saddle patch dipping close to zero next to the
+  sign change, or two concave patches meeting at a kink), the root finder
+  stopped after 8 evaluations at an unevaluated iterate. With 1.1.0, 9 of
+  106 corpus meshes and 14 of 200 sweep meshes had a vertex more than
+  0.01 Å off the SES (1 and 3 of them more than 0.1 Å), up to 0.22 Å on
+  1RCL at 0.5 Å, at most 0.003 % of a mesh's vertices; on the capsids at
+  1 Å 0.11 Å (3J3Q) and 0.088 Å (1K4R assembly). 1.1.1 bisects such edges
+  (Design §8.2). Rerun on the same sphere files (campaigns `acc`, `sw`,
+  `synth`, `det`, `large`; the 1.1.0 runs are kept as `acc110`, `sw110`,
+  `synth110`, `det110`, and the capsids' in `perf`): the same vertex,
+  triangle, component and cavity counts in every run, no vertex more than
+  0.01 Å off, and the worst vertex of each mesh at the edge clamp (≥ 4 f32
+  ulps of the largest coordinate, checked per run against the sphere file's
+  extent). Over the corpus and the sweep: 2.3·10⁻⁴ Å on 6ESB (atoms up to
+  540 Å from the origin), 1.1–1.2·10⁻⁴ Å on 17 entries with coordinates of
+  256–512 Å, at most 6.1·10⁻⁵ Å on the other 288 meshes; 4.8·10⁻⁴ Å on 3J3Q
+  (1 105 Å) and 1.1·10⁻⁴ Å on the 1K4R assembly. The synthetic input 10⁴ Å
+  from the origin keeps its 7.1·10⁻³ Å clamp distance in both versions.
 
 **Cavities (issue #6).** 2PTN has 14 cavities in sesmesh, NanoShaper and
 ESES at 0.5 and 0.25 Å, with the same total volume to 0.1 Å³ (707.8 Å³ at
@@ -169,8 +188,16 @@ Rocchia, 2013).
 * EDTSurf: aborted on both capsids (1K4R assembly, 3J3Q) at 1 Å.
 * sesa: crashed on 3J3Q.
 * Byte-identical output (comment lines ignored) for 1–16 threads and repeats
-  on 4HHB and 1AON: sesmesh, NanoShaper, ChimeraX; MSMS and EDTSurf across
-  repeats (single-threaded). ESES's 1AON mesh differed at every thread count.
+  on 4HHB and 1AON: sesmesh (1.1.1 on arm64, 1.1.0 on x86-64), NanoShaper,
+  ChimeraX; MSMS and EDTSurf across repeats (single-threaded). ESES's 1AON
+  mesh differed at every thread count.
+* sesmesh's four x86-64 SIMD levels (scalar, SSE4.2, AVX2, AVX-512) wrote
+  identical files for 4HHB and 1AON at 0.25 Å. Across architectures the
+  files differ: 1.1.0 on arm64 (campaign `arm110`) and on x86-64 wrote
+  different files for all 53 corpus entries at 0.5 Å, with the same vertex,
+  triangle and cavity counts, areas and volumes (to meshcheck's 10⁻⁶) and
+  worst vertex distances, i.e. differences in the last bits of positions or
+  normals. Determinism is a property of one binary, as the design states.
 
 ## 7. Performance and x86 measurements
 

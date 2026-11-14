@@ -6,6 +6,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Cross-tool comparison: the sesmesh accuracy, sweep, synthetic,
+  determinism and 1 Å capsid runs were repeated with 1.1.1 (no vertex more
+  than 0.01 Å off the SES; 1.1.0 had up to 0.22 Å); the 1.1.0 runs stay in
+  `docs/validation/compare/` as separate campaigns. `tools/compare/run.py`
+  runs outside the container (`BENCH_DIR`, `GNU_TIME`).
+- Paper draft describes 1.1.1 (refinement fallback in §3.5, reruns in §7).
+
 ## [1.1.1] - 2026-11-14
 
 A correctness fix for exact vertex refinement on rare non-monotone grid

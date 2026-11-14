@@ -63,6 +63,23 @@ bash ~/sesmesh-bench/src/sesmesh/tools/compare/perf.sh a
 python3 tools/compare/report.py RUNS_DIR docs/validation/compare --references tests/data/reference
 ```
 
+`report.py` takes the campaign from the file name up to the first `-`
+(`acc-msms.jsonl` → `acc`). The published data hold the sesmesh 1.1.1
+reruns in `acc`, `sw`, `synth` and `det`, and the original 1.1.0 runs of
+the same inputs in `acc110`, `sw110`, `synth110` and `det110`; the `perf`
+campaign is 1.1.0. sesmesh-only reruns need no container: build `sesmesh`
+and `meshcheck`, put both into `BENCH/opt/bin`, link
+`BENCH/data/cache` to `tests/data/cache` and `BENCH/src/sesmesh` to the
+checkout, then
+
+```bash
+BENCH_DIR=BENCH GNU_TIME="" BENCH_HOST=workstation python3 tools/compare/run.py run --tool sesmesh --spacing 0.5 --threads 4 --out BENCH/runs/acc-sesmesh111.jsonl @validation
+```
+
+(`GNU_TIME=""` skips GNU time, which macOS lacks; such runs have no wall
+time or peak RSS). The synthetic set also needs NanoShaper's
+`example/fullerene.xyzr` in `BENCH/src/NanoShaper/example/`.
+
 ## Notes
 
 * The sphere files keep three decimals of the coordinates (as in the PDB

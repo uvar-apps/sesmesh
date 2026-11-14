@@ -174,11 +174,14 @@ tick them in #19. Summary:
    `tests/data/reference/*.toml`, `tests/references.rs`. Close #5/#6 (and report #8/#10
    numbers). Paper draft in `paper/` (`make`; README lists the open items).
 3. Rare 1.1.0 refinement outliers on non-monotone edges, found by the comparison
-   (`docs/validation/compare/runs.csv`, sesmesh `dist_max`): 0.22 Å on sweep entry 1RCL,
-   0.19 Å 2IEM, 0.17 Å 1GZM, 0.16 Å 8Y7M (all at 0.5 Å), 0.094 Å 1AON at 0.5 Å, 0.083 Å 6VXX
-   at 0.25 Å. Fixed in d358dcf + c97a0bb, released in 1.1.1;
-   still to do: update `paper/` (§7, §3.5) and the site's accuracy wording ("≤ 1e-4·h"
-   holds near the origin; the edge clamp is ≥ 4 f32 ulps farther out).
+   (`docs/validation/compare/runs.csv`, campaigns `acc110`/`sw110`, sesmesh `dist_max`):
+   0.22 Å on 1RCL, 0.19 Å 2IEM, 0.17 Å 1GZM, 0.16 Å 8Y7M (all at 0.5 Å), 0.094 Å 1AON at
+   0.5 Å, 0.083 Å 6VXX at 0.25 Å. Fixed in d358dcf + c97a0bb, released in 1.1.1. The sesmesh comparison runs
+   were repeated with 1.1.1 on this Mac (campaigns `acc`/`sw`/`synth`/`det`/`large`; 1.1.0
+   kept as `*110`, `tools/compare/README.md`) and the paper describes 1.1.1 (§3.5, §7).
+   Still to do: the site's accuracy wording ("≤ 1e-4·h" holds near the origin; the edge
+   clamp is ≥ 4 f32 ulps farther out). arm64 and x86-64 builds write files that differ
+   in the last bits (same counts and areas); determinism is per binary.
 4. Apple Silicon 8-P-core reference timings, x86 kernel work (#9, #13), robustness sweep to
    1 000 entries (#23), Ubuntu 26 CI image (#18), optional marching tetrahedra (#14).
 

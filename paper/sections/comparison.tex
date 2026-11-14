@@ -5,7 +5,7 @@
 \section{Comparison with other programs}
 \label{sec:comparison}
 
-We compared \sesmesh{} 1.1.0 with five programs that produce SES meshes and
+We compared \sesmesh{} 1.1.1 with five programs that produce SES meshes and
 one that computes analytic SES areas (\cref{tab:cmp-programs}), on the
 \val{corpus-n}-entry validation corpus at $h = 0.5$ and 0.25\Ang, the
 \val{sweep-n}-entry random sweep at 0.5\Ang, nine degenerate synthetic
@@ -54,7 +54,13 @@ vertex to the exact SES of the same spheres, $|F(\vect v)|$, and the angle
 between each vertex normal and the analytic normal. All runs used two
 identical machines with an AMD Ryzen AI Max+ 395 (16 Zen~5 cores, SMT off,
 128\,GB) and one Ubuntu 24.04 container holding every program; performance
-runs had a machine to themselves.
+runs had a machine to themselves. The comparison was first run with
+\sesmesh{} 1.1.0; after the fix of \cref{sec:refine}, the \sesmesh{} runs on
+the corpus, the sweep, the synthetic inputs and the determinism set were
+repeated with 1.1.1 on the arm64 machine of \cref{sec:performance} with the
+same sphere files and checker. Tables and numbers in this section are those
+of 1.1.1 except the timings (\cref{sec:cmp-performance}); the 1.1.0 runs
+remain in the published data.
 
 \subsection{Accuracy}
 \label{sec:cmp-accuracy}
@@ -134,15 +140,23 @@ are), and its grid distances leave a median 99th-percentile vertex error of
 own radius model and are not comparable.
 
 The checker also exposed a defect in \sesmesh{} 1.1.0 itself: on a few edges
-where $F$ is not monotone (two concave patches meeting at a kink), the root
-finder exhausted its evaluations and placed the vertex at an unevaluated
-point, up to \val{cmp-worst-sesmesh}\Ang{} from the surface (one corpus
-entry at 0.5\Ang{} and three sweep entries; at most 0.011\,\% of the
-vertices of an affected mesh). This has since been fixed by bisecting such
-edges, so every vertex is an evaluated point within $2.4\cdot10^{-5}$\Ang{}
-of the SES away from the edge clamp \todo{name the release that contains the
-fix (development branch \code{claude/intelligent-pasteur-0b9022}) and update
-\cref{sec:refine,sec:analytic} accordingly}.
+where $F$ is not monotone, the root finder exhausted its eight evaluations
+and placed the vertex at the next, unevaluated iterate
+(\cref{sec:refine}). In the 1.1.0 runs, \val{cmp-acc-off1-sesmesh-110} of
+the \val{cmp-acc-meshed-sesmesh} corpus meshes and
+\val{cmp-sweep-off1-sesmesh-110} of the \val{cmp-sweep-meshed-sesmesh}
+sweep meshes had a vertex more than 0.01\Ang{} from the SES
+(\val{cmp-acc-off-sesmesh-110} and \val{cmp-sweep-off-sesmesh-110} of them
+more than 0.1\Ang), up to \val{cmp-worst-sesmesh-110}\Ang{} on the sweep
+entry 1RCL; such vertices were at most \val{cmp-frac-sesmesh-110}\,\% of a
+mesh's vertices; on the capsids at 1\Ang{} the worst vertex was
+\val{cmp-capsid-worst-110}\Ang{} off. Version 1.1.1 bisects these edges.
+Rerun on the same sphere files, it produced the same vertex, triangle,
+component and cavity counts in every run, and the worst vertex of each mesh
+now lies at the edge clamp of \cref{sec:refine}, four single-precision ulps
+of the largest coordinate: at most \val{cmp-worst-sesmesh}\Ang{} over the
+corpus and the sweep (6ESB, whose atoms reach 540\Ang{} from the origin)
+and \val{cmp-capsid-worst-111}\Ang{} on 3J3Q (1\,105\Ang).
 
 \begin{table}[t]
   \centering
@@ -224,15 +238,27 @@ needed 47\,GiB for the 1K4R capsid.
 
 Outputs were compared byte for byte (ignoring comment lines, since
 NanoShaper writes a date into its header) for 1, 2, 4, 8 and 16 threads and
-repeated runs on 4HHB and 1AON. \sesmesh, NanoShaper and ChimeraX produced
-identical files at every thread count, MSMS and EDTSurf (single-threaded)
-across repeats; ESES's output for 1AON differed at every thread count.
+repeated runs on 4HHB and 1AON. \sesmesh{} (1.1.1 on arm64, 1.1.0 on
+x86-64), NanoShaper and ChimeraX produced identical files at every thread
+count, MSMS and EDTSurf (single-threaded) across repeats; ESES's output for
+1AON differed at every thread count. \sesmesh's four x86-64 SIMD levels also
+wrote identical files for 4HHB and 1AON at 0.25\Ang. Across architectures
+the files differ: the arm64 and x86-64 builds of 1.1.0 wrote different
+files for all \val{cmp-arch-n} corpus entries at 0.5\Ang, yet with the same
+vertex, triangle and cavity counts and areas equal to the checker's
+$10^{-6}$\,\AA$^2$, so the differences are in the last bits of positions
+or normals (\cref{sec:discussion}).
 
 \subsection{Performance}
 \label{sec:cmp-performance}
 
 \Cref{tab:cmp-perf} lists wall time and peak memory on the benchmark set,
-with all 16 cores available to the multi-threaded programs. \sesmesh{},
+with all 16 cores available to the multi-threaded programs. The \sesmesh{}
+timings are those of 1.1.0: the fallback of 1.1.1 adds 0.02\,\% field
+evaluations, and on the arm64 machine the two versions took
+\val{ab-1AON-0.5-110} and \val{ab-1AON-0.5-111}\,s for 1AON at 0.5\Ang{}
+and \val{ab-4HHB-0.25-110} and \val{ab-4HHB-0.25-111}\,s for 4HHB at
+0.25\Ang{} (8 threads, median of nine alternating runs). \sesmesh{},
 ESES and ChimeraX completed every entry; NanoShaper, MSMS and EDTSurf
 failed on the largest. \sesmesh{} was the fastest program on every entry at
 matched resolution: NanoShaper took \val{ratio-nanoshaper-min} to
