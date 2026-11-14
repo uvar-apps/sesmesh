@@ -691,20 +691,35 @@ blocker ordering), reuse of the sampling gather for refinement (≈ 5 %).
      change, or two concave patches meeting at a kink — Newton and Illinois
      both stall in the dip (Illinois halves the far end's value each step and
      creeps), so such vertices were up to 0.094 Å off the SES (1AON at
-     0.5 Å; 4HHB 2.4·10⁻³ Å, 6VXX at 0.25 Å 0.083 Å). The candidate lists
-     were not at fault: local, global and brute-force oracle values agree to
-     the last digit along these edges. Now an edge still unconverged after 8
-     evaluations is bisected on the preserved bracket until $|g| \le 10^{-5}$
-     Å or the bracket spans ≤ $2\cdot10^{-5}$ Å ($F$ is 1-Lipschitz, so the
-     midpoint is then within $10^{-5}$ Å of the root), and the vertex is
-     always an evaluated point. Converged edges are untouched (same
-     iterates, byte-identical vertices); 0.001–0.011 % of the vertices change
-     (1CRN none, 4HHB 17/10, 1AON 158/107, 6VXX 74/42 at 0.5/0.25 Å), at
-     ≈ 7.5 extra evaluations each (+0.02 % in total). Vertices not on the
-     edge clamp (step 3) are now within 2.4·10⁻⁵ Å of the SES on these
-     structures (refinement tolerance plus `f32` storage); regression test
-     `refinement_converges_on_non_monotone_edges` (4- and 3-atom sets reduced
-     from 1AON and 4HHB).
+     0.5 Å; 4HHB 2.4·10⁻³ Å, 6VXX at 0.25 Å 0.083 Å), with normals up to
+     134° off. The candidate lists were not at fault: local, global and
+     brute-force oracle values agree to the last digit along these edges.
+     Now an edge still unconverged after 8 evaluations is bisected on the
+     preserved bracket until $|g| \le 10^{-5}$ Å or the bracket spans
+     ≤ $2\cdot10^{-5}$ Å (at most 15 steps at 0.5 Å). $F$ is 1-Lipschitz, so
+     the midpoint is then within $10^{-5}$ Å of the sign change. A bracket
+     end still at a lattice node carries the `f32` sample, whose sign can
+     differ from $F$'s only where $|F|$ is below the kernel error
+     (≈ 3·10⁻⁵ Å, §7.5): that node is then as close to the surface, and the
+     bound becomes $10^{-5}$ Å plus that error. The vertex is the last
+     evaluated point, moved only by the edge clamp (step 3; its attributes
+     come from that evaluation, as for every vertex). Converged edges are
+     untouched (same iterates, byte-identical vertices; unit test
+     `converged_edges_keep_their_1_1_vertices` compares 14 400 of them bit
+     for bit with a frozen copy of the 1.1.0 loop); 0.001–0.011 % of the
+     vertices change (1CRN none, 4HHB 17/10, 1AON 158/107, 6VXX 74/42 at
+     0.5/0.25 Å), at ≈ 7.5 extra evaluations each (+0.02 % in total).
+     Vertices not on the edge clamp are now within 2.4·10⁻⁵ Å of the SES on
+     these structures (refinement tolerance plus `f32` storage); regression
+     test `refinement_converges_on_non_monotone_edges` (4-, 3- and 5-atom
+     sets reduced from 1AON, 4HHB and 6VXX, normals checked too).
+     *Rejected:* a Dekker/Brent-style safeguard inside the loop (bisect
+     whenever the bracket has not halved in two steps) also catches these
+     edges, but Newton usually converges from one side and keeps one bracket
+     end, so the rule fires on edges that converge today: it would change
+     0.3–1.8 % of the converged edges (1CRN, 4HHB, 1AON at 0.5/0.25 Å;
+     199 of 13 812 on 1CRN at 0.5 Å) instead of only the stalled ones, so
+     the fallback stays a separate loop after the cap.
      `RefineMode::Linear` skips this (fast preview, one evaluation for the
      normal);
   3. clamp $t \in [10^{-4}, 1-10^{-4}]$ so vertices from edges meeting at a

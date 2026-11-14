@@ -56,6 +56,12 @@ Review of the `sesmesh` public API against the
   variants to non-exhaustive enums, functions and features is a minor change;
   removing or renaming public items, changing signatures or default outputs
   (mesh geometry for the same parameters) is a major change.
+* Exception (2026-11-14): a correctness fix that brings default output to
+  what the specification and design document promise (for example vertices
+  within the refinement tolerance of the SES, Design §8.2) may change
+  default meshes in a patch release. The changelog lists it under "Fixed"
+  and says which meshes change and by how much; output that is not wrong
+  still changes only behind an option or in 2.0.
 * MSRV (currently 1.89) may rise in minor releases, announced in the
   changelog; it is checked in CI.
 * Output determinism (identical OBJ bytes for any thread count) is part of

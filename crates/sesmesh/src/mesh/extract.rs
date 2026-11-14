@@ -26,8 +26,8 @@ use crate::surface::RefineMode;
 /// Field evaluations of the Newton / Illinois phase per edge (at most).
 const MAX_ITER: usize = 8;
 /// Bisection steps after an unconverged Newton / Illinois phase (at most;
-/// the bracket test ends bisection within `log2(|edge| / TOL)` steps, 16 at
-/// 0.5 Å, so this cap only guards against non-finite input).
+/// the bracket test ends bisection within `⌈log2(|edge| / (2·TOL))⌉` steps,
+/// 15 at 0.5 Å, so this cap only guards against non-finite input).
 const MAX_BISECT: usize = 64;
 /// Stop refining when `|F| ≤ TOL` (Å).
 const TOL: f64 = 1e-5;
@@ -340,9 +340,15 @@ fn vertex(
             // stall in the dip and use up MAX_ITER far from the root; the
             // iterate computed after the last evaluation is unchecked (1.1.0
             // placed the vertex there, up to 0.09 Å off the surface). Bisect
-            // the bracket instead: F is 1-Lipschitz and has a root in
-            // [t0, t1], so the midpoint is within TOL of the surface once the
-            // bracket spans ≤ 2·TOL. The vertex is an evaluated point.
+            // the bracket instead. F is 1-Lipschitz, so once the bracket
+            // spans ≤ 2·TOL its midpoint is within TOL of the sign change.
+            // An end still at a lattice sample carries the f32 kernel value,
+            // whose sign can be wrong only where |F| is below its rounding
+            // error (≈ 3·10⁻⁵ Å, Design §7.5): such an end is itself that
+            // close to the surface, so the bound becomes TOL plus that error.
+            // The vertex is the last evaluated point, up to the edge clamp
+            // below (its attributes come from that evaluation, as for
+            // converged edges).
             let len = d.norm();
             let neg0 = g0 < 0.0;
             for _ in 0..MAX_BISECT {
@@ -529,4 +535,205 @@ pub(crate) fn assemble(bricks: &[[i32; 3]], chunk: usize, parts: Vec<ChunkMesh>)
         mesh.triangles.extend(tris?);
     }
     Ok(mesh)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::field::{SesField, SimdLevel};
+    use crate::geom::Sphere;
+    use sesmesh_testkit::clusters::{Rng, random_chain};
+
+    /// The exact refinement of 1.1.0, frozen: the edge parameter of the
+    /// vertex, the evaluation its attributes came from and whether it
+    /// converged (otherwise 1.1.0 used the next, unevaluated iterate).
+    fn refine_1_1(engine: &Engine, edge: &Edge, local: &LocalCandidates) -> (f64, NearEval, bool) {
+        let &Edge { pa, pb, fa, fb, .. } = edge;
+        let d = pb - pa;
+        let mut t = (fa / (fa - fb)).clamp(0.0, 1.0);
+        let (mut t0, mut g0, mut t1, mut g1) = (0.0, fa, 1.0, fb);
+        let mut side = 0i8;
+        let mut last = None;
+        for _ in 0..MAX_ITER {
+            let e = engine.field.eval_local(pa + d * t, engine.band, local);
+            last = Some(e);
+            let g = e.value;
+            if g.abs() <= TOL {
+                return (t, e, true);
+            }
+            if (g < 0.0) == (g0 < 0.0) {
+                t0 = t;
+                g0 = g;
+                if side == -1 {
+                    g1 *= 0.5;
+                }
+                side = -1;
+            } else {
+                t1 = t;
+                g1 = g;
+                if side == 1 {
+                    g0 *= 0.5;
+                }
+                side = 1;
+            }
+            let slope = gradient(engine, pa + d * t, &e).map_or(0.0, |n| n.dot(d));
+            let newton = t - g / slope;
+            t = if slope.abs() > 1e-3 * d.norm() && newton > t0 && newton < t1 {
+                newton
+            } else {
+                let s = (t0 * g1 - t1 * g0) / (g1 - g0);
+                if s.is_finite() && s > t0 && s < t1 {
+                    s
+                } else {
+                    0.5 * (t0 + t1)
+                }
+            };
+        }
+        (t, last.expect("MAX_ITER > 0"), false)
+    }
+
+    /// Every crossing lattice edge of `spheres` at spacing `h`: vertices of
+    /// edges that converged in 1.1.0 must be bit-identical (1.x keeps
+    /// default meshes), the others must now lie on the surface. Returns the
+    /// counts of both.
+    fn compare_with_1_1(spheres: &[Sphere], probe: f64, h: f64) -> (usize, usize) {
+        let field = SesField::new(spheres, probe, SurfaceKind::Ses).unwrap();
+        let engine = Engine::new(field, h, 10, SimdLevel::Auto).unwrap();
+        let t_min = edge_clamp(&engine);
+        let reach = probe + 2.0 * h;
+        let (mut lo, mut hi) = ([i64::MAX; 3], [i64::MIN; 3]);
+        for s in spheres {
+            for a in 0..3 {
+                lo[a] = lo[a].min(((s.center[a] - s.radius - reach) / h).floor() as i64);
+                hi[a] = hi[a].max(((s.center[a] + s.radius + reach) / h).ceil() as i64);
+            }
+        }
+        let n = [0, 1, 2].map(|a| (hi[a] - lo[a] + 1) as usize);
+        let point = |i: [usize; 3]| {
+            Vec3::new(
+                (lo[0] + i[0] as i64) as f64 * h,
+                (lo[1] + i[1] as i64) as f64 * h,
+                (lo[2] + i[2] as i64) as f64 * h,
+            )
+        };
+        // Samples rounded to f32 like the kernel's.
+        let mut values = Vec::with_capacity(n[0] * n[1] * n[2]);
+        for z in 0..n[2] {
+            for y in 0..n[1] {
+                for x in 0..n[0] {
+                    let v = engine.field.value(point([x, y, z]).to_array()) as f32;
+                    values.push(f64::from(v));
+                }
+            }
+        }
+        let at = |i: [usize; 3]| values[(i[2] * n[1] + i[1]) * n[0] + i[0]];
+        let (mut converged, mut stalled) = (0, 0);
+        let mut local = LocalCandidates::default();
+        for z in 0..n[2] {
+            for y in 0..n[1] {
+                for x in 0..n[0] {
+                    let i = [x, y, z];
+                    for axis in 0..3 {
+                        let mut j = i;
+                        j[axis] += 1;
+                        if j[axis] == n[axis] || (at(i) < 0.0) == (at(j) < 0.0) {
+                            continue;
+                        }
+                        let (pa, pb) = (point(i), point(j));
+                        let edge = Edge {
+                            pa,
+                            pb,
+                            fa: at(i),
+                            fb: at(j),
+                            t_min,
+                        };
+                        engine.field.gather_local(
+                            (pa + pb) * 0.5,
+                            0.5 * h + 1e-9,
+                            engine.band,
+                            &mut local,
+                        );
+                        let mut out = BrickMesh::default();
+                        vertex(&engine, &edge, RefineMode::Exact, &local, &mut out);
+                        let (t, e, ok) = refine_1_1(&engine, &edge, &local);
+                        if ok {
+                            converged += 1;
+                            let d = pb - pa;
+                            let v = pa + d * t.clamp(t_min, 1.0 - t_min);
+                            let outward = if edge.fa < 0.0 { d } else { -d }.normalized();
+                            let (normal, patch, atom) = attributes(&engine, v, &e, outward);
+                            let bits = |p: Vec3| p.to_array().map(|c| (c as f32).to_bits());
+                            let got = |p: [f32; 3]| p.map(f32::to_bits);
+                            assert_eq!(got(out.positions[0]), bits(v), "{pa:?} axis {axis}");
+                            assert_eq!(got(out.normals[0]), bits(normal), "{pa:?} axis {axis}");
+                            assert_eq!((out.atoms[0], out.patches[0]), (atom, patch));
+                        } else {
+                            stalled += 1;
+                            let f = engine.field.value(out.positions[0].map(f64::from));
+                            assert!(f.abs() < 3.0 * TOL, "{pa:?} axis {axis}: |F| {f}");
+                        }
+                    }
+                }
+            }
+        }
+        (converged, stalled)
+    }
+
+    #[test]
+    fn converged_edges_keep_their_1_1_vertices() {
+        // Atoms around edges where Newton / Illinois stall (1AON, 4HHB, and
+        // 6VXX moved by −250 Å, as in `tests/surface.rs`), and a random chain.
+        let mut sets: Vec<(Vec<Sphere>, f64)> = vec![
+            (
+                vec![
+                    Sphere::new([42.580, -79.518, -23.569], 1.52),
+                    Sphere::new([45.767, -76.655, -20.023], 1.7),
+                    Sphere::new([46.735, -77.095, -22.324], 1.7),
+                    Sphere::new([45.949, -76.134, -21.455], 1.7),
+                ],
+                1.4,
+            ),
+            (
+                vec![
+                    Sphere::new([-6.673, 27.709, 45.944], 1.7),
+                    Sphere::new([-7.086, 29.017, 45.404], 1.7),
+                    Sphere::new([-5.941, 27.687, 40.494], 1.7),
+                ],
+                1.4,
+            ),
+            (
+                [
+                    ([248.493, 187.309, 217.927], 1.7),
+                    ([250.981, 187.532, 218.118], 1.55),
+                    ([250.493, 187.404, 212.713], 1.52),
+                    ([252.171, 185.663, 212.761], 1.7),
+                    ([251.518, 184.731, 213.616], 1.52),
+                ]
+                .iter()
+                .map(|&(c, r): &([f64; 3], f64)| Sphere::new(c.map(|x| x - 250.0), r))
+                .collect(),
+                1.4,
+            ),
+        ];
+        let chain = random_chain(&mut Rng::new(7), 30);
+        sets.push((
+            chain
+                .centers
+                .iter()
+                .zip(&chain.radii)
+                .map(|(&c, &r)| Sphere::new(c, r))
+                .collect(),
+            chain.probe,
+        ));
+        let (mut converged, mut stalled) = (0, 0);
+        for (spheres, probe) in &sets {
+            for h in [0.5, 0.25] {
+                let (c, s) = compare_with_1_1(spheres, *probe, h);
+                converged += c;
+                stalled += s;
+            }
+        }
+        assert!(stalled > 0, "no edge exercises the bisection");
+        assert!(converged > 10_000, "{converged} converged edges");
+    }
 }

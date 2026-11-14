@@ -56,7 +56,9 @@ any deviation from the plan.
   `v0.9.1`, `v1.0.0`, `v1.1.0`, crates `sesmesh` and `sesmesh-cli` on crates.io (owner: the
   user's crates.io account), GitHub releases with tier-1 binaries. `main` = `origin/main` = the
   1.1.0 release commit (branch `release-1.1.0`). Semantic versioning from 1.0
-  (`docs/api-review.md`); 1.x keeps default output byte-identical (new behaviour is opt-in).
+  (`docs/api-review.md`); 1.x keeps default output byte-identical (new behaviour is opt-in),
+  except correctness fixes that bring output to what the spec and design promise (user's
+  decision, 2026-11-14): patch release, CHANGELOG names the meshes that change and by how much.
 - Website: https://uvar-apps.github.io/sesmesh/ (GitHub Pages, source "GitHub Actions",
   deployed from `main` by `.github/workflows/pages.yml`; branch `website` holds its history).
 - The crates.io token lives in the user's `~/.cargo/credentials.toml` (never read or print it).

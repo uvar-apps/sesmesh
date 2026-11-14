@@ -13,12 +13,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   almost to zero next to the crossing): Newton and Illinois stalled, and
   after the 8-evaluation cap the vertex was put at the next, unevaluated
   iterate (1AON at 0.5 Å: 0.094 Å off; 4HHB 0.0024 Å; 6VXX at 0.25 Å
-  0.083 Å). Such edges are now bisected on the preserved sign-change bracket
-  to within 10⁻⁵ Å, and vertex normal, patch and atom come from the
-  vertex's own evaluation. Found by the cross-tool comparison (#5, #6). This
-  bug fix changes default meshes: 0.001–0.011 % of the vertices move (by up
-  to 0.15 Å), triangles are unchanged (1CRN: no change; 4HHB 17 / 10,
-  1AON 158 / 107, 6VXX 74 / 42 vertices at 0.5 / 0.25 Å).
+  0.083 Å), with the normal, patch and atom of the previous evaluation
+  (normals up to 134° off). Such edges are now bisected on the preserved
+  sign-change bracket to within 10⁻⁵ Å (plus the `f32` sample error where
+  an end of the bracket is still a grid node), and the vertex is the
+  evaluated point its attributes come from (up to the usual edge clamp).
+  Found by the cross-tool comparison (#5, #6). This bug fix changes default
+  meshes, which the semver policy now allows for correctness fixes in a
+  patch release (`docs/api-review.md`): 0.001–0.011 % of the vertices move
+  (by up to 0.15 Å), triangles are unchanged (1CRN: no change; 4HHB 17 / 10,
+  1AON 158 / 107, 6VXX 74 / 42 vertices at 0.5 / 0.25 Å). Vertices of edges
+  that converged before are bit-identical.
 
 ### Changed
 
