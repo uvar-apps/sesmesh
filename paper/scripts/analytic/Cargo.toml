@@ -1,0 +1,23 @@
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+# Stand-alone helper for the paper (not a workspace member): meshes the
+# analytic one- and two-sphere references of crates/sesmesh/tests/surface.rs
+# at several grid spacings and prints a CSV (paper/data/analytic.csv).
+
+[package]
+name = "paper-analytic"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+sesmesh = { path = "../../../crates/sesmesh" }
+sesmesh-testkit = { path = "../../../crates/sesmesh-testkit" }
+
+# Own (empty) workspace so the repository workspace does not claim it.
+[workspace]
+
+[profile.release]
+debug = false

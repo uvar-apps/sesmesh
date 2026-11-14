@@ -1,0 +1,39 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+
+\begin{abstract}
+\noindent
+The solvent-excluded surface (SES), or Connolly surface, is a widely used
+model of the boundary between a macromolecule and its solvent. Programs that
+triangulate it trade accuracy, robustness and scale against each other:
+analytic patch methods are exact but fragile in singular configurations,
+while grid methods are robust but approximate the surface by the voxel size.
+We present \sesmesh{}, a Rust library and command-line tool that meshes the
+\emph{exact} SES on a uniform grid. It samples the implicit SES distance
+function of Quan and Stamm, built on the arrangement of solvent-accessible
+spheres, circles and probe positions, only in a sparse narrow band of bricks
+selected by provably conservative bounds. Marching Cubes with a uniform
+face-ambiguity rule yields closed, consistently oriented, edge-manifold
+meshes; every vertex is refined onto the exact surface (within
+$10^{-4}h$ for grid spacing $h$) and carries the analytic normal, patch type
+and nearest atom. Internal cavities are classified exactly by signed volume.
+On a corpus of \val{corpus-n} structures (\val{corpus-atoms-min} to
+\val{corpus-atoms-max} atoms) the mesh area and volume differ from their
+$h \to 0$ extrapolation by \val{area-mean-0.25}\,\% and
+\val{vol-mean-0.25}\,\% on average at $h = 0.25$\Ang, with clean $O(h^2)$
+convergence; \val{sweep-ok} of \val{sweep-n} randomly drawn Protein Data
+Bank entries produced valid meshes. The output is byte-identical for any
+number of threads. On a 10-core Apple Silicon machine, a 545\,040-atom virus
+capsid is meshed at 1\Ang{} in \val{large-1K4R-seconds}\,s and a
+2.44-million-atom capsid in \val{large-3J3Q-seconds}\,s
+(\val{large-3J3Q-tri}\,M triangles). \sesmesh{} is free software
+(MIT or Apache-2.0) available from crates.io and GitHub.
+\todo{Final abstract length/format depends on the target venue (arXiv: no
+limit; Bioinformatics application note: 150 words with structured headings;
+J.\ Appl.\ Cryst.: unstructured).}
+\end{abstract}
+
+\noindent\textbf{Keywords:} solvent excluded surface; Connolly surface;
+molecular surface; implicit surface; Marching Cubes; mesh generation;
+deterministic parallelism; Rust.

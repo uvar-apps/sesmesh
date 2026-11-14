@@ -1,0 +1,67 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+
+\section{Availability}
+\label{sec:availability}
+
+\begin{center}
+\small
+\begin{tabular}{@{}>{\bfseries}l p{0.7\linewidth}@{}}
+  Software & \sesmesh{} 1.1.0, released 2026-11-14 (first public release
+    0.9.0 and 1.0.0 on 2026-11-13); library crate \code{sesmesh}, command-line
+    crate \code{sesmesh-cli} (binary \code{sesmesh})~\cite{sesmesh} \\
+  Source code & \url{https://github.com/uvar-apps/sesmesh} \\
+  Packages & \url{https://crates.io/crates/sesmesh},
+    \url{https://crates.io/crates/sesmesh-cli};
+    API documentation at \url{https://docs.rs/sesmesh} \\
+  Binaries & GitHub releases for macOS arm64, Linux x86-64 and arm64,
+    Windows x86-64 \\
+  Website & \url{https://uvar-apps.github.io/sesmesh/} (guides, tutorials,
+    gallery, interactive viewer) \\
+  Archive & Zenodo, DOI \todo{mint a Zenodo DOI for v1.1.0 (or the version
+    the paper describes) and cite it here and in \code{CITATION.cff}} \\
+  Licence & MIT or Apache-2.0, at the user's option \\
+  Language & Rust 1.89 or newer; no unsafe code; dependencies from
+    crates.io only \\
+  Install & \code{cargo install sesmesh-cli}; library: \code{sesmesh = "1"}
+    in \code{Cargo.toml} \\
+\end{tabular}
+\end{center}
+
+\paragraph{Data and reproducibility.}
+The validation data used in this paper are in the repository
+(\code{docs/validation/}: accuracy study, robustness sweep, large inputs),
+together with the commands that regenerate them. Structures are fetched from
+the RCSB PDB by \code{cargo xtask fetch}, whose lock file pins their SHA-256
+checksums; PDB data are in the public domain (CC0). The paper's sources,
+figures, the script that turns the data into its tables and plots, and the
+program that produces the analytic-reference data are in \code{paper/}
+(\cref{app:reproduce}).
+
+\section*{Declarations}
+
+\paragraph{Use of AI tools.}
+\todo{Author to review and finalize this statement, and check it against
+the target venue's policy.} The software, its tests and documentation,
+and a first draft of this manuscript were developed with the help of an AI
+coding assistant (Anthropic's Claude Opus 5.5, used through Claude Code).
+Commits to which the assistant contributed carry a
+\code{Co-Authored-By: Claude} trailer in the project's version history
+(30 of the 31 commits at the time of writing). The author designed and directed
+the work, reviewed the code, the measurements and the text, and takes full
+responsibility for the content.
+
+\paragraph{Competing interests.}
+\todo{Confirm: the author declares no competing interests.}
+
+\paragraph{Funding.}
+\todo{Funding statement, or ``This work received no specific funding.''}
+
+\paragraph{Author contributions.}
+\todo{CRediT statement if the venue requires one; single author.}
+
+\paragraph{Acknowledgements.}
+\todo{Acknowledgements, if any.} The atomic coordinates used in this work
+were obtained from the Protein Data Bank \todo{cite the RCSB PDB / wwPDB
+reference recommended by the archive}.

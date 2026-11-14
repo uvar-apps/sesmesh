@@ -1,0 +1,120 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+
+\section{The SES as a level set}
+\label{sec:background}
+
+\paragraph{Definitions.}
+Let atom $i = 1,\dots,N$ have centre $\vect c_i$ and radius $r_i > 0$, let
+$r_p \ge 0$ be the probe radius and $R_i = r_i + r_p$ the expanded radii.
+The open SAS solid is $A = \bigcup_i B^\circ(\vect c_i, R_i)$ and the SAS is
+$\partial A$. The \emph{probe-accessible region}
+\begin{equation}
+  P = \mathbb R^3 \setminus A
+    = \{\vect x : \norm{\vect x - \vect c_i} \ge R_i \ \forall i\}
+\end{equation}
+is the closed set of feasible probe centres. The \emph{excluded region}
+$E = \{\vect x : d(\vect x, P) \ge r_p\}$ is the complement of the union of
+all probe balls that do not overlap an atom~\cite{greer1978}, and the SES is
+$\partial E$.
+
+\paragraph{The SES field.}
+\sesmesh{} samples
+\begin{equation}
+  F(\vect x) = r_p - d(\vect x, P),
+  \label{eq:field}
+\end{equation}
+which is negative inside the molecule, positive in the solvent and zero on
+the SES. Quan and Stamm~\cite{quan2016} showed that this level set is
+exactly the SES, singularities included: self-intersecting tori and
+intersecting concave patches are features of the level set of $F$ and need
+no special treatment. The algorithm relies on six elementary properties
+(proofs are short and given in the design document of the
+repository):
+\begin{enumerate}[label=(P\arabic*)]
+  \item $F$ is 1-Lipschitz, as every distance function is.
+    \label{p:lipschitz}
+  \item $F(\vect x) = r_p$, its maximum, for $\vect x \in P$: everything
+    outside the SAS is trivially ``outside''.
+  \item Inside $E$, $|F(\vect x)| = \operatorname{dist}(\vect x, \mathrm{SES})$
+    exactly; outside $E$, $0 < F(\vect x) \le \operatorname{dist}(\vect x,
+    \mathrm{SES})$. \label{p:dist}
+  \item $F(\vect x) \le s_{\mathrm{vdW}}(\vect x) :=
+    \min_i(\norm{\vect x - \vect c_i} - r_i)$, because
+    $d(\vect x, P) \ge R_i - \norm{\vect x - \vect c_i}$ for every $i$: a
+    cheap ``inside'' test. \label{p:vdw}
+  \item Where the closest point $\vect p(\vect x) \in P$ is unique and
+    $\vect x \notin P$, $\nabla F(\vect x) = (\vect p - \vect x) /
+    \norm{\vect p - \vect x}$; on the SES the outward unit normal is
+    $\vect n = (\vect p - \vect x)/r_p$. \label{p:normal}
+  \item For $\vect x \in E$, the point $\vect x^* = \vect p + r_p(\vect x -
+    \vect p)/\norm{\vect x - \vect p}$ lies on the SES: an exact projection
+    from inside. \label{p:project}
+\end{enumerate}
+The SAS and vdW surfaces use $F_{\mathrm{SAS}}(\vect x) =
+\min_i(\norm{\vect x - \vect c_i} - R_i)$ and $F_{\mathrm{vdW}}(\vect x) =
+\min_i(\norm{\vect x - \vect c_i} - r_i)$, which are also 1-Lipschitz and
+exact on their zero sets; an SES with $r_p = 0$ is the vdW surface.
+
+\paragraph{Closest point on the SAS.}
+For $\vect x \in A$ the closest point of $P$ lies on $\partial A$, a union of
+spherical faces, circular arcs (pairwise sphere intersections) and vertices
+(triple intersections). It lies in the relative interior of a face or an
+arc, or is a vertex; on a sphere the only interior local minimum of the
+distance is the radial projection, on a circle the planar projection. Hence
+$d(\vect x, P)$ is the minimum over three candidate classes, each subject to
+a validity test---the candidate point must not lie strictly inside another
+expanded sphere (\cref{tab:classes}). Class S produces the convex patches
+of the SES, class C the saddles and class V the concave patches, so the
+winning class of a vertex is its patch type.
+
+\begin{table}[t]
+  \centering
+  \caption{Candidate closest points on the SAS for a query point $\vect x$.
+    For circle $(i,j)$ with $D = \norm{\vect c_j - \vect c_i}$,
+    $|R_i - R_j| < D < R_i + R_j$: $\vect u = (\vect c_j - \vect c_i)/D$,
+    $t = (D^2 + R_i^2 - R_j^2)/(2D)$, centre $\vect m = \vect c_i + t\vect u$,
+    radius $\rho = (R_i^2 - t^2)^{1/2}$; $\vect y = \vect x - \vect m$,
+    $a = \vect y \cdot \vect u$, $\vect w = \vect y - a\vect u$. $N(i)$ is the
+    set of spheres intersecting sphere $i$ and $K(i,j)$ the set of spheres
+    that cut circle $(i,j)$.}
+  \label{tab:classes}
+  \small
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    Class (SES patch) & Candidate $\vect q$ & Distance & Valid iff \\
+    \midrule
+    S, sphere $i$ (convex) &
+      $\vect c_i + R_i \frac{\vect x - \vect c_i}{\norm{\vect x - \vect c_i}}$ &
+      $\bigl|\norm{\vect x - \vect c_i} - R_i\bigr|$ &
+      $\norm{\vect q - \vect c_k} \ge R_k\ \forall k \in N(i)$ \\[4pt]
+    C, circle $(i,j)$ (saddle) &
+      $\vect m + \rho\, \vect w/\norm{\vect w}$ &
+      $\bigl(a^2 + (\norm{\vect w} - \rho)^2\bigr)^{1/2}$ &
+      $\norm{\vect q - \vect c_k} \ge R_k\ \forall k \in K(i,j)$ \\[4pt]
+    V, vertex $(i,j,k)$ (concave) &
+      precomputed $\vect v$ & $\norm{\vect x - \vect v}$ &
+      precomputed (exposed only) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Degenerate queries have deterministic answers: at $\vect x = \vect c_i$
+class S is undefined and skipped (the point is deep inside), and for
+$\norm{\vect w} \approx 0$ all points of a circle are equidistant, so the
+minimum over an exposed arc is attained at an arc endpoint (a class-V
+vertex) or, for a fully exposed circle, at a fixed point. Validity uses
+$\norm{\vect q - \vect c_k}^2 \ge R_k^2 - \tau_k$; a wrong decision for a
+candidate within $\varepsilon$ of a blocking sphere changes the computed
+distance by $O(\varepsilon)$, because the true closest point is then on the
+nearby arc or vertex. Tolerances are therefore accuracy parameters, not
+topology hazards; the only ill-posed inputs are exactly fitting probes,
+which a fixed tolerance decides deterministically (\cref{sec:arrangement}).
+
+\paragraph{Cavities.}
+$P$ may have bounded components: probe-accessible pockets that the solvent
+cannot reach from outside. Each yields closed SES components whose outward
+normals point into the enclosed solvent, so they have negative signed
+volume, while external components have positive signed volume. This gives
+an exact and cheap classification on the mesh (\cref{sec:cavities}).

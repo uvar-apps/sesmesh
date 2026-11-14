@@ -1,0 +1,70 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+
+\section{Discussion and limitations}
+\label{sec:discussion}
+
+\paragraph{What exactness buys.}
+Sampling the exact field changes the error budget of a grid method:
+vertices lie on the SES to within $10^{-4}h$ and normals are exact, so the
+only discretization error left is that of a piecewise-linear surface
+through exact points, which decreases as $O(h^2)$ with a small constant.
+The mean area error at the default 0.5\Ang{} grid
+(\val{area-mean-0.5}\,\%) is below the published error of a
+distance-transform method at $256^3$ (1.99\,\%~\cite{xu2009edtsurf}),
+although the two figures are measured against different references
+(\cref{sec:comparison}). Because classification is conservative and the
+table is uniform, the same code path yields closed manifold meshes for
+every input tried, without perturbation or restarts.
+
+\paragraph{Limitations.}
+\begin{itemize}
+  \item \emph{Inscribed meshes underestimate area} (by
+    \val{area-mean-0.25}\,\% on average at 0.25\Ang{} for proteins, and by
+    up to \val{an-area-hi-0.25}\,\% for the atom-sized analytic
+    references). Applications that need the area itself
+    should use a finer grid or the $h \to 0$ extrapolation; an analytic
+    area and volume in the style of Quan and Stamm or sesa is future
+    work~\cite{quan2016,wang2024sesa}.
+  \item \emph{Topology at coarse spacing.} The uniform face rule guarantees
+    manifoldness, not the topology of the trilinear interpolant
+    (MC33~\cite{lewiner2003,custodio2013}). Features thinner than $h$ can
+    be cut off as sub-grid fragments (\cref{sec:fragments}) or, by the
+    same mechanism, thin necks can be merged or split; such fragments are
+    identified exactly and can be dropped, but other topological changes
+    below the grid resolution are not detected.
+  \item \emph{Uniform resolution.} The grid spacing is uniform; decimation
+    redistributes triangles afterwards, but there is no curvature-adaptive
+    sampling.
+  \item \emph{Exactly fitting probes} (a probe that fits a cavity exactly)
+    are decided by a fixed tolerance of $10^{-9}$\Ang; the result is
+    deterministic but, like any such decision, arbitrary at the tie.
+  \item \emph{Memory per atom.} The exact double-precision arrangement
+    costs about 560 bytes per atom; a 545\,000-atom capsid needs about
+    640\,MiB for its atoms alone, so very tight memory limits force very
+    coarse grids (6.1\Ang{} under 700\,MiB).
+  \item \emph{Determinism scope.} Byte-identical output holds for the same
+    binary and SIMD level. Across SIMD levels, sampled field values agree
+    within $2\cdot10^{-5}$\Ang{} in the tests, so the mesh topology can
+    differ only at samples that close to the surface.
+\end{itemize}
+
+\paragraph{Open measurements.}
+Reviewers will rightly ask for the following, which the present version
+does not provide: (i)~the comparison with MSMS, NanoShaper, EDTSurf, sesa
+and ChimeraX (\cref{sec:comparison}); (ii)~performance on the reference
+machines, in particular the AVX2 and AVX-512 kernels on x86-64 and parallel
+efficiency on 8 homogeneous cores, since all timings here come from one
+loaded Apple Silicon machine; (iii)~a robustness sweep of 1\,000 rather
+than 200 entries; and (iv)~a fuzzing campaign of at least 24 CPU-hours per
+parser, of which only 10 minutes per target have been run
+\todo{update this paragraph as each item is completed}.
+
+\paragraph{Future work.}
+The brick and structure-of-arrays kernel design maps directly to GPU
+compute; other planned extensions are MC33 and dual
+meshers~\cite{gibson1998,ju2002}, adaptive resolution, analytic area and
+volume, Gaussian and skin surfaces as further field kinds, region-restricted
+surfaces (for example a binding pocket), Python bindings and a WebAssembly
+build.

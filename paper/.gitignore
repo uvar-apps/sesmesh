@@ -1,0 +1,20 @@
+# LaTeX build files
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.tdo
+*.toc
+*.lof
+*.lot
+*.synctex.gz
+main.pdf
+# arXiv bundle
+/arxiv/
+/arxiv.tar.gz
+# analytic reference program
+/scripts/analytic/target/
+/scripts/analytic/Cargo.lock

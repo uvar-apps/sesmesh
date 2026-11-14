@@ -1,0 +1,566 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+%
+% Bibliography of the sesmesh paper. Every entry is transcribed from the
+% repository: README.md ("How it works and what to cite") and
+% docs/01-product-specification.md §12 (reference ids [R1]..[R54] noted in
+% each entry's `note`-free comment line). Fields that the repository does not
+% give (missing DOIs, page ranges of conference papers, access dates) are NOT
+% filled in from memory; paper/README.md lists them as open items.
+
+% ------------------------------------------------------------------ software
+@misc{sesmesh,
+  author       = {Varetto, Ugo},
+  title        = {sesmesh: Solvent Excluded Surface meshes for molecules},
+  year         = {2026},
+  howpublished = {Software, version 1.1.0, released 2026-11-14},
+  url          = {https://github.com/uvar-apps/sesmesh},
+}
+
+% ------------------------------------- molecular surface definitions, theory
+% [R1]
+@article{lee1971,
+  author  = {Lee, B. and Richards, F. M.},
+  title   = {The interpretation of protein structures: estimation of static accessibility},
+  journal = {Journal of Molecular Biology},
+  volume  = {55},
+  number  = {3},
+  pages   = {379--400},
+  year    = {1971},
+  doi     = {10.1016/0022-2836(71)90324-X},
+}
+
+% [R2]
+@article{richards1977,
+  author  = {Richards, F. M.},
+  title   = {Areas, volumes, packing, and protein structure},
+  journal = {Annual Review of Biophysics and Bioengineering},
+  volume  = {6},
+  pages   = {151--176},
+  year    = {1977},
+}
+
+% [R3]
+@article{greer1978,
+  author  = {Greer, J. and Bush, B. L.},
+  title   = {Macromolecular shape and surface maps by solvent exclusion},
+  journal = {Proceedings of the National Academy of Sciences of the USA},
+  volume  = {75},
+  number  = {1},
+  pages   = {303--307},
+  year    = {1978},
+  doi     = {10.1073/pnas.75.1.303},
+}
+
+% [R4]
+@article{connolly1983jac,
+  author  = {Connolly, M. L.},
+  title   = {Analytical molecular surface calculation},
+  journal = {Journal of Applied Crystallography},
+  volume  = {16},
+  number  = {5},
+  pages   = {548--558},
+  year    = {1983},
+  doi     = {10.1107/S0021889883010985},
+}
+
+% [R5]
+@article{connolly1983science,
+  author  = {Connolly, M. L.},
+  title   = {Solvent-accessible surfaces of proteins and nucleic acids},
+  journal = {Science},
+  volume  = {221},
+  pages   = {709--713},
+  year    = {1983},
+}
+
+% [R6]
+@article{quan2016,
+  author  = {Quan, C. and Stamm, B.},
+  title   = {Mathematical analysis and calculation of molecular surfaces},
+  journal = {Journal of Computational Physics},
+  volume  = {322},
+  pages   = {760--782},
+  year    = {2016},
+  doi     = {10.1016/j.jcp.2016.07.007},
+}
+
+% [R7]
+@article{quan2017,
+  author  = {Quan, C. and Stamm, B.},
+  title   = {Meshing molecular surfaces based on analytical implicit representation},
+  journal = {Journal of Molecular Graphics and Modelling},
+  volume  = {71},
+  pages   = {200--210},
+  year    = {2017},
+  doi     = {10.1016/j.jmgm.2016.11.008},
+}
+
+% [R8]
+@article{kozlikova2017,
+  author  = {Kozl{\'\i}kov{\'a}, B. and others},
+  title   = {Visualization of biomolecular structures: state of the art revisited},
+  journal = {Computer Graphics Forum},
+  volume  = {36},
+  number  = {8},
+  pages   = {178--204},
+  year    = {2017},
+  doi     = {10.1111/cgf.13072},
+}
+
+% ------------------------------------------------- SES algorithms and tools
+% [R9]
+@article{sanner1996,
+  author  = {Sanner, M. F. and Olson, A. J. and Spehner, J.-C.},
+  title   = {Reduced surface: an efficient way to compute molecular surfaces},
+  journal = {Biopolymers},
+  volume  = {38},
+  number  = {3},
+  pages   = {305--320},
+  year    = {1996},
+}
+
+% [R9], second half: the MSMS manual
+@misc{msmsmanual,
+  author       = {{Scripps Research, Center for Computational Structural Biology}},
+  title        = {{MSMS} documentation},
+  howpublished = {Web page},
+  url          = {https://ccsb.scripps.edu/msms/documentation/},
+}
+
+% [R10]
+@article{totrov1996,
+  author  = {Totrov, M. and Abagyan, R.},
+  title   = {The contour-buildup algorithm to calculate the analytical molecular surface},
+  journal = {Journal of Structural Biology},
+  volume  = {116},
+  number  = {1},
+  pages   = {138--143},
+  year    = {1996},
+  doi     = {10.1006/jsbi.1996.0022},
+}
+
+% [R11]
+@article{lindow2010,
+  author  = {Lindow, N. and Baum, D. and Prohaska, S. and Hege, H.-C.},
+  title   = {Accelerated visualization of dynamic molecular surfaces},
+  journal = {Computer Graphics Forum},
+  volume  = {29},
+  number  = {3},
+  pages   = {943--952},
+  year    = {2010},
+  doi     = {10.1111/j.1467-8659.2009.01693.x},
+}
+
+% [R12]
+@article{xu2009edtsurf,
+  author  = {Xu, D. and Zhang, Y.},
+  title   = {Generating triangulated macromolecular surfaces by {E}uclidean distance transform},
+  journal = {PLoS ONE},
+  volume  = {4},
+  number  = {12},
+  pages   = {e8140},
+  year    = {2009},
+  doi     = {10.1371/journal.pone.0008140},
+}
+
+% [R13]
+@article{decherchi2013,
+  author  = {Decherchi, S. and Rocchia, W.},
+  title   = {A general and robust ray-casting-based algorithm for triangulating surfaces at the nanoscale},
+  journal = {PLoS ONE},
+  volume  = {8},
+  number  = {4},
+  pages   = {e59744},
+  year    = {2013},
+  doi     = {10.1371/journal.pone.0059744},
+}
+
+% [R14]
+@inproceedings{parulek2012,
+  author    = {Parulek, J. and Viola, I.},
+  title     = {Implicit representation of molecular surfaces},
+  booktitle = {IEEE Pacific Visualization Symposium (PacificVis)},
+  pages     = {217--224},
+  year      = {2012},
+  doi       = {10.1109/PacificVis.2012.6183594},
+}
+
+% [R15]
+@article{hermosilla2017,
+  author  = {Hermosilla, P. and Krone, M. and Guallar, V. and V{\'a}zquez, P.-P. and Vinacua, {\`A}. and Ropinski, T.},
+  title   = {Interactive {GPU}-based generation of solvent-excluded surfaces},
+  journal = {The Visual Computer},
+  volume  = {33},
+  number  = {6--8},
+  pages   = {869--881},
+  year    = {2017},
+  doi     = {10.1007/s00371-017-1397-2},
+}
+
+% [R16]
+@inproceedings{martinez2019quickses,
+  author    = {Martinez, X. and Krone, M. and Baaden, M.},
+  title     = {{QuickSES}: a library for fast computation of solvent excluded surfaces},
+  booktitle = {Eurographics Workshop on Molecular Graphics and Visual Analysis of Molecular Data (MolVA)},
+  year      = {2019},
+  url       = {https://diglib.eg.org/handle/10.2312/molva20191095},
+}
+
+% [R17]
+@article{liu2017eses,
+  author  = {Liu, B. and Wang, B. and Zhao, R. and Tong, Y. and Wei, G.-W.},
+  title   = {{ESES}: software for {E}ulerian solvent excluded surface},
+  journal = {Journal of Computational Chemistry},
+  volume  = {38},
+  number  = {7},
+  pages   = {446--466},
+  year    = {2017},
+  doi     = {10.1002/jcc.24682},
+}
+
+% [R18]
+@article{can2006lsms,
+  author  = {Can, T. and Chen, C.-I. and Wang, Y.-F.},
+  title   = {Efficient molecular surface generation using level-set methods},
+  journal = {Journal of Molecular Graphics and Modelling},
+  volume  = {25},
+  number  = {4},
+  pages   = {442--454},
+  year    = {2006},
+}
+
+% [R19]
+@misc{goddard2013,
+  author       = {Goddard, T.},
+  title        = {Molecular surface algorithms},
+  howpublished = {UCSF Chimera technical notes},
+  year         = {2013},
+  url          = {https://www.cgl.ucsf.edu/chimera/data/surface-oct2013/surface.html},
+}
+
+% [R20]
+@misc{chimeraxsurface,
+  author       = {{UCSF Resource for Biocomputing, Visualization, and Informatics}},
+  title        = {{UCSF ChimeraX} User Guide: the \texttt{surface} command},
+  howpublished = {Web page},
+  url          = {https://rbvi.ucsf.edu/chimerax/docs/user/commands/surface.html},
+}
+
+% [R21]
+@article{wang2024sesa,
+  author  = {Wang, L.},
+  title   = {sesa: a program for the analytic computation of solvent-excluded surface areas},
+  journal = {ChemistryOpen},
+  volume  = {13},
+  number  = {12},
+  pages   = {e202400172},
+  year    = {2024},
+  doi     = {10.1002/open.202400172},
+}
+
+% ----------------------- isosurface extraction, sparse volumes, mesh processing
+% [R22]
+@article{lorensen1987,
+  author  = {Lorensen, W. E. and Cline, H. E.},
+  title   = {Marching cubes: a high resolution {3D} surface construction algorithm},
+  journal = {Computer Graphics (Proceedings of SIGGRAPH '87)},
+  volume  = {21},
+  number  = {4},
+  pages   = {163--169},
+  year    = {1987},
+  doi     = {10.1145/37402.37422},
+}
+
+% [R23]
+@article{lewiner2003,
+  author  = {Lewiner, T. and Lopes, H. and Vieira, A. W. and Tavares, G.},
+  title   = {Efficient implementation of {M}arching {C}ubes' cases with topological guarantees},
+  journal = {Journal of Graphics Tools},
+  volume  = {8},
+  number  = {2},
+  pages   = {1--15},
+  year    = {2003},
+  doi     = {10.1080/10867651.2003.10487582},
+}
+
+% [R24]
+@article{custodio2013,
+  author  = {Cust{\'o}dio, L. and Etiene, T. and Pesco, S. and Silva, C.},
+  title   = {Practical considerations on {M}arching {C}ubes 33 topological correctness},
+  journal = {Computers \& Graphics},
+  volume  = {37},
+  number  = {7},
+  pages   = {840--850},
+  year    = {2013},
+}
+
+% [R25]
+@inproceedings{schroeder2015,
+  author    = {Schroeder, W. and Maynard, R. and Geveci, B.},
+  title     = {Flying edges: a high-performance scalable isocontouring algorithm},
+  booktitle = {IEEE 5th Symposium on Large Data Analysis and Visualization (LDAV)},
+  year      = {2015},
+  doi       = {10.1109/LDAV.2015.7348069},
+}
+
+% [R26]
+@inproceedings{gibson1998,
+  author    = {Gibson, S. F. F.},
+  title     = {Constrained elastic surface nets},
+  booktitle = {Medical Image Computing and Computer-Assisted Intervention (MICCAI '98)},
+  series    = {Lecture Notes in Computer Science},
+  volume    = {1496},
+  pages     = {888--898},
+  year      = {1998},
+  doi       = {10.1007/BFb0056277},
+}
+
+% [R27]
+@article{ju2002,
+  author  = {Ju, T. and Losasso, F. and Schaefer, S. and Warren, J.},
+  title   = {Dual contouring of {H}ermite data},
+  journal = {ACM Transactions on Graphics},
+  volume  = {21},
+  number  = {3},
+  pages   = {339--346},
+  year    = {2002},
+}
+
+% [R28]
+@inproceedings{garland1997,
+  author    = {Garland, M. and Heckbert, P. S.},
+  title     = {Surface simplification using quadric error metrics},
+  booktitle = {Proceedings of SIGGRAPH '97},
+  pages     = {209--216},
+  year      = {1997},
+  doi       = {10.1145/258734.258849},
+}
+
+% [R29]
+@inproceedings{taubin1995,
+  author    = {Taubin, G.},
+  title     = {A signal processing approach to fair surface design},
+  booktitle = {Proceedings of SIGGRAPH '95},
+  pages     = {351--358},
+  year      = {1995},
+}
+
+% [R30]
+@article{museth2013,
+  author  = {Museth, K.},
+  title   = {{VDB}: high-resolution sparse volumes with dynamic topology},
+  journal = {ACM Transactions on Graphics},
+  volume  = {32},
+  number  = {3},
+  pages   = {27},
+  year    = {2013},
+  doi     = {10.1145/2487228.2487235},
+}
+
+% [R31]
+@inproceedings{frisken2000,
+  author    = {Frisken, S. F. and Perry, R. N. and Rockwood, A. P. and Jones, T. R.},
+  title     = {Adaptively sampled distance fields},
+  booktitle = {Proceedings of SIGGRAPH 2000},
+  pages     = {249--254},
+  year      = {2000},
+}
+
+% ------------------------------------------------------- distance transforms
+% [R32]
+@article{felzenszwalb2012,
+  author  = {Felzenszwalb, P. F. and Huttenlocher, D. P.},
+  title   = {Distance transforms of sampled functions},
+  journal = {Theory of Computing},
+  volume  = {8},
+  pages   = {415--428},
+  year    = {2012},
+  doi     = {10.4086/toc.2012.v008a019},
+}
+
+% [R33]
+@article{maurer2003,
+  author  = {Maurer, Jr., C. R. and Qi, R. and Raghavan, V.},
+  title   = {A linear time algorithm for computing exact {E}uclidean distance transforms of binary images in arbitrary dimensions},
+  journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence},
+  volume  = {25},
+  number  = {2},
+  pages   = {265--270},
+  year    = {2003},
+  doi     = {10.1109/TPAMI.2003.1177156},
+}
+
+% --------------------------------------------------------------- atomic radii
+% [R34]
+@article{bondi1964,
+  author  = {Bondi, A.},
+  title   = {van der {W}aals volumes and radii},
+  journal = {Journal of Physical Chemistry},
+  volume  = {68},
+  number  = {3},
+  pages   = {441--451},
+  year    = {1964},
+  doi     = {10.1021/j100785a001},
+}
+
+% [R35]
+@article{mantina2009,
+  author  = {Mantina, M. and Chamberlin, A. C. and Valero, R. and Cramer, C. J. and Truhlar, D. G.},
+  title   = {Consistent van der {W}aals radii for the whole main group},
+  journal = {Journal of Physical Chemistry A},
+  volume  = {113},
+  number  = {19},
+  pages   = {5806--5812},
+  year    = {2009},
+  doi     = {10.1021/jp8111556},
+}
+
+% [R36]
+@article{alvarez2013,
+  author  = {Alvarez, S.},
+  title   = {A cartography of the van der {W}aals territories},
+  journal = {Dalton Transactions},
+  volume  = {42},
+  pages   = {8617--8636},
+  year    = {2013},
+  doi     = {10.1039/C3DT50599E},
+}
+
+% [R37]
+@article{tsai1999,
+  author  = {Tsai, J. and Taylor, R. and Chothia, C. and Gerstein, M.},
+  title   = {The packing density in proteins: standard radii and volumes},
+  journal = {Journal of Molecular Biology},
+  volume  = {290},
+  pages   = {253--266},
+  year    = {1999},
+  doi     = {10.1006/jmbi.1999.2829},
+}
+
+% --------------------------------------------------------------- file formats
+% [R38]
+@misc{pdbformat33,
+  author       = {{wwPDB}},
+  title        = {Atomic Coordinate Entry Format Version 3.3},
+  howpublished = {Web page},
+  url          = {https://www.wwpdb.org/documentation/file-format-content/format33/v3.3.html},
+}
+
+% [R39]
+@misc{mmcif,
+  author       = {{wwPDB}},
+  title        = {{PDBx/mmCIF} dictionary resources},
+  howpublished = {Web page},
+  url          = {https://mmcif.wwpdb.org/},
+}
+
+% [R40]
+@misc{pdbjlarge,
+  author       = {{PDBj}},
+  title        = {Large structures},
+  howpublished = {Web page},
+  url          = {https://pdbj.org/help/large-structures},
+}
+
+% [R41]
+@misc{hybrid36,
+  author       = {Grosse-Kunstleve, R. W.},
+  title        = {Hybrid-36 encoding for {PDB} serial and residue numbers},
+  howpublished = {Web page},
+  url          = {https://cci.lbl.gov/hybrid_36/},
+}
+
+% [R42]
+@article{sehnal2020,
+  author  = {Sehnal, D. and Bittrich, S. and Velankar, S. and Ko{\v c}a, J. and Rose, A. S.},
+  title   = {{BinaryCIF} and {CIFTools}},
+  journal = {PLoS Computational Biology},
+  volume  = {16},
+  number  = {10},
+  pages   = {e1008247},
+  year    = {2020},
+  doi     = {10.1371/journal.pcbi.1008247},
+}
+
+% [R43]
+@misc{extxyz,
+  author       = {{libAtoms}},
+  title        = {Extended {XYZ} specification},
+  howpublished = {Web page},
+  url          = {https://github.com/libAtoms/extxyz},
+}
+
+% [R44]
+@misc{pqr,
+  author       = {{APBS developers}},
+  title        = {{PQR} molecular structure format},
+  howpublished = {APBS documentation},
+  url          = {https://apbs.readthedocs.io/en/latest/formats/pqr.html},
+}
+
+% [R45]
+@misc{objformat,
+  editor       = {Bourke, P.},
+  author       = {Bourke, P.},
+  title        = {Wavefront {OBJ} file format},
+  howpublished = {Appendix B1 of the Advanced Visualizer manual},
+  url          = {https://paulbourke.net/dataformats/obj/},
+}
+
+% [R46]
+@article{wojdyr2022,
+  author  = {Wojdyr, M.},
+  title   = {{GEMMI}: a library for structural biology},
+  journal = {Journal of Open Source Software},
+  volume  = {7},
+  number  = {73},
+  pages   = {4200},
+  year    = {2022},
+  doi     = {10.21105/joss.04200},
+}
+
+% ------------------------------------------------------------ Rust ecosystem
+% [R47]
+@misc{rayon,
+  title        = {rayon: a data-parallelism library for {Rust}},
+  howpublished = {Rust crate},
+  url          = {https://crates.io/crates/rayon},
+}
+
+% [R48]
+@misc{fearlesssimd,
+  title        = {fearless\_simd: safe portable {SIMD} with runtime dispatch},
+  howpublished = {Rust crate},
+  url          = {https://docs.rs/fearless_simd},
+}
+
+% [R50]
+@misc{portablesimd,
+  title        = {Tracking issue for portable {SIMD} (\texttt{std::simd})},
+  howpublished = {Rust issue 86656},
+  url          = {https://github.com/rust-lang/rust/issues/86656},
+}
+
+% [R51]
+@misc{flate2,
+  title        = {flate2 with the zlib-rs backend},
+  howpublished = {Rust crate},
+  url          = {https://github.com/rust-lang/flate2-rs},
+}
+
+% [R52]
+@misc{meshoptimizer,
+  author       = {Kapoulkine, A.},
+  title        = {meshoptimizer},
+  howpublished = {Software library},
+  url          = {https://github.com/zeux/meshoptimizer},
+}
+
+% [R54]
+@misc{rustsasa,
+  title        = {rust-sasa: solvent accessible surface area calculation (Shrake--Rupley)},
+  howpublished = {Rust crate},
+  url          = {https://crates.io/crates/rust-sasa},
+}

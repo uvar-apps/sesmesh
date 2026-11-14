@@ -1,0 +1,191 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+
+\section{Implementation}
+\label{sec:implementation}
+
+\sesmesh{} is written in Rust (edition 2024, minimum supported compiler
+1.89) as a Cargo workspace of a library crate, \code{sesmesh}, a
+command-line crate, \code{sesmesh-cli} (binary \code{sesmesh}), and a
+development-only crate of test oracles, analytic references and cluster
+generators. All crates forbid \code{unsafe} code, every public item is
+documented, the library never prints (warnings are returned as values), and
+the public API exposes no third-party types, so dependency upgrades cannot
+break callers. Since 1.0 the project follows semantic versioning, and the
+1.x series keeps the default output byte-identical; new behaviour is
+opt-in.
+
+\subsection{Library and command-line interface}
+
+The core entry point takes spheres and parameters and returns a mesh with
+per-vertex normals, nearest atoms, patch types and components, plus
+statistics; structure readers, atom selection and radius assignment are
+separate composable functions (\cref{lst:api}). A reusable
+\code{SurfaceEngine} keeps per-thread buffers between calls for
+trajectories, and a \code{Control} object carries a cancellation flag and a
+progress callback; cancellation is checked per sphere, between stages and
+per brick, and takes effect within one brick's work (under 100\,ms in the
+tests). The command-line tool exposes every library option, writes one or
+many inputs (batch mode with per-file error isolation), reports timings and
+statistics, generates shell completions and a manual page, and uses
+distinct exit codes (0 success, 1 runtime error, 2 usage error, 3 input
+parse error, 4 resource limit, 130 interrupted).
+
+\begin{figure}[t]
+\begin{lstlisting}[language=Rust]
+use sesmesh::export::obj::{write_obj_path, ObjOptions};
+use sesmesh::{compute_surface, io, radii, Diagnostics, Selection, Sphere, SurfaceParams};
+
+fn main() -> sesmesh::Result<()> {
+    let structure = io::read_path("1crn.cif", &io::ReadOptions::default())?;
+    let mut diags = Diagnostics::new();
+    let atoms = structure.select(&Selection::default(), &mut diags)?;
+    let radii = radii::assign(&atoms, &radii::RadiusOptions::default(), &mut diags)?;
+    let spheres = Sphere::from_atoms(&atoms, &radii)?;
+    let out = compute_surface(&spheres, &SurfaceParams::ses(1.4).with_spacing(0.25))?;
+    println!("{} triangles, area {:.1} A^2", out.stats.triangles, out.stats.area);
+    write_obj_path("1crn.obj", &out.mesh, &ObjOptions::default())
+}
+\end{lstlisting}
+\begin{lstlisting}
+sesmesh 1crn.cif -q high --cavities remove --vertex-colors element --stats stats.json
+sesmesh 1k4r.cif.gz --assembly 1 -q draft -o capsid.ply      # 545k-atom capsid
+sesmesh 3j3q.cif.gz --max-memory 4G --auto-coarsen          # coarsen until it fits
+\end{lstlisting}
+  \caption{Library use (from the README; the snippets on the project
+    website are compiled against 1.1.0) and three command-line
+    invocations.}
+  \label{lst:api}
+\end{figure}
+
+\paragraph{Inputs.}
+Purpose-built readers parse PDB (fixed columns, hybrid-36 serial
+numbers~\cite{pdbformat33,hybrid36}, chunked parallel parsing of large
+files), PDBx/mmCIF~\cite{mmcif} (a full CIF~1.1 lexer and the
+\code{\_atom\_site} loop in any column order; about 350\,MiB/s on one core;
+the gzipped 2.44-million-atom 3J3Q entry reads in about 0.8\,s), XYZ
+and extended XYZ~\cite{extxyz}, and PQR~\cite{pqr}, each optionally gzip
+compressed~\cite{flate2}. Biological assemblies are generated from mmCIF
+\code{pdbx\_struct\_\allowbreak assembly\_gen} and
+\code{pdbx\_struct\_\allowbreak oper\_list} and PDB
+\code{REMARK 350}; the 1K4R entry contains 9\,084 deposited atoms of a
+capsid of 545\,040. Assemblies of more than 100\,000 copies or 500 million
+atoms and decompressed inputs above 8\,GiB are refused, which bounds memory
+on hostile input. The parsers are tested by reading the same entries in
+PDB and mmCIF format, which must give identical atom sets, and against the
+deposited atom counts published by the RCSB. Selection defaults to the first model, the
+highest-occupancy alternate location per residue, and no hydrogens or
+waters. Radius sets are Bondi~\cite{bondi1964} completed with Mantina et
+al.~\cite{mantina2009} (default), Alvarez~\cite{alvarez2013}, the
+united-atom ProtOr radii~\cite{tsai1999}, a uniform radius, per-file radii
+(PQR, extended XYZ) and custom TOML rules.
+
+\paragraph{Outputs.}
+Wavefront OBJ~\cite{objformat} with a header recording the version, input,
+every parameter and summary statistics, written by a parallel fixed-point
+formatter (about 23\,ms for the 1.28-million-triangle 4HHB mesh), with
+optional per-component groups and per-vertex colours by element, chain,
+patch type or component; binary PLY with per-vertex atom, patch and
+component attributes; and the MSMS \code{.vert}/\code{.face}
+format~\cite{msmsmanual} for programs that consume MSMS meshes. All three
+can be gzip compressed or written to standard output. Side files give
+per-vertex attributes and per-atom SES areas (each triangle's area split
+equally among the nearest atoms of its vertices) as CSV, and statistics as
+JSON.
+
+\subsection{Parallelism and determinism}
+\label{sec:determinism}
+
+Parallelism uses rayon's work stealing~\cite{rayon}. The library never
+creates a global thread pool: it runs in the caller's pool, and the CLI
+builds one from \code{--threads}. Parsing, radius assignment, cell lists,
+the arrangement, the touched set, classification, the fused per-brick
+pipeline (gather, kernel, Marching Cubes, refinement), prefix sums,
+reference resolution, components, validation, smoothing and output
+formatting are parallel. Without the \code{parallel} feature the same code
+runs sequentially.
+
+Output is \emph{byte-identical} for identical input, options, binary and
+SIMD level, independent of the number of threads and of scheduling. Four
+rules achieve this: per-item results are collected into indexed vectors and
+concatenated in order; every floating-point total is a sum of per-brick
+(or per-chunk) partials added sequentially in a fixed order; union--find
+links the larger root to the smaller (\cref{sec:cavities}); and parallel
+sorts break ties by index. Memory-saving chunking
+($\mathrm{clamp}(n/256, 1, 4096)$ items per chunk) is likewise invisible in
+the result. A test suite compares OBJ files byte for byte for 1, 2, 4, 8
+and 16 threads and for repeated runs on crambin and trypsin (2PTN) in
+continuous integration, and on 4HHB and 1AON nightly. Determinism also
+makes memory-limited runs reproducible: the memory estimate deliberately
+ignores the thread count, so the automatically coarsened spacing, and with
+it the mesh, cannot depend on it (\cref{sec:memory}).
+
+\subsection{SIMD with runtime dispatch}
+
+Stable Rust has no portable SIMD in its standard library~\cite{portablesimd};
+\sesmesh{} uses the safe \code{fearless\_simd} crate~\cite{fearlesssimd},
+which detects the CPU at run time and dispatches generic kernels at SSE4.2,
+AVX2, AVX-512 or NEON width, with a portable fallback. The level is
+detected once per engine and can be forced for diagnostics; an explicit
+level is capped at the detected one, and a level of another architecture
+is a usage error. Sampled field values at every available level agree with
+the fallback within $2\cdot10^{-5}$\Ang{} (a test run on x86-64 and arm64
+runners in continuous integration). On Apple Silicon the compiler
+auto-vectorizes the fallback too, and NEON was only 3--6\,\% faster than it
+(crambin and haemoglobin at 0.5 and 0.25\Ang); the AVX2 versus SSE2 ratio
+on x86-64 has not been measured yet (\cref{sec:discussion}). Marching Cubes
+case classification stays scalar (about 2\,\% of a single-thread profile).
+
+\subsection{Memory model and memory guard}
+\label{sec:memory}
+
+Peak memory has a per-atom part (the arrangement and the structure) and a
+per-triangle part (brick meshes, assembly, the final mesh). Compacting the
+arrangement---neighbour rows only for exposed spheres, no stored arcs,
+circles without their second basis vector, exact capacities---reduced the
+field data on the 1K4R capsid from about 1\,150 to 560 bytes per atom, plus
+about 150 bytes per atom for the input structure and spheres; building it
+in waves of flat per-chunk arrays and freeing the field before assembly
+lowered peaks further (\cref{sec:large}).
+
+A memory guard (\code{--max-memory}) predicts the peak before meshing. It
+counts the Marching Cubes triangles of all surface bricks, without creating
+vertices, when there are at most 512, and otherwise of every $k$-th brick
+in key order, extrapolating $T = n(\bar t + 2 s_t/\sqrt m)$ from the mean
+and standard deviation over the $m$ sampled bricks. For grids finer than
+the pilot spacing (brick side 5\Ang), it classifies the pilot grid and
+predicts $T \propto h^{-2}$ (times 1.1) and the number of touched bricks
+$X \propto h^{-3}$, so it never classifies a grid that would not fit. The
+estimate is
+\begin{equation}
+  M = 16\,\text{MiB} + 1200\,N + (150 + 50\,[\text{decimation}]
+    + 50\,[\text{smoothing}])\,T + 100\,X \ \text{bytes},
+\end{equation}
+calibrated on measured peaks; on the test runs it was 1.15--1.7 times the
+measured peak resident set size. Above the limit the run is refused (exit
+code 4), or, with \code{--auto-coarsen}, the smallest spacing whose
+prediction fits is found by bisection and checked on its own sample, and if
+needed $h$ grows by $1.05\sqrt{(M - M_0)/(L - M_0)}$ ($L$ the limit, $M_0$
+the part independent of $h$), at most four times. For example, the 1K4R
+capsid requested at 0.25\Ang{} under a 1\,GiB limit is meshed at 2.08\Ang{}
+with an estimate of 1\,001\,MiB and a measured peak of 600\,MiB, and 1AON
+requested at 0.1\Ang{} under 512\,MiB at 0.634\Ang{} (estimate 497\,MiB,
+peak 352\,MiB).
+
+\subsection{Quality assurance}
+
+Every optimized path has a simple reference: a brute-force double-precision
+oracle of $F$ over all features, against which the exact point evaluator,
+the SIMD kernel at every level and the lattice samples of random clusters
+are checked (property-based tests with random radii and probes); analytic
+surfaces (\cref{sec:analytic}); the exhaustive Marching Cubes table tests
+(\cref{sec:mc}); mesh validation of every result; and the determinism suite.
+Seven fuzz targets cover the PDB, mmCIF, CIF lexer, XYZ, PQR, format
+detection and assembly code; before 1.0 each ran for 10 minutes (about 18
+million inputs in total) without a crash, timeout or out-of-memory report,
+and a longer campaign is pending (\cref{sec:discussion}). Continuous
+integration runs formatting, a strict lint configuration, tests on macOS
+arm64, Linux x86-64, Linux arm64 and Windows x86-64, documentation, licence
+and advisory checks, the minimum compiler version, and five runnable
+examples; a nightly job runs the long tests on downloaded structures.

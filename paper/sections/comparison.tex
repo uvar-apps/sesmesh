@@ -1,0 +1,110 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+
+\section{Comparison with other programs}
+\label{sec:comparison}
+
+\begin{center}
+\fcolorbox{BrickRed}{BrickRed!5}{\parbox{0.92\linewidth}{\small
+  \textbf{Placeholder.} The cross-program comparison has not been carried
+  out yet (GitHub issues \#5, cross-tool references, and \#6, benchmark
+  comparison): no external surface program was installed on the
+  development machine. This section fixes the structure, the protocol and
+  the measurements it needs; every number in it is still to be produced.
+  The accuracy figures of \cref{sec:validation} are relative to analytic
+  surfaces and to \sesmesh's own $h \to 0$ extrapolation only.}}
+\end{center}
+
+\subsection{Programs}
+\label{sec:comparison-programs}
+
+The comparison covers the programs discussed in \cref{sec:intro}, at the
+settings the specification prescribes for high-accuracy references:
+MSMS~\cite{sanner1996} at a vertex density of at least 20 per \AA$^2$,
+NanoShaper~\cite{decherchi2013} at a grid scale of at least 4 per \AA,
+EDTSurf~\cite{xu2009edtsurf} at its highest resolution, sesa for analytic
+areas~\cite{wang2024sesa}, and ChimeraX~\cite{chimeraxsurface} at grid
+spacings of 0.5 and 0.25\Ang{} as the most widely used grid-based
+implementation \todo{program versions, build options and exact command
+lines for every program; decide whether ESES~\cite{liu2017eses} and the
+Quan--Stamm mesher~\cite{quan2017} are included}. GPU programs
+(QuickSES~\cite{martinez2019quickses}, Hermosilla et
+al.~\cite{hermosilla2017}) are outside the scope of a CPU comparison;
+only their published figures are quoted, e.g.\ about 1.65\,s for the 1K4R
+capsid on a $512^3$ grid with a GeForce GTX 970~\cite{hermosilla2017},
+which is not comparable with \cref{tab:large} (different hardware,
+resolution and accuracy).
+
+\subsection{Protocol}
+
+\begin{itemize}
+  \item \textbf{Same input.} Identical atom sets and radii for all programs:
+    \sesmesh{} writes the selected atoms with their radii (PQR or
+    \code{xyzr}), which every program reads; probe radius 1.4\Ang;
+    hydrogens and waters excluded.
+  \item \textbf{Same surface.} Cavity handling matched per program
+    (external surface only, as MSMS reports by default, vs.\ all components);
+    areas and volumes compared per component where the programs report
+    them.
+  \item \textbf{Matched resolution.} \sesmesh{} spacing $h$ against MSMS
+    density $d = 1.5/h^2$ (\cref{sec:density}), NanoShaper grid scale
+    $1/h$, EDTSurf and ChimeraX grid spacing $h$.
+  \item \textbf{Provenance.} Numbers stored with program version and exact
+    command line in \code{tests/\allowbreak data/\allowbreak reference/\allowbreak *.toml}, so continuous
+    integration can compare against them without installing the programs.
+  \item \textbf{Timing.} \code{hyperfine} with 2 warm-up and 10 measured
+    runs, peak resident set size from \code{/usr/bin/time}, on both
+    reference machines (Apple Silicon with 8 performance cores; x86-64 with
+    8 cores and AVX2).
+\end{itemize}
+
+\subsection{Measurements needed}
+\label{sec:comparison-needed}
+
+\begin{enumerate}
+  \item \textbf{Accuracy} on the \val{corpus-n}-entry validation corpus:
+    area and volume from each reference program versus \sesmesh{} at
+    $h = 0.5$, 0.25 and 0.125\Ang{} and versus its $h \to 0$
+    extrapolation; per-atom areas against sesa; this tests the
+    specification's protein bounds against independent references
+    \todo{run the accuracy comparison; fill \cref{tab:comparison} from the
+    stored reference files}.
+  \item \textbf{Robustness} on the \val{sweep-n}-entry sweep set and the
+    synthetic degenerate corpus (including a C$_{60}$ fullerene): failures,
+    crashes and time-outs per program, and, for every mesh produced, the
+    number of boundary edges, non-manifold edges, inconsistently oriented
+    edges and components, checked by \sesmesh's validator and by an
+    independent mesh library \todo{choose the independent mesh checker;
+    run the robustness comparison}.
+  \item \textbf{Performance} on the benchmark set of \cref{tab:perf} at
+    matched resolution: wall time and peak memory per program and thread
+    count \todo{run the performance comparison on both reference
+    machines}.
+  \item \textbf{Determinism}: for each multi-threaded program, outputs for
+    1, 2, 4, 8 and 16 threads compared by hash, which turns the claim in
+    \cref{sec:intro} into a measurement \todo{run the determinism
+    comparison}.
+  \item \textbf{Normals}: angle between each program's vertex normals and
+    the analytic normal at the same point, evaluated with \sesmesh's field
+    \todo{run the normal comparison}.
+\end{enumerate}
+
+\begin{table}[t]
+  \centering
+  \caption[Template for the cross-program accuracy comparison]{Template for the cross-program accuracy comparison (area in
+    \AA$^2$; relative difference to the analytic reference where one exists,
+    otherwise to sesa). \textbf{All cells (\tbd) are to be filled}.}
+  \label{tab:comparison}
+  \small
+  \begin{tabular}{@{}lccccc@{}}
+    \toprule
+    Entry & \sesmesh{} 0.25\Ang & \sesmesh{} $h\to0$ & MSMS ($d \ge 20$) &
+      NanoShaper ($\ge 4$/\AA) & sesa \\
+    \midrule
+    1CRN & \tbd & \tbd & \tbd & \tbd & \tbd \\
+    4HHB & \tbd & \tbd & \tbd & \tbd & \tbd \\
+    1AON & \tbd & \tbd & \tbd & \tbd & \tbd \\
+    \bottomrule
+  \end{tabular}
+\end{table}
