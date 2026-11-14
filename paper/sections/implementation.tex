@@ -133,8 +133,7 @@ is a usage error. Sampled field values at every available level agree with
 the fallback within $2\cdot10^{-5}$\Ang{} (a test run on x86-64 and arm64
 runners in continuous integration). On Apple Silicon the compiler
 auto-vectorizes the fallback too, and NEON was only 3--6\,\% faster than it
-(crambin and haemoglobin at 0.5 and 0.25\Ang); the AVX2 versus SSE2 ratio
-on x86-64 has not been measured yet (\cref{sec:discussion}). Marching Cubes
+(crambin and haemoglobin at 0.5 and 0.25\Ang); the x86-64 levels are measured in \cref{sec:x86}. Marching Cubes
 case classification stays scalar (about 2\,\% of a single-thread profile).
 
 \subsection{Memory model and memory guard}

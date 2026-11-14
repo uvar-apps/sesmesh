@@ -343,6 +343,243 @@ def scaling() -> None:
     write("scaling.dat", "\n".join(lines) + "\n", DAT_HEADER)
 
 
+# ------------------------------------------------------------- comparison
+CMP = REPO / "docs" / "validation" / "compare"
+NAMES = {"sesmesh": "\\sesmesh{}", "nanoshaper": "NanoShaper", "eses": "ESES", "msms": "MSMS",
+         "chimerax": "ChimeraX", "edtsurf": "EDTSurf", "sesa": "sesa"}
+ORDER = ["sesmesh", "nanoshaper", "eses", "msms", "chimerax", "edtsurf", "sesa"]
+
+
+def fnum(x: str):
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return None
+
+
+def comparison() -> None:
+    """Tables and macros of the cross-tool comparison (docs/validation/compare)."""
+    if not (CMP / "runs.csv").exists():
+        return
+    rows = read(CMP / "runs.csv")
+    for r in rows:
+        r["h"] = fnum(r["spacing"])
+    acc = [r for r in rows if r["campaign"] == "acc"]
+    by = {}
+    for r in acc:
+        by.setdefault((r["entry"], r["h"]), {})[r["tool"]] = r
+
+    # Accuracy against sesmesh's h -> 0 extrapolation (same spheres).
+    lines = []
+    for t in ["sesmesh", "nanoshaper", "eses", "msms", "chimerax"]:
+        cells = [NAMES[t]]
+        for h in (0.5, 0.25):
+            a = [fnum(r["area_err_vs_A0"]) for r in acc if r["tool"] == t and r["h"] == h and fnum(r.get("area_err_vs_A0"))]
+            v = [fnum(r["volume_err_vs_V0"]) for r in acc if r["tool"] == t and r["h"] == h and fnum(r.get("volume_err_vs_V0"))]
+            if a:
+                cells += [pct(st.median(a)), pct(max(a, key=abs)), pct(st.median(v)), pct(max(v, key=abs))]
+                val(f"cmp-{t}-area-med-{fmt_h(h)}", pct(st.median(a)))
+                val(f"cmp-{t}-area-worst-{fmt_h(h)}", pct(max(a, key=abs)))
+                val(f"cmp-{t}-vol-med-{fmt_h(h)}", pct(st.median(v)))
+            else:
+                cells += ["--"] * 4
+        lines.append(" & ".join(cells) + " \\\\")
+    an = [fnum(r["analytic_area_err_vs_A0"]) for r in acc if r["tool"] == "msms" and r["h"] == 0.5 and fnum(r.get("analytic_area_err_vs_A0")) is not None]
+    if an:
+        val("cmp-msms-analytic-median", pct(st.median(an)))
+        val("cmp-msms-analytic-min", pct(min(an)))
+        val("cmp-msms-analytic-max", pct(max(an)))
+        val("cmp-msms-analytic-n", str(len(an)))
+        lines.append("MSMS analytic & \\multicolumn{4}{c}{" + pct(st.median(an)) + " (" + pct(min(an)) + " to " + pct(max(an)) + ")} & \\multicolumn{4}{c}{(same)} \\\\")
+    write("tab-cmp-accuracy.tex", "\n".join(lines) + "\n")
+
+    # Agreement of sesmesh with NanoShaper and ESES at the same spacing.
+    for t in ("nanoshaper", "eses"):
+        for h in (0.5, 0.25):
+            da, dv = [], []
+            for (e, hh), d in by.items():
+                if hh == h and t in d and "sesmesh" in d and fnum(d[t]["area"]) and fnum(d["sesmesh"]["area"]):
+                    da.append(abs(fnum(d[t]["area"]) / fnum(d["sesmesh"]["area"]) - 1))
+                    dv.append(abs(fnum(d[t]["volume"]) / fnum(d["sesmesh"]["volume"]) - 1))
+            if da:
+                k = fmt_h(h)
+                val(f"cmp-{t}-darea-max-{k}", pct_plain(max(da), 3))
+                val(f"cmp-{t}-dvol-max-{k}", pct_plain(max(dv), 3))
+                val(f"cmp-{t}-darea-med-{k}", pct_plain(st.median(da), 3))
+                val(f"cmp-{t}-n-{k}", str(len(da)))
+
+    # Validity and robustness per program.
+    def block(rs):
+        n = len(rs)
+        fail = sum(1 for r in rs if r["status"] != "ok")
+        meshed = [r for r in rs if r["status"] == "ok" and r["triangles"]]
+        co = sum(1 for r in meshed if r["closed"] == "True" and r["oriented"] == "True")
+        nm = sum(1 for r in meshed if (fnum(r["nonmanifold_edges"]) or 0) > 0)
+        off = sum(1 for r in meshed if (fnum(r["dist_max"]) or 0) > 0.1)
+        return n, fail, co, len(meshed), nm, off
+
+    lines = []
+    for t in ORDER:
+        c = block([r for r in acc if r["tool"] == t])
+        w = block([r for r in rows if r["campaign"] == "sw" and r["tool"] == t])
+        y = block([r for r in rows if r["campaign"] == "synth" and r["tool"] == t])
+        p99 = [fnum(r["dist_p99"]) for r in acc if r["tool"] == t and r["h"] == 0.5 and fnum(r["dist_p99"]) is not None]
+        mesh = t != "sesa"
+        cell = lambda b: (f"{b[1]}", f"{b[2]}/{b[3]}" if mesh else "--", f"{b[4]}" if mesh else "--", f"{b[5]}" if mesh else "--")
+        cc, ww = cell(c), cell(w)
+        lines.append(" & ".join([NAMES[t], f"{c[0]}", *cc, f"{w[0]}", *ww, f"{y[1]}/{y[0]}",
+                                 f"{st.median(p99):.1e}".replace("e-0", "e-") if p99 else "--"]) + " \\\\")
+        if p99:
+            val(f"cmp-p99-{t}", f"{st.median(p99):.1g}")
+        worst = [fnum(r["dist_max"]) for r in acc + [r for r in rows if r["campaign"] == "sw"]
+                 if r["tool"] == t and fnum(r["dist_max"]) is not None]
+        if worst:
+            val(f"cmp-worst-{t}", f"{max(worst):.2g}")
+        val(f"cmp-sweep-fail-{t}", str(w[1]))
+        val(f"cmp-sweep-runs-{t}", str(w[0]))
+        val(f"cmp-acc-nm-{t}", str(c[4]))
+        val(f"cmp-acc-off-{t}", str(c[5]))
+        val(f"cmp-acc-meshed-{t}", str(c[3]))
+        val(f"cmp-sweep-nm-{t}", str(w[4]))
+        val(f"cmp-sweep-off-{t}", str(w[5]))
+        val(f"cmp-sweep-co-{t}", str(w[2]))
+        val(f"cmp-sweep-meshed-{t}", str(w[3]))
+        val(f"cmp-synth-fail-{t}", str(y[1]))
+    write("tab-cmp-validity.tex", "\n".join(lines) + "\n")
+
+    # Cavities.
+    if (CMP / "cavities.csv").exists():
+        lines = []
+        for r in read(CMP / "cavities.csv"):
+            if r["tool"] == "edtsurf":
+                continue
+            lines.append(f"{NAMES[r['tool']]} & {float(r['spacing']):.2f} & {thousands(int(r['cavities']))} & "
+                         f"{thousands(int(r['sesmesh_cavities']))} & {thousands(int(r['unmatched']))} & "
+                         f"{float(r['unmatched_median_maxdist']):.3f} & {thousands(int(r['sesmesh_not_found']))} \\\\"
+                         if r['unmatched_median_maxdist'] else "")
+        write("tab-cmp-cavities.tex", "\n".join(l for l in lines if l) + "\n")
+    for t in ORDER:
+        for h in (0.5, 0.25):
+            r = by.get(("2PTN", h), {}).get(t)
+            if r and r["cavities"]:
+                val(f"cmp-2ptn-{t}-{fmt_h(h)}", r["cavities"])
+
+    # Performance (wall time, peak RSS) on the bench set.
+    if (CMP / "performance.csv").exists():
+        perf = read(CMP / "performance.csv")
+        cases = [("1CRN", 0.25), ("4HHB", 0.5), ("4HHB", 0.25), ("1AON", 0.5), ("1AON", 0.25),
+                 ("1JJ2", 0.5), ("4V6X", 0.5), ("3J3Q", 1.0), ("1K4R:asm1", 1.0)]
+        cols = [("sesmesh", 16), ("nanoshaper", 16), ("eses", 16), ("msms", 1), ("chimerax", 16),
+                ("edtsurf", 1), ("sesa", 1)]
+        lines = []
+        for e, h in cases:
+            cells = [e.replace(":asm1", " asm.\\,1"), f"{h:g}"]
+            for t, n in cols:
+                m = [r for r in perf if r["tool"] == t and r["entry"] == e and fnum(r["spacing"]) == h
+                     and int(r["threads"]) == n and not r["opts"]]
+                if t == "sesa":
+                    m = [r for r in perf if r["tool"] == t and r["entry"] == e]
+                if not m:
+                    cells.append("--")
+                elif m[0]["status"] != "ok":
+                    cells.append({"timeout": "t/o"}.get(m[0]["status"], "fail"))
+                else:
+                    w, rss = fnum(m[0]["wall_s_median"]), fnum(m[0]["maxrss_mb"])
+                    ws = f"{w:.0f}" if w >= 1000 else f"{w:.3g}"
+                    cells.append(f"{ws}\\,({rss / 1024:.2g})")
+            lines.append(" & ".join(cells) + " \\\\")
+        write("tab-cmp-perf.tex", "\n".join(lines) + "\n")
+
+        # sesmesh on x86: SIMD levels and thread scaling.
+        def wall(e, h, n, opts=""):
+            m = [r for r in perf if r["tool"] == "sesmesh" and r["entry"] == e and fnum(r["spacing"]) == h
+                 and int(r["threads"]) == n and r["opts"] == opts and r["status"] == "ok"]
+            return fnum(m[0]["wall_s_median"]) if m else None
+
+        for lvl in ("scalar", "sse4.2", "avx2", "avx512"):
+            for e, n in (("4HHB", 16), ("1AON", 16), ("4HHB", 1)):
+                w = wall(e, 0.25, n, f"--simd {lvl}")
+                if w:
+                    val(f"cmp-simd-{lvl}-{e}-{n}", f"{w:.3g}")
+        # Mesh-stage time (sesmesh's own timings) per SIMD level, from runs.csv.
+        def mesh_ms(e, n, opts):
+            xs = [fnum(r["mesh_ms"]) for r in rows if r["campaign"] == "perf" and r["tool"] == "sesmesh"
+                  and r["entry"] == e and r["h"] == 0.25 and int(r["threads"]) == n and r["opts"] == opts
+                  and fnum(r.get("mesh_ms"))]
+            return st.median(xs) / 1000 if xs else None
+
+        simd = []
+        base = {(e, n): mesh_ms(e, n, "--simd scalar") for e, n in (("4HHB", 1), ("4HHB", 16), ("1AON", 16))}
+        for lvl, name in (("scalar", "portable fallback"), ("sse4.2", "SSE4.2"), ("avx2", "AVX2"), ("avx512", "AVX-512")):
+            cells = [name]
+            for e, n in (("4HHB", 1), ("4HHB", 16), ("1AON", 16)):
+                w, m = wall(e, 0.25, n, f"--simd {lvl}"), mesh_ms(e, n, f"--simd {lvl}")
+                cells += [f"{w:.3g}" if w else "--", f"{m:.3g}" if m else "--"]
+                if m and base[(e, n)]:
+                    val(f"x86-simd-gain-{lvl}-{e}-{n}", f"{100 * (1 - m / base[(e, n)]):.0f}")
+            simd.append(" & ".join(cells) + " \\\\")
+        write("tab-x86-simd.tex", "\n".join(simd) + "\n")
+        # Criterion field benchmark (arrangement, classification, kernel) per level.
+        bench = CMP / "bench-field-zen5.txt"
+        if bench.exists():
+            import re
+            t = {}
+            for line in bench.read_text().splitlines():
+                m = re.match(r"field/(\w+)/h([\d.]+)/(\S+) time: \[\S+ \S+ ([\d.]+) (ms|s)", line)
+                if m:
+                    e, hh, lvl, v, unit = m.groups()
+                    t[(e, hh, lvl)] = float(v) * (1000 if unit == "s" else 1)
+            for lvl in ("sse4.2", "avx2", "avx512"):
+                r = [t[(e, hh, "scalar")] / t[(e, hh, lvl)] for (e, hh, l) in t if l == lvl and (e, hh, "scalar") in t]
+                if r:
+                    val(f"x86-bench-{lvl}-min", f"{min(r):.2f}")
+                    val(f"x86-bench-{lvl}-max", f"{max(r):.2f}")
+        lines = ["threads aon jj2 saon sjj2"]
+        base = {e: wall(e, 0.5, 1) for e in ("1AON", "1JJ2")}
+        for n in (1, 2, 4, 8, 12, 16):
+            w = {e: wall(e, 0.5, n) for e in ("1AON", "1JJ2")}
+            if all(w.values()) and all(base.values()):
+                lines.append(f"{n} {w['1AON']} {w['1JJ2']} {base['1AON'] / w['1AON']:.3f} {base['1JJ2'] / w['1JJ2']:.3f}")
+                if n == 16:
+                    val("x86-speedup-1AON", f"{base['1AON'] / w['1AON']:.1f}")
+                    val("x86-speedup-1JJ2", f"{base['1JJ2'] / w['1JJ2']:.1f}")
+                    val("x86-eff-1AON", f"{100 * base['1AON'] / w['1AON'] / 16:.0f}")
+                    val("x86-eff-1JJ2", f"{100 * base['1JJ2'] / w['1JJ2'] / 16:.0f}")
+                if n == 8:
+                    val("x86-eff8-1AON", f"{100 * base['1AON'] / w['1AON'] / 8:.0f}")
+                    val("x86-eff8-1JJ2", f"{100 * base['1JJ2'] / w['1JJ2'] / 8:.0f}")
+        write("scaling-x86.dat", "\n".join(lines) + "\n", DAT_HEADER)
+        for e, h in cases:
+            w = wall(e, h, 16)
+            if w:
+                val(f"x86-{e.replace(':asm1', '')}-{fmt_h(h)}", f"{w:.3g}")
+        # Time of each program relative to sesmesh (both succeeded), over the
+        # benchmark cases; peak memory likewise.
+        def one(t, e, h, n):
+            m = [r for r in perf if r["tool"] == t and r["entry"] == e and fnum(r["spacing"]) == h
+                 and int(r["threads"]) == n and not r["opts"] and r["status"] == "ok"]
+            return (fnum(m[0]["wall_s_median"]), fnum(m[0]["maxrss_mb"])) if m else None
+
+        for t, n in (("nanoshaper", 16), ("eses", 16), ("msms", 1), ("chimerax", 16)):
+            rt, rm = [], []
+            for e, h in cases:
+                a_, b_ = one(t, e, h, n), one("sesmesh", e, h, 16)
+                if a_ and b_:
+                    rt.append(a_[0] / b_[0])
+                    rm.append(a_[1] / b_[1])
+            if rt:
+                val(f"ratio-{t}-min", f"{min(rt):.0f}")
+                val(f"ratio-{t}-max", f"{max(rt):.0f}")
+                val(f"ratio-{t}-med", f"{st.median(rt):.0f}")
+                val(f"memratio-{t}-med", f"{st.median(rm):.1f}")
+        for t, n in (("edtsurf", 1), ("sesmesh", 16)):
+            r = one(t, "1AON", 0.25, n)
+            m = [x for x in perf if x["tool"] == t and x["entry"] == "1AON" and fnum(x["spacing"]) == 0.25
+                 and int(x["threads"]) == n and not x["opts"] and x["status"] == "ok"]
+            if m:
+                val(f"tri-{t}-1AON-0.25", f"{int(m[0]['triangles']) / 1e6:.1f}")
+
+
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     accuracy()
@@ -350,6 +587,7 @@ def main() -> None:
     large()
     analytic()
     scaling()
+    comparison()
     body = ["\\makeatletter"]
     for k in sorted(macros):
         body.append(f"\\@namedef{{smval@{k}}}{{{macros[k]}}}")

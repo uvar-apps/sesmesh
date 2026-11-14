@@ -10,13 +10,17 @@ Sampling the exact field changes the error budget of a grid method:
 vertices lie on the SES to within $10^{-4}h$ and normals are exact, so the
 only discretization error left is that of a piecewise-linear surface
 through exact points, which decreases as $O(h^2)$ with a small constant.
-The mean area error at the default 0.5\Ang{} grid
-(\val{area-mean-0.5}\,\%) is below the published error of a
-distance-transform method at $256^3$ (1.99\,\%~\cite{xu2009edtsurf}),
-although the two figures are measured against different references
+On the same spheres and grid, the mean area error at the default 0.5\Ang{}
+grid (\val{area-mean-0.5}\,\%) compares with
+\val{cmp-chimerax-area-med-0.5}\,\% for ChimeraX's distance grid, and two
+independent exact-vertex programs, NanoShaper and ESES, reproduce \sesmesh's
+areas and volumes to a few hundredths of a per cent
 (\cref{sec:comparison}). Because classification is conservative and the
 table is uniform, the same code path yields closed manifold meshes for
-every input tried, without perturbation or restarts.
+every input tried, without perturbation or restarts. Exactness also makes
+the mesh testable: measuring every vertex against the exact field revealed
+both other programs' defects and a rare root-finding failure in \sesmesh{}
+1.1.0 (\cref{sec:cmp-validity}).
 
 \paragraph{Limitations.}
 \begin{itemize}
@@ -51,14 +55,11 @@ every input tried, without perturbation or restarts.
 \end{itemize}
 
 \paragraph{Open measurements.}
-Reviewers will rightly ask for the following, which the present version
-does not provide: (i)~the comparison with MSMS, NanoShaper, EDTSurf, sesa
-and ChimeraX (\cref{sec:comparison}); (ii)~performance on the reference
-machines, in particular the AVX2 and AVX-512 kernels on x86-64 and parallel
-efficiency on 8 homogeneous cores, since all timings here come from one
-loaded Apple Silicon machine; (iii)~a robustness sweep of 1\,000 rather
-than 200 entries; and (iv)~a fuzzing campaign of at least 24 CPU-hours per
-parser, of which only 10 minutes per target have been run
+Still missing: (i)~timings on the specification's Apple Silicon reference
+machine with 8 performance cores (the x86-64 measurements of
+\cref{sec:x86} cover the homogeneous-core case); (ii)~a robustness sweep of
+1\,000 rather than 200 entries; and (iii)~a fuzzing campaign of at least
+24 CPU-hours per parser, of which only 10 minutes per target have been run
 \todo{update this paragraph as each item is completed}.
 
 \paragraph{Future work.}

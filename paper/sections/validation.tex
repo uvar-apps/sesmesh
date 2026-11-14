@@ -235,8 +235,7 @@ others, and random protein-like chains, each for the SES, SAS and vdW
 surfaces. Further tests place a molecule $10^4$\Ang{} from the origin (the
 single-precision kernel frame follows the molecule), use probes of 0.1 and
 10\Ang, and use a 5\,000\Ang{} extent, which selects the double-precision
-sampling path automatically. The design document also lists a C$_{60}$
-fullerene, on which MSMS is reported to fail~\cite{decherchi2013}; the
-present tests use the icosahedral--dodecahedral cage instead
-\todo{add an actual C$_{60}$ test (and report it here) or drop the
-remark}.
+sampling path automatically. The C$_{60}$ fullerene of NanoShaper's examples, on which MSMS misses the
+internal cavity~\cite{decherchi2013}, is part of the comparison's synthetic
+set (\cref{sec:cmp-cavities}): \sesmesh{} meshes it with its cavity,
+like NanoShaper and ESES.

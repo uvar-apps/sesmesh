@@ -9,8 +9,8 @@ private (`publish = false`).
 | Criterion | Status |
 |---|---|
 | All Must and Should requirements implemented | Met: decimation (FR-LOD-4, #1), auto-coarsening (FR-LOD-6, #3); NFR-MEM met with the per-atom budget revised to 800 B (#21) |
-| NFR-PERF met or revised with justification | Revised to the Phase 9 measurements on 10-core Apple Silicon (#20); x86 reference measurements after 1.0 (#8, #10) |
-| NFR-ACC met on the validation corpus, report published | Met against internal references (`docs/validation-report.md`); analytic bound revised (#4); cross-tool references after 1.0 (#5, #6) |
+| NFR-PERF met or revised with justification | Revised to the Phase 9 measurements on 10-core Apple Silicon (#20); x86 reference measurements after 1.0 (#8, #10; 16-core Zen 5 measured 2026-11-14, `docs/comparison.md`) |
+| NFR-ACC met on the validation corpus, report published | Met against internal references (`docs/validation-report.md`); analytic bound revised (#4); cross-tool references after 1.0 (#5, #6; done 2026-11-14, `docs/comparison.md`) |
 | Zero robustness failures; ≥ 24 CPU-hours fuzzing per parser | Sweep 200/200; 10 minutes per fuzz target (7 targets, ≈ 18 M inputs, 0 failures); 24 CPU-hour campaign after 1.0 (#22) |
 | API docs, examples, CLI manual, changelog; crates published | Met |
 

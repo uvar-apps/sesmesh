@@ -40,14 +40,13 @@ areas~\cite{wang2024sesa}. They give exact geometry and compact,
 well-shaped meshes, but the SES has singularities---self-intersecting tori
 where the probe cannot pass between two atoms, and intersecting concave
 patches where probe placements overlap---which make patch construction
-numerically delicate~\cite{quan2016}. MSMS handles failures by restarting
-with perturbed radii, and Goddard reports that it fails on many structures
-with more than 10\,000 atoms~\cite{goddard2013}
-\todo{check this statement and its scope against the Chimera technical
-notes before submission}; Decherchi and Rocchia report a fullerene input on
-which MSMS fails~\cite{decherchi2013} \todo{verify the exact claim and the
-MSMS version in the NanoShaper paper}. MSMS is distributed under a licence
-that is not open source~\cite{msmsmanual}.
+numerically delicate~\cite{quan2016}. MSMS restarts a failing computation
+up to five times after enlarging the radii of the atoms involved by
+0.1\Ang~\cite{msmsmanual}; Goddard found that it crashed on most structures
+larger than 10\,000 atoms~\cite{goddard2013}, and Decherchi and Rocchia
+report that it fails to detect the internal cavity of a
+fullerene~\cite{decherchi2013}. MSMS is distributed under a licence that is
+not open source~\cite{msmsmanual}.
 
 \emph{Volumetric} methods sample a function on a grid and extract an
 isosurface. EDTSurf~\cite{xu2009edtsurf} voxelizes the SAS, computes a
@@ -75,22 +74,24 @@ exactly the $r_p$-level set of the distance to the SAS, computable from
 three classes of closest features~\cite{quan2016}.
 
 \paragraph{Failure modes.}
-Users of these programs meet four recurring problems.
-(i)~\emph{Outright failures} in singular or highly symmetric
-configurations, as reported for MSMS above~\cite{goddard2013,decherchi2013}.
-(ii)~\emph{Meshes that are not closed 2-manifolds}---holes, non-manifold
-edges, inconsistent orientation---which downstream solvers or 3D printing
-have to repair \todo{needs a citable source per tool (which tools, which
-inputs); otherwise state only that sesmesh guarantees these properties and
-remove the comparison}.
-(iii)~\emph{Accuracy tied to the voxel size} in distance-transform
-methods~\cite{xu2009edtsurf}, together with memory that grows with the
+Our own comparison of current versions on the same spheres
+(\cref{sec:comparison}) shows four recurring problems.
+(i)~\emph{Failures}: MSMS stopped with an error on several large or
+irregular structures even after its restarts, NanoShaper crashed or stopped
+on a large ribosome at a fine grid, on a 2.4-million-atom capsid and on one-
+and two-atom inputs, EDTSurf aborted on both 1\Ang{} capsids, and ESES
+crashed on coordinates far from the origin.
+(ii)~\emph{Meshes that are not closed 2-manifolds or not on the surface}:
+many MSMS meshes have non-manifold edges and vertices up to several \AA{}
+from the SES, ChimeraX writes each patch with separate vertices, and
+NanoShaper occasionally places vertices far from the surface.
+(iii)~\emph{Accuracy tied to the voxel size} in grid-distance
+methods~\cite{xu2009edtsurf}: ChimeraX's surface area is several per cent
+low at its default spacing, and dense grids need memory that grows with the
 volume of the bounding box rather than with the surface area.
-(iv)~\emph{Results that depend on the run}: none of the multi-threaded
-programs cited above documents that its output is independent of the
-number of threads \todo{verify for NanoShaper, EDTSurf, ChimeraX and the
-GPU codes; if any documents determinism, rephrase}; reproducible meshes
-matter for regression testing, caching and published supplementary data.
+(iv)~\emph{Results that depend on the run}: ESES's mesh changed with the
+number of threads; reproducible meshes matter for regression testing,
+caching and published supplementary data.
 To our knowledge no Rust library computes SES meshes; existing Rust crates
 in this area compute numerical solvent-accessible surface
 areas~\cite{rustsasa}.
@@ -124,7 +125,9 @@ contributions are:
     (\cref{sec:implementation});
   \item a validation against analytic references, a \val{corpus-n}-entry
     accuracy study, a \val{sweep-n}-entry robustness sweep and inputs of up
-    to 2.44 million atoms (\cref{sec:validation,sec:performance}).
+    to 2.44 million atoms (\cref{sec:validation,sec:performance}), and a
+    comparison on the same spheres with MSMS, NanoShaper, ESES, EDTSurf,
+    ChimeraX and sesa (\cref{sec:comparison}).
 \end{enumerate}
 \sesmesh{} is a library first: the command-line tool is a thin layer over
 a public Rust API that takes spheres and returns a mesh.
@@ -132,8 +135,8 @@ a public Rust API that takes spheres and returns a mesh.
 \Cref{sec:background} recalls the definitions and the implicit field;
 \cref{sec:method} describes the algorithm and \cref{sec:implementation} its
 implementation. \Cref{sec:validation,sec:performance} report accuracy,
-robustness and performance; \cref{sec:comparison} outlines the comparison
-with other programs, which is still to be done; \cref{sec:discussion}
+robustness and performance; \cref{sec:comparison} compares \sesmesh{} with
+other programs; \cref{sec:discussion}
 discusses limitations, and \cref{sec:availability} gives availability.
 
 \begin{figure}[t]

@@ -1,0 +1,386 @@
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# Reference numbers from sesa for the validation corpus (GitHub issue #5),
+# written by tools/compare/report.py from the runs of tools/compare/run.py.
+# Only derived numbers are stored, never the program's output files.
+# area/volume are those of the program's mesh (signed volume, cavities
+# negative), measured by tools/compare/meshcheck; cavities = closed
+# components with negative volume; dist_* = distance of the mesh vertices
+# to the exact SES of the same spheres (sesmesh's SesField).
+
+[provenance]
+program = "sesa V001 (github.com/wlincong/SESexact, sesaV001.tar.gz Linux binary)"
+command = "sesa ID.pdb"
+spheres = "own CHARMM radii, adds hydrogens (not comparable sphere by sphere); atoms: sesmesh default selection (first model, no H or waters, highest-occupancy alt-locs), Bondi radii, probe 1.4 A"
+machine = "AMD Ryzen AI Max+ 395 (16 cores), Ubuntu 24.04 container (tools/compare/Containerfile)"
+date = "2026-11-14"
+
+[[entry]]
+id = "1A28"
+spacing = 0.5
+atoms = 4082
+status = "ok"
+analytic_area = 21132.1142
+
+[[entry]]
+id = "1A3N"
+spacing = 0.5
+atoms = 4542
+status = "ok"
+analytic_area = 23703.2895
+
+[[entry]]
+id = "1AKE"
+spacing = 0.5
+atoms = 3426
+status = "ok"
+analytic_area = 20612.3394
+
+[[entry]]
+id = "1AOI"
+spacing = 0.5
+atoms = 12372
+status = "ok"
+analytic_area = 37373.2247
+
+[[entry]]
+id = "1AON"
+spacing = 0.5
+atoms = 58870
+status = "ok"
+analytic_area = 321220.6406
+
+[[entry]]
+id = "1ATN"
+spacing = 0.5
+atoms = 5019
+status = "ok"
+analytic_area = 23523.0312
+
+[[entry]]
+id = "1BNA"
+spacing = 0.5
+atoms = 486
+status = "ok"
+
+[[entry]]
+id = "1BPI"
+spacing = 0.5
+atoms = 459
+status = "ok"
+analytic_area = 3123.6018
+
+[[entry]]
+id = "1BRS"
+spacing = 0.5
+atoms = 4638
+status = "ok"
+analytic_area = 24095.914
+
+[[entry]]
+id = "1CLL"
+spacing = 0.5
+atoms = 1136
+status = "ok"
+analytic_area = 8099.3992
+
+[[entry]]
+id = "1CRN"
+spacing = 0.5
+atoms = 327
+status = "ok"
+analytic_area = 2276.5336
+
+[[entry]]
+id = "1D66"
+spacing = 0.5
+atoms = 1711
+status = "ok"
+analytic_area = 7379.0628
+
+[[entry]]
+id = "1ECA"
+spacing = 0.5
+atoms = 1087
+status = "ok"
+analytic_area = 6380.2515
+
+[[entry]]
+id = "1EJG"
+spacing = 0.5
+atoms = 327
+status = "ok"
+analytic_area = 2258.565
+
+[[entry]]
+id = "1EMA"
+spacing = 0.5
+atoms = 1771
+status = "ok"
+analytic_area = 8833.8652
+
+[[entry]]
+id = "1ENH"
+spacing = 0.5
+atoms = 466
+status = "ok"
+analytic_area = 3075.2142
+
+[[entry]]
+id = "1FFK"
+spacing = 0.5
+atoms = 64275
+status = "ok"
+
+[[entry]]
+id = "1GFL"
+spacing = 0.5
+atoms = 3650
+status = "ok"
+analytic_area = 17263.9502
+
+[[entry]]
+id = "1GZM"
+spacing = 0.5
+atoms = 5752
+status = "ok"
+analytic_area = 25242.0889
+
+[[entry]]
+id = "1HHO"
+spacing = 0.5
+atoms = 2287
+status = "ok"
+analytic_area = 12662.094
+
+[[entry]]
+id = "1HRC"
+spacing = 0.5
+atoms = 869
+status = "ok"
+analytic_area = 5490.6055
+
+[[entry]]
+id = "1HSG"
+spacing = 0.5
+atoms = 1559
+status = "ok"
+analytic_area = 8840.5577
+
+[[entry]]
+id = "1HZH"
+spacing = 0.5
+atoms = 10576
+status = "ok"
+analytic_area = 60840.1856
+
+[[entry]]
+id = "1IGT"
+spacing = 0.5
+atoms = 10434
+status = "ok"
+analytic_area = 60219.9063
+
+[[entry]]
+id = "1JJ2"
+spacing = 0.5
+atoms = 90650
+status = "ok"
+analytic_area = 78471.0216
+
+[[entry]]
+id = "1KX5"
+spacing = 0.5
+atoms = 13625
+status = "ok"
+analytic_area = 49252.9971
+
+[[entry]]
+id = "1L2Y"
+spacing = 0.5
+atoms = 154
+status = "ok"
+analytic_area = 1273.0176
+
+[[entry]]
+id = "1LYZ"
+spacing = 0.5
+atoms = 1001
+status = "ok"
+analytic_area = 5626.5898
+
+[[entry]]
+id = "1MBN"
+spacing = 0.5
+atoms = 1260
+status = "ok"
+analytic_area = 7370.1598
+
+[[entry]]
+id = "1PGB"
+spacing = 0.5
+atoms = 436
+status = "ok"
+analytic_area = 2999.266
+
+[[entry]]
+id = "1PPT"
+spacing = 0.5
+atoms = 302
+status = "ok"
+analytic_area = 2544.6188
+
+[[entry]]
+id = "1SHG"
+spacing = 0.5
+atoms = 472
+status = "ok"
+analytic_area = 3085.3191
+
+[[entry]]
+id = "1STP"
+spacing = 0.5
+atoms = 917
+status = "ok"
+analytic_area = 5830.2924
+
+[[entry]]
+id = "1TEN"
+spacing = 0.5
+atoms = 698
+status = "ok"
+
+[[entry]]
+id = "1TIM"
+spacing = 0.5
+atoms = 3740
+status = "ok"
+analytic_area = 19479.5004
+
+[[entry]]
+id = "1UBQ"
+spacing = 0.5
+atoms = 602
+status = "ok"
+analytic_area = 3955.8678
+
+[[entry]]
+id = "1VII"
+spacing = 0.5
+atoms = 295
+status = "ok"
+analytic_area = 2381.4134
+
+[[entry]]
+id = "2CPP"
+spacing = 0.5
+atoms = 3258
+status = "ok"
+analytic_area = 14797.6484
+
+[[entry]]
+id = "2DHB"
+spacing = 0.5
+atoms = 2287
+status = "ok"
+analytic_area = 13417.6547
+
+[[entry]]
+id = "2LZM"
+spacing = 0.5
+atoms = 1309
+status = "ok"
+analytic_area = 7357.5437
+
+[[entry]]
+id = "2PTN"
+spacing = 0.5
+atoms = 1630
+status = "ok"
+analytic_area = 8400.4792
+
+[[entry]]
+id = "2RH1"
+spacing = 0.5
+atoms = 3756
+status = "ok"
+analytic_area = 20362.2442
+
+[[entry]]
+id = "3CLN"
+spacing = 0.5
+atoms = 1130
+status = "ok"
+analytic_area = 8155.8411
+
+[[entry]]
+id = "3FX2"
+spacing = 0.5
+atoms = 1133
+status = "ok"
+analytic_area = 5850.7665
+
+[[entry]]
+id = "3HVT"
+spacing = 0.5
+atoms = 7426
+status = "ok"
+analytic_area = 45882.1006
+
+[[entry]]
+id = "3PTB"
+spacing = 0.5
+atoms = 1639
+status = "ok"
+analytic_area = 8316.4566
+
+[[entry]]
+id = "4AKE"
+spacing = 0.5
+atoms = 3312
+status = "ok"
+analytic_area = 20141.2949
+
+[[entry]]
+id = "4HHB"
+spacing = 0.5
+atoms = 4558
+status = "ok"
+analytic_area = 24423.6376
+
+[[entry]]
+id = "4PTI"
+spacing = 0.5
+atoms = 454
+status = "ok"
+analytic_area = 3043.6372
+
+[[entry]]
+id = "4V6X"
+spacing = 0.5
+atoms = 237685
+status = "ok"
+analytic_area = 706834.172
+
+[[entry]]
+id = "5PTI"
+spacing = 0.5
+atoms = 460
+status = "ok"
+analytic_area = 3043.672
+
+[[entry]]
+id = "6LU7"
+spacing = 0.5
+atoms = 2416
+status = "ok"
+analytic_area = 12461.8003
+
+[[entry]]
+id = "6VXX"
+spacing = 0.5
+atoms = 23694
+status = "ok"
+analytic_area = 123401.6523

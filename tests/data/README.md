@@ -6,7 +6,7 @@
 | `tests/data/sets.toml` | Named download sets (`small`, `bench`, later `validation` and `sweep`). Edited by hand. | yes |
 | `tests/data/sets.lock` | SHA-256 of every downloaded file. Written by `cargo xtask fetch`. | yes |
 | `tests/data/cache/` | Downloaded files. | no (git-ignored) |
-| `tests/data/reference/` (Plan T9.2) | Numbers produced offline by external tools (MSMS, NanoShaper, EDTSurf, sesa) with tool versions and command lines. Only derived numbers, never the tools' output files. | yes |
+| `tests/data/reference/` (Plan T9.2) | Numbers produced offline by external tools (MSMS, NanoShaper, ESES, EDTSurf, ChimeraX, sesa) with tool versions and command lines, written by `tools/compare/report.py`; read by `crates/sesmesh/tests/references.rs`. Only derived numbers, never the tools' output files. | yes |
 
 ## Fetching
 

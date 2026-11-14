@@ -1,0 +1,1495 @@
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+#
+# Reference numbers from nanoshaper for the validation corpus (GitHub issue #5),
+# written by tools/compare/report.py from the runs of tools/compare/run.py.
+# Only derived numbers are stored, never the program's output files.
+# area/volume are those of the program's mesh (signed volume, cavities
+# negative), measured by tools/compare/meshcheck; cavities = closed
+# components with negative volume; dist_* = distance of the mesh vertices
+# to the exact SES of the same spheres (sesmesh's SesField).
+
+[provenance]
+program = "NanoShaper 0.7.5 (source github.com/shi-scala/NanoShaper @ 107d844; CGAL 5.6, Boost 1.83, GCC 13.3, one missing #include <memory> added)"
+command = "NanoShaper conf.prm with Surface = ses, Grid_scale = 1/h, Grid_perfil = 80, Probe_Radius = 1.4, Accurate_Triangulation = true, Smooth_Mesh = false, Build_status_map = true, Cavity_Detection_Filling = false, Compute_Vertex_Normals = true"
+spheres = "same spheres as sesmesh (xyzr); atoms: sesmesh default selection (first model, no H or waters, highest-occupancy alt-locs), Bondi radii, probe 1.4 A"
+machine = "AMD Ryzen AI Max+ 395 (16 cores), Ubuntu 24.04 container (tools/compare/Containerfile)"
+date = "2026-11-14"
+
+[[entry]]
+id = "1A28"
+spacing = 0.25
+atoms = 4082
+status = "ok"
+triangles = 1102844
+area = 22993.537224
+volume = 63055.944442
+components = 32
+cavities = 30
+closed = true
+dist_p99 = 0.000808
+dist_max = 0.001064
+
+[[entry]]
+id = "1A28"
+spacing = 0.5
+atoms = 4082
+status = "ok"
+triangles = 273788
+area = 22852.529365
+volume = 63057.221427
+components = 30
+cavities = 27
+closed = true
+dist_p99 = 0.000808
+dist_max = 0.001067
+
+[[entry]]
+id = "1A3N"
+spacing = 0.25
+atoms = 4542
+status = "ok"
+triangles = 1208236
+area = 25132.012185
+volume = 69406.082165
+components = 30
+cavities = 28
+closed = true
+dist_p99 = 0.000761
+dist_max = 0.001611
+
+[[entry]]
+id = "1A3N"
+spacing = 0.5
+atoms = 4542
+status = "ok"
+triangles = 300028
+area = 24981.75877
+volume = 69417.735979
+components = 27
+cavities = 26
+closed = true
+dist_p99 = 0.000762
+dist_max = 0.00164
+
+[[entry]]
+id = "1AKE"
+spacing = 0.25
+atoms = 3426
+status = "ok"
+triangles = 971880
+area = 20265.369025
+volume = 52288.273804
+components = 14
+cavities = 10
+closed = true
+dist_p99 = 0.000757
+dist_max = 0.001032
+
+[[entry]]
+id = "1AKE"
+spacing = 0.5
+atoms = 3426
+status = "ok"
+triangles = 241236
+area = 20145.3828
+volume = 52279.517039
+components = 12
+cavities = 10
+closed = true
+dist_p99 = 0.000757
+dist_max = 0.000987
+
+[[entry]]
+id = "1AOI"
+spacing = 0.25
+atoms = 12372
+status = "ok"
+triangles = 3739604
+area = 77881.995031
+volume = 174190.004612
+components = 58
+cavities = 37
+closed = true
+dist_p99 = 0.000758
+dist_max = 0.001152
+
+[[entry]]
+id = "1AOI"
+spacing = 0.5
+atoms = 12372
+status = "ok"
+triangles = 928072
+area = 77455.291823
+volume = 174129.449792
+components = 40
+cavities = 33
+closed = true
+dist_p99 = 0.000758
+dist_max = 0.001145
+
+[[entry]]
+id = "1AON"
+spacing = 0.25
+atoms = 58870
+status = "ok"
+triangles = 17470796
+area = 364085.769741
+volume = 873185.535008
+components = 384
+cavities = 284
+closed = true
+dist_p99 = 0.000758
+dist_max = 0.197806
+
+[[entry]]
+id = "1AON"
+spacing = 0.5
+atoms = 58870
+status = "ok"
+triangles = 4338396
+area = 361909.662254
+volume = 873425.320586
+components = 278
+cavities = 251
+closed = true
+dist_p99 = 0.000758
+dist_max = 0.20526
+
+[[entry]]
+id = "1ATN"
+spacing = 0.25
+atoms = 5019
+status = "ok"
+triangles = 1239364
+area = 25867.183137
+volume = 78204.648187
+components = 42
+cavities = 34
+closed = true
+dist_p99 = 0.000462
+dist_max = 0.000803
+
+[[entry]]
+id = "1ATN"
+spacing = 0.5
+atoms = 5019
+status = "ok"
+triangles = 307796
+area = 25708.430543
+volume = 78205.864816
+components = 34
+cavities = 30
+closed = true
+dist_p99 = 0.000462
+dist_max = 0.00083
+
+[[entry]]
+id = "1BNA"
+spacing = 0.25
+atoms = 486
+status = "ok"
+triangles = 167300
+area = 3488.818942
+volume = 5837.378262
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000806
+dist_max = 0.000908
+
+[[entry]]
+id = "1BNA"
+spacing = 0.5
+atoms = 486
+status = "ok"
+triangles = 41540
+area = 3472.416647
+volume = 5824.714894
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000805
+dist_max = 0.000901
+
+[[entry]]
+id = "1BPI"
+spacing = 0.25
+atoms = 459
+status = "ok"
+triangles = 156224
+area = 3248.33552
+volume = 6577.12166
+components = 2
+cavities = 0
+closed = true
+dist_p99 = 0.00076
+dist_max = 0.000909
+
+[[entry]]
+id = "1BPI"
+spacing = 0.5
+atoms = 459
+status = "ok"
+triangles = 38784
+area = 3231.215537
+volume = 6568.071602
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.00076
+dist_max = 0.000911
+
+[[entry]]
+id = "1BRS"
+spacing = 0.25
+atoms = 4638
+status = "ok"
+triangles = 1285984
+area = 26778.30246
+volume = 70343.497437
+components = 32
+cavities = 24
+closed = true
+dist_p99 = 0.000758
+dist_max = 0.001087
+
+[[entry]]
+id = "1BRS"
+spacing = 0.5
+atoms = 4638
+status = "ok"
+triangles = 319316
+area = 26620.980345
+volume = 70337.73086
+components = 24
+cavities = 23
+closed = true
+dist_p99 = 0.000759
+dist_max = 0.001224
+
+[[entry]]
+id = "1CLL"
+spacing = 0.25
+atoms = 1136
+status = "ok"
+triangles = 394252
+area = 8212.206189
+volume = 16265.395521
+components = 3
+cavities = 1
+closed = true
+dist_p99 = 0.00064
+dist_max = 0.000829
+
+[[entry]]
+id = "1CLL"
+spacing = 0.5
+atoms = 1136
+status = "ok"
+triangles = 97864
+area = 8165.439192
+volume = 16245.637759
+components = 2
+cavities = 1
+closed = true
+dist_p99 = 0.000641
+dist_max = 0.000772
+
+[[entry]]
+id = "1CRN"
+spacing = 0.25
+atoms = 327
+status = "ok"
+triangles = 110816
+area = 2314.412299
+volume = 4662.708795
+components = 2
+cavities = 1
+closed = true
+dist_p99 = 0.000751
+dist_max = 0.000905
+
+[[entry]]
+id = "1CRN"
+spacing = 0.5
+atoms = 327
+status = "ok"
+triangles = 27540
+area = 2302.613844
+volume = 4656.172277
+components = 2
+cavities = 1
+closed = true
+dist_p99 = 0.000751
+dist_max = 0.00093
+
+[[entry]]
+id = "1D66"
+spacing = 0.25
+atoms = 1711
+status = "ok"
+triangles = 580872
+area = 12115.462982
+volume = 22962.149896
+components = 4
+cavities = 2
+closed = true
+dist_p99 = 0.000754
+dist_max = 0.000952
+
+[[entry]]
+id = "1D66"
+spacing = 0.5
+atoms = 1711
+status = "ok"
+triangles = 144612
+area = 12051.06963
+volume = 22936.867003
+components = 3
+cavities = 1
+closed = true
+dist_p99 = 0.000753
+dist_max = 0.000919
+
+[[entry]]
+id = "1ECA"
+spacing = 0.25
+atoms = 1087
+status = "ok"
+triangles = 316780
+area = 6606.197801
+volume = 16400.717323
+components = 6
+cavities = 4
+closed = true
+dist_p99 = 0.00076
+dist_max = 0.000978
+
+[[entry]]
+id = "1ECA"
+spacing = 0.5
+atoms = 1087
+status = "ok"
+triangles = 78740
+area = 6567.460103
+volume = 16399.029584
+components = 6
+cavities = 4
+closed = true
+dist_p99 = 0.000758
+dist_max = 0.000975
+
+[[entry]]
+id = "1EJG"
+spacing = 0.25
+atoms = 327
+status = "ok"
+triangles = 109704
+area = 2291.186252
+volume = 4621.578702
+components = 2
+cavities = 1
+closed = true
+dist_p99 = 0.00064
+dist_max = 0.000777
+
+[[entry]]
+id = "1EJG"
+spacing = 0.5
+atoms = 327
+status = "ok"
+triangles = 27376
+area = 2278.889865
+volume = 4614.613712
+components = 2
+cavities = 1
+closed = true
+dist_p99 = 0.000636
+dist_max = 0.000756
+
+[[entry]]
+id = "1EMA"
+spacing = 0.25
+atoms = 1771
+status = "ok"
+triangles = 474160
+area = 9886.203892
+volume = 27352.613024
+components = 14
+cavities = 11
+closed = true
+dist_p99 = 0.000759
+dist_max = 0.001298
+
+[[entry]]
+id = "1EMA"
+spacing = 0.5
+atoms = 1771
+status = "ok"
+triangles = 117448
+area = 9825.384632
+volume = 27350.358382
+components = 12
+cavities = 11
+closed = true
+dist_p99 = 0.000764
+dist_max = 0.0012
+
+[[entry]]
+id = "1ENH"
+spacing = 0.25
+atoms = 466
+status = "ok"
+triangles = 152676
+area = 3176.276422
+volume = 6783.802078
+components = 3
+cavities = 2
+closed = true
+dist_p99 = 0.00064
+dist_max = 0.000828
+
+[[entry]]
+id = "1ENH"
+spacing = 0.5
+atoms = 466
+status = "ok"
+triangles = 37988
+area = 3155.944405
+volume = 6775.79273
+components = 3
+cavities = 2
+closed = true
+dist_p99 = 0.000638
+dist_max = 0.000737
+
+[[entry]]
+id = "1FFK"
+spacing = 0.25
+atoms = 64275
+status = "ok"
+triangles = 23750948
+area = 495260.793873
+volume = 874780.69826
+components = 364
+cavities = 32
+closed = true
+dist_p99 = 0.000642
+dist_max = 0.002
+
+[[entry]]
+id = "1FFK"
+spacing = 0.5
+atoms = 64275
+status = "ok"
+triangles = 5895324
+area = 492372.57514
+volume = 873502.160734
+components = 165
+cavities = 29
+closed = true
+dist_p99 = 0.000641
+dist_max = 0.002091
+
+[[entry]]
+id = "1GFL"
+spacing = 0.25
+atoms = 3650
+status = "ok"
+triangles = 960392
+area = 20028.245148
+volume = 56767.442839
+components = 42
+cavities = 32
+closed = true
+dist_p99 = 0.000642
+dist_max = 0.000867
+
+[[entry]]
+id = "1GFL"
+spacing = 0.5
+atoms = 3650
+status = "ok"
+triangles = 238628
+area = 19898.580859
+volume = 56775.216085
+components = 35
+cavities = 31
+closed = true
+dist_p99 = 0.00064
+dist_max = 0.000774
+
+[[entry]]
+id = "1GZM"
+spacing = 0.25
+atoms = 5752
+status = "ok"
+triangles = 1510224
+area = 31472.668791
+volume = 90030.809899
+components = 45
+cavities = 39
+closed = true
+dist_p99 = 0.000642
+dist_max = 0.001039
+
+[[entry]]
+id = "1GZM"
+spacing = 0.5
+atoms = 5752
+status = "ok"
+triangles = 375708
+area = 31282.55267
+volume = 90045.092105
+components = 37
+cavities = 34
+closed = true
+dist_p99 = 0.00064
+dist_max = 0.000937
+
+[[entry]]
+id = "1HHO"
+spacing = 0.25
+atoms = 2287
+status = "ok"
+triangles = 643876
+area = 13437.235395
+volume = 34245.899158
+components = 14
+cavities = 12
+closed = true
+dist_p99 = 0.000464
+dist_max = 0.001185
+
+[[entry]]
+id = "1HHO"
+spacing = 0.5
+atoms = 2287
+status = "ok"
+triangles = 160260
+area = 13356.667608
+volume = 34241.697352
+components = 14
+cavities = 12
+closed = true
+dist_p99 = 0.000463
+dist_max = 0.001043
+
+[[entry]]
+id = "1HRC"
+spacing = 0.25
+atoms = 869
+status = "ok"
+triangles = 249604
+area = 5197.270825
+volume = 13112.12772
+components = 7
+cavities = 5
+closed = true
+dist_p99 = 0.000757
+dist_max = 0.000939
+
+[[entry]]
+id = "1HRC"
+spacing = 0.5
+atoms = 869
+status = "ok"
+triangles = 61888
+area = 5165.99677
+volume = 13105.32161
+components = 6
+cavities = 5
+closed = true
+dist_p99 = 0.000761
+dist_max = 0.000925
+
+[[entry]]
+id = "1HSG"
+spacing = 0.25
+atoms = 1559
+status = "ok"
+triangles = 427700
+area = 8895.66772
+volume = 24848.480273
+components = 11
+cavities = 9
+closed = true
+dist_p99 = 0.000752
+dist_max = 0.002241
+
+[[entry]]
+id = "1HSG"
+spacing = 0.5
+atoms = 1559
+status = "ok"
+triangles = 105712
+area = 8842.631967
+volume = 24842.899881
+components = 10
+cavities = 9
+closed = true
+dist_p99 = 0.000754
+dist_max = 0.002098
+
+[[entry]]
+id = "1HZH"
+spacing = 0.25
+atoms = 10576
+status = "ok"
+triangles = 3167940
+area = 66066.219515
+volume = 157852.450178
+components = 79
+cavities = 57
+closed = true
+dist_p99 = 0.000461
+dist_max = 0.001327
+
+[[entry]]
+id = "1HZH"
+spacing = 0.5
+atoms = 10576
+status = "ok"
+triangles = 786188
+area = 65674.808323
+volume = 157815.48379
+components = 60
+cavities = 53
+closed = true
+dist_p99 = 0.000462
+dist_max = 0.001264
+
+[[entry]]
+id = "1IGT"
+spacing = 0.25
+atoms = 10434
+status = "ok"
+triangles = 3137456
+area = 65357.904788
+volume = 157716.36271
+components = 62
+cavities = 53
+closed = true
+dist_p99 = 0.000643
+dist_max = 0.001932
+
+[[entry]]
+id = "1IGT"
+spacing = 0.5
+atoms = 10434
+status = "ok"
+triangles = 778556
+area = 64961.132574
+volume = 157678.214031
+components = 53
+cavities = 45
+closed = true
+dist_p99 = 0.000643
+dist_max = 0.001686
+
+[[entry]]
+id = "1JJ2"
+spacing = 0.25
+atoms = 90650
+status = "ok"
+triangles = 24087796
+area = 502182.086374
+volume = 1253756.370742
+components = 373
+cavities = 232
+closed = true
+dist_p99 = 0.000642
+dist_max = 0.256115
+
+[[entry]]
+id = "1JJ2"
+spacing = 0.5
+atoms = 90650
+status = "ok"
+triangles = 5979792
+area = 499182.268288
+volume = 1254021.818584
+components = 253
+cavities = 207
+closed = true
+dist_p99 = 0.000643
+dist_max = 0.002472
+
+[[entry]]
+id = "1KX5"
+spacing = 0.25
+atoms = 13625
+status = "ok"
+triangles = 4186284
+area = 87281.925084
+volume = 190698.261862
+components = 52
+cavities = 32
+closed = true
+dist_p99 = 0.00046
+dist_max = 0.00079
+
+[[entry]]
+id = "1KX5"
+spacing = 0.5
+atoms = 13625
+status = "ok"
+triangles = 1040304
+area = 86809.419992
+volume = 190606.999175
+components = 41
+cavities = 30
+closed = true
+dist_p99 = 0.000459
+dist_max = 0.000937
+
+[[entry]]
+id = "1L2Y"
+spacing = 0.25
+atoms = 154
+status = "ok"
+triangles = 61096
+area = 1276.055304
+volume = 2067.276637
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000803
+dist_max = 0.000909
+
+[[entry]]
+id = "1L2Y"
+spacing = 0.5
+atoms = 154
+status = "ok"
+triangles = 15212
+area = 1269.067381
+volume = 2062.056717
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000796
+dist_max = 0.000898
+
+[[entry]]
+id = "1LYZ"
+spacing = 0.25
+atoms = 1001
+status = "ok"
+triangles = 291120
+area = 6077.108381
+volume = 14703.770556
+components = 7
+cavities = 5
+closed = true
+dist_p99 = 0.000644
+dist_max = 0.000829
+
+[[entry]]
+id = "1LYZ"
+spacing = 0.5
+atoms = 1001
+status = "ok"
+triangles = 72284
+area = 6041.845327
+volume = 14698.710103
+components = 6
+cavities = 5
+closed = true
+dist_p99 = 0.00064
+dist_max = 0.000767
+
+[[entry]]
+id = "1MBN"
+spacing = 0.25
+atoms = 1260
+status = "ok"
+triangles = 377416
+area = 7875.66662
+volume = 18629.43705
+components = 8
+cavities = 7
+closed = true
+dist_p99 = 0.000465
+dist_max = 0.001219
+
+[[entry]]
+id = "1MBN"
+spacing = 0.5
+atoms = 1260
+status = "ok"
+triangles = 93400
+area = 7828.705058
+volume = 18627.547105
+components = 6
+cavities = 5
+closed = true
+dist_p99 = 0.000465
+dist_max = 0.001306
+
+[[entry]]
+id = "1PGB"
+spacing = 0.25
+atoms = 436
+status = "ok"
+triangles = 148768
+area = 3104.766713
+volume = 6300.022431
+components = 3
+cavities = 2
+closed = true
+dist_p99 = 0.000808
+dist_max = 0.000968
+
+[[entry]]
+id = "1PGB"
+spacing = 0.5
+atoms = 436
+status = "ok"
+triangles = 37116
+area = 3086.820177
+volume = 6293.437903
+components = 3
+cavities = 2
+closed = true
+dist_p99 = 0.000807
+dist_max = 0.000902
+
+[[entry]]
+id = "1PPT"
+spacing = 0.25
+atoms = 302
+status = "ok"
+triangles = 122836
+area = 2558.782232
+volume = 4066.494288
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000749
+dist_max = 0.000917
+
+[[entry]]
+id = "1PPT"
+spacing = 0.5
+atoms = 302
+status = "ok"
+triangles = 30364
+area = 2544.918222
+volume = 4058.142831
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000755
+dist_max = 0.000913
+
+[[entry]]
+id = "1SHG"
+spacing = 0.25
+atoms = 472
+status = "ok"
+triangles = 148592
+area = 3087.286396
+volume = 6985.463909
+components = 2
+cavities = 0
+closed = true
+dist_p99 = 0.000457
+dist_max = 0.000569
+
+[[entry]]
+id = "1SHG"
+spacing = 0.5
+atoms = 472
+status = "ok"
+triangles = 37052
+area = 3069.021504
+volume = 6976.579979
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000459
+dist_max = 0.000555
+
+[[entry]]
+id = "1STP"
+spacing = 0.25
+atoms = 917
+status = "ok"
+triangles = 274440
+area = 5728.575555
+volume = 13445.240361
+components = 3
+cavities = 2
+closed = true
+dist_p99 = 0.000644
+dist_max = 0.000848
+
+[[entry]]
+id = "1STP"
+spacing = 0.5
+atoms = 917
+status = "ok"
+triangles = 68240
+area = 5695.835705
+volume = 13432.172661
+components = 3
+cavities = 2
+closed = true
+dist_p99 = 0.000643
+dist_max = 0.000776
+
+[[entry]]
+id = "1TEN"
+spacing = 0.25
+atoms = 698
+status = "ok"
+triangles = 216132
+area = 4504.87034
+volume = 10535.887336
+components = 4
+cavities = 3
+closed = true
+dist_p99 = 0.000459
+dist_max = 0.000659
+
+[[entry]]
+id = "1TEN"
+spacing = 0.5
+atoms = 698
+status = "ok"
+triangles = 53624
+area = 4479.237623
+volume = 10528.806971
+components = 4
+cavities = 3
+closed = true
+dist_p99 = 0.000461
+dist_max = 0.000616
+
+[[entry]]
+id = "1TIM"
+spacing = 0.25
+atoms = 3740
+status = "ok"
+triangles = 1130776
+area = 23584.328978
+volume = 55684.293425
+components = 32
+cavities = 26
+closed = true
+dist_p99 = 0.000463
+dist_max = 0.001181
+
+[[entry]]
+id = "1TIM"
+spacing = 0.5
+atoms = 3740
+status = "ok"
+triangles = 280684
+area = 23430.097649
+volume = 55705.471652
+components = 24
+cavities = 22
+closed = true
+dist_p99 = 0.000464
+dist_max = 0.001264
+
+[[entry]]
+id = "1UBQ"
+spacing = 0.25
+atoms = 602
+status = "ok"
+triangles = 192720
+area = 4017.695882
+volume = 9182.282604
+components = 2
+cavities = 1
+closed = true
+dist_p99 = 0.000806
+dist_max = 0.000935
+
+[[entry]]
+id = "1UBQ"
+spacing = 0.5
+atoms = 602
+status = "ok"
+triangles = 48064
+area = 3994.522827
+volume = 9172.155755
+components = 2
+cavities = 1
+closed = true
+dist_p99 = 0.000806
+dist_max = 0.000914
+
+[[entry]]
+id = "1VII"
+spacing = 0.25
+atoms = 295
+status = "ok"
+triangles = 114488
+area = 2387.892945
+volume = 3887.002437
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000641
+dist_max = 0.000747
+
+[[entry]]
+id = "1VII"
+spacing = 0.5
+atoms = 295
+status = "ok"
+triangles = 28384
+area = 2374.869185
+volume = 3877.849411
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000643
+dist_max = 0.000739
+
+[[entry]]
+id = "2CPP"
+spacing = 0.25
+atoms = 3258
+status = "ok"
+triangles = 800552
+area = 16681.126311
+volume = 51151.69053
+components = 32
+cavities = 27
+closed = true
+dist_p99 = 0.000642
+dist_max = 0.001202
+
+[[entry]]
+id = "2CPP"
+spacing = 0.5
+atoms = 3258
+status = "ok"
+triangles = 199424
+area = 16575.227235
+volume = 51155.63526
+components = 31
+cavities = 27
+closed = true
+dist_p99 = 0.000643
+dist_max = 0.000933
+
+[[entry]]
+id = "2DHB"
+spacing = 0.25
+atoms = 2287
+status = "ok"
+triangles = 686604
+area = 14278.495943
+volume = 35397.622132
+components = 23
+cavities = 20
+closed = true
+dist_p99 = 0.00076
+dist_max = 0.00114
+
+[[entry]]
+id = "2DHB"
+spacing = 0.5
+atoms = 2287
+status = "ok"
+triangles = 170512
+area = 14184.36886
+volume = 35399.489151
+components = 18
+cavities = 15
+closed = true
+dist_p99 = 0.000759
+dist_max = 0.000928
+
+[[entry]]
+id = "2LZM"
+spacing = 0.25
+atoms = 1309
+status = "ok"
+triangles = 384364
+area = 8011.845349
+volume = 19823.035389
+components = 12
+cavities = 8
+closed = true
+dist_p99 = 0.000752
+dist_max = 0.000999
+
+[[entry]]
+id = "2LZM"
+spacing = 0.5
+atoms = 1309
+status = "ok"
+triangles = 95408
+area = 7965.515565
+volume = 19815.921155
+components = 10
+cavities = 8
+closed = true
+dist_p99 = 0.000757
+dist_max = 0.000936
+
+[[entry]]
+id = "2PTN"
+spacing = 0.25
+atoms = 1630
+status = "ok"
+triangles = 442060
+area = 9216.108659
+volume = 25203.985056
+components = 16
+cavities = 14
+closed = true
+dist_p99 = 0.000643
+dist_max = 0.000813
+
+[[entry]]
+id = "2PTN"
+spacing = 0.5
+atoms = 1630
+status = "ok"
+triangles = 109732
+area = 9160.092494
+volume = 25205.462544
+components = 15
+cavities = 14
+closed = true
+dist_p99 = 0.000645
+dist_max = 0.000832
+
+[[entry]]
+id = "2RH1"
+spacing = 0.25
+atoms = 3756
+status = "ok"
+triangles = 1061760
+area = 22150.52498
+volume = 57577.444417
+components = 26
+cavities = 22
+closed = true
+dist_p99 = 0.000758
+dist_max = 0.001034
+
+[[entry]]
+id = "2RH1"
+spacing = 0.5
+atoms = 3756
+status = "ok"
+triangles = 263848
+area = 22021.799834
+volume = 57568.359658
+components = 23
+cavities = 21
+closed = true
+dist_p99 = 0.000757
+dist_max = 0.001027
+
+[[entry]]
+id = "3CLN"
+spacing = 0.25
+atoms = 1130
+status = "ok"
+triangles = 390992
+area = 8150.605738
+volume = 16068.658007
+components = 3
+cavities = 0
+closed = true
+dist_p99 = 0.000756
+dist_max = 0.000928
+
+[[entry]]
+id = "3CLN"
+spacing = 0.5
+atoms = 1130
+status = "ok"
+triangles = 96972
+area = 8103.819786
+volume = 16048.122285
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000754
+dist_max = 0.000957
+
+[[entry]]
+id = "3FX2"
+spacing = 0.25
+atoms = 1133
+status = "ok"
+triangles = 287000
+area = 5984.089157
+volume = 17278.849072
+components = 7
+cavities = 6
+closed = true
+dist_p99 = 0.000643
+dist_max = 0.000779
+
+[[entry]]
+id = "3FX2"
+spacing = 0.5
+atoms = 1133
+status = "ok"
+triangles = 71392
+area = 5947.305964
+volume = 17271.20314
+components = 7
+cavities = 6
+closed = true
+dist_p99 = 0.000643
+dist_max = 0.000757
+
+[[entry]]
+id = "3HVT"
+spacing = 0.25
+atoms = 7426
+status = "ok"
+triangles = 2386204
+area = 49716.767152
+volume = 109937.185448
+components = 46
+cavities = 34
+closed = true
+dist_p99 = 0.000809
+dist_max = 0.001802
+
+[[entry]]
+id = "3HVT"
+spacing = 0.5
+atoms = 7426
+status = "ok"
+triangles = 592540
+area = 49414.754246
+volume = 109926.59925
+components = 37
+cavities = 31
+closed = true
+dist_p99 = 0.000809
+dist_max = 0.001124
+
+[[entry]]
+id = "3PTB"
+spacing = 0.25
+atoms = 1639
+status = "ok"
+triangles = 432900
+area = 9021.101886
+volume = 25396.234726
+components = 17
+cavities = 15
+closed = true
+dist_p99 = 0.000757
+dist_max = 0.001148
+
+[[entry]]
+id = "3PTB"
+spacing = 0.5
+atoms = 1639
+status = "ok"
+triangles = 107436
+area = 8966.447555
+volume = 25397.980314
+components = 16
+cavities = 14
+closed = true
+dist_p99 = 0.000753
+dist_max = 0.001007
+
+[[entry]]
+id = "4AKE"
+spacing = 0.25
+atoms = 3312
+status = "ok"
+triangles = 1029184
+area = 21471.698701
+volume = 49951.993786
+components = 16
+cavities = 12
+closed = true
+dist_p99 = 0.00064
+dist_max = 0.000983
+
+[[entry]]
+id = "4AKE"
+spacing = 0.5
+atoms = 3312
+status = "ok"
+triangles = 255680
+area = 21346.183879
+volume = 49939.743103
+components = 14
+cavities = 11
+closed = true
+dist_p99 = 0.000642
+dist_max = 0.000872
+
+[[entry]]
+id = "4HHB"
+spacing = 0.25
+atoms = 4558
+status = "ok"
+triangles = 1282716
+area = 26668.927481
+volume = 70222.517646
+components = 35
+cavities = 31
+closed = true
+dist_p99 = 0.000759
+dist_max = 0.000986
+
+[[entry]]
+id = "4HHB"
+spacing = 0.5
+atoms = 4558
+status = "ok"
+triangles = 318408
+area = 26502.102359
+volume = 70239.655515
+components = 31
+cavities = 30
+closed = true
+dist_p99 = 0.00076
+dist_max = 0.000987
+
+[[entry]]
+id = "4PTI"
+spacing = 0.25
+atoms = 454
+status = "ok"
+triangles = 150288
+area = 3137.958889
+volume = 6508.811433
+components = 2
+cavities = 1
+closed = true
+dist_p99 = 0.000461
+dist_max = 0.000618
+
+[[entry]]
+id = "4PTI"
+spacing = 0.5
+atoms = 454
+status = "ok"
+triangles = 37428
+area = 3122.435398
+volume = 6499.674381
+components = 1
+cavities = 0
+closed = true
+dist_p99 = 0.000458
+dist_max = 0.000532
+
+[[entry]]
+id = "4V6X"
+spacing = 0.25
+atoms = 237685
+status = "fail"
+exit = "139"
+
+[[entry]]
+id = "4V6X"
+spacing = 0.5
+atoms = 237685
+status = "ok"
+triangles = 18008244
+area = 1503399.416933
+volume = 3269199.716065
+components = 600
+cavities = 383
+closed = true
+dist_p99 = 0.000758
+dist_max = 0.679253
+
+[[entry]]
+id = "5PTI"
+spacing = 0.25
+atoms = 460
+status = "ok"
+triangles = 154900
+area = 3223.418538
+volume = 6597.493264
+components = 2
+cavities = 1
+closed = true
+dist_p99 = 0.000811
+dist_max = 0.000921
+
+[[entry]]
+id = "5PTI"
+spacing = 0.5
+atoms = 460
+status = "ok"
+triangles = 38424
+area = 3206.140423
+volume = 6589.204854
+components = 2
+cavities = 1
+closed = true
+dist_p99 = 0.000811
+dist_max = 0.000904
+
+[[entry]]
+id = "6LU7"
+spacing = 0.25
+atoms = 2416
+status = "ok"
+triangles = 639476
+area = 13331.900907
+volume = 37414.966856
+components = 14
+cavities = 11
+closed = true
+dist_p99 = 0.000755
+dist_max = 0.00103
+
+[[entry]]
+id = "6LU7"
+spacing = 0.5
+atoms = 2416
+status = "ok"
+triangles = 158668
+area = 13247.884919
+volume = 37406.505253
+components = 12
+cavities = 11
+closed = true
+dist_p99 = 0.000757
+dist_max = 0.001086
+
+[[entry]]
+id = "6VXX"
+spacing = 0.25
+atoms = 23694
+status = "ok"
+triangles = 6869688
+area = 143222.582572
+volume = 362342.520806
+components = 152
+cavities = 118
+closed = true
+dist_p99 = 0.000757
+dist_max = 0.001354
+
+[[entry]]
+id = "6VXX"
+spacing = 0.5
+atoms = 23694
+status = "ok"
+triangles = 1704848
+area = 142311.743644
+volume = 362357.647962
+components = 121
+cavities = 104
+closed = true
+dist_p99 = 0.000757
+dist_max = 0.001635

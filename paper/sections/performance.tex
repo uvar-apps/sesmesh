@@ -13,9 +13,10 @@ macOS and rustc versions}. The machine carried a heavy background load
 from other applications during the runs (load average 15--27), so wall
 times are pessimistic and repeated runs vary by several percent. The
 reference machines of the specification---8 homogeneous performance
-cores, and an x86-64 desktop with AVX2---were not available; measurements
-on them are planned (\cref{sec:discussion}). Peak memory is the maximum
-resident set size reported by \code{/usr/bin/time -l}.
+cores, and an x86-64 desktop with AVX2---were not available for these runs;
+\cref{sec:x86} adds measurements on an idle 16-core x86-64 machine. Peak
+memory is the maximum resident set size reported by \code{/usr/bin/time
+-l}.
 
 \begin{table}[t]
   \centering
@@ -46,9 +47,13 @@ resident set size reported by \code{/usr/bin/time -l}.
 1.2--2.2 times slower than the targets that were set before the
 implementation, on a machine with only four performance cores. For
 version~1.0 the targets were revised to these measurements, rounded up,
-and the original values remain goals \todo{re-measure on a quiet,
-homogeneous machine with hyperfine (10 runs, 2 warm-ups) as in the
-benchmark protocol, and on x86-64 with AVX2/AVX-512}. The validity tests
+and the original values remain goals. On the idle 16-core x86-64 machine
+of \cref{sec:x86} the same complete runs take \val{x86-1CRN-0.25}\,s
+(1CRN, 0.25\Ang), \val{x86-4HHB-0.5} and \val{x86-4HHB-0.25}\,s (4HHB),
+\val{x86-1AON-0.5}\,s (1AON), \val{x86-1JJ2-0.5}\,s (1JJ2),
+\val{x86-4V6X-0.5}\,s (4V6X) and \val{x86-3J3Q-1}\,s (3J3Q): all the
+original provisional targets are met there except 4HHB at 0.5\Ang{}
+(target $<0.1$\,s). The validity tests
 of the sampling kernel take about 38\,\% of the time and are the next
 optimization target; one evaluated sample costs about
 0.5--0.65\,\textmu s per core.
@@ -61,7 +66,7 @@ efficiency core runs this workload several times slower, which caps the
 speed-up near $5\times$ (4.5--4.9$\times$ at 10 threads). The serial part
 (reading, assembly concatenation) is about 4\,\% of the 10-thread total.
 The specification's target of 75\,\% parallel efficiency on 8 cores needs
-a homogeneous 8-core machine to be tested.
+homogeneous cores; it is met on the x86-64 machine of \cref{sec:x86}.
 
 \paragraph{Size.}
 \Cref{fig:scaling}b plots time against atom count for the
@@ -116,6 +121,77 @@ from the loaded machine.
     robustness sweep and the validation corpus
     (\code{docs/validation/*.csv}); loaded machine, all cores.}
   \label{fig:scaling}
+\end{figure}
+
+\subsection{x86-64: SIMD levels and thread scaling}
+\label{sec:x86}
+
+The cross-tool comparison machines (\cref{sec:comparison}: AMD Ryzen AI
+Max+ 395, 16 Zen~5 cores, SMT off, \code{performance} governor, idle) also
+provide the homogeneous x86-64 platform that the measurements above lacked.
+There \sesmesh{} meshes 1AON at 0.25\Ang{} in \val{x86-1AON-0.25}\,s,
+4V6X at 0.5\Ang{} in \val{x86-4V6X-0.5}\,s and the 2.44-million-atom
+3J3Q at 1\Ang{} in \val{x86-3J3Q-1}\,s (\cref{tab:cmp-perf}), between
+two and three times faster than on the 10-core Apple Silicon machine.
+\Cref{tab:x86-simd} compares the SIMD levels of the field kernel: the
+portable fallback, compiled for the x86-64 baseline and auto-vectorized by
+LLVM, against explicit SSE4.2, AVX2 and AVX-512 kernels. The explicit
+kernels shorten the meshing stage (gathering, sampling, Marching Cubes and
+refinement) by only \val{x86-simd-gain-avx2-4HHB-1}\,\% (AVX2, one thread,
+4HHB) and \val{x86-simd-gain-avx512-1AON-16}\,\% (AVX-512, 16 threads,
+1AON): as on Apple Silicon, the compiler vectorizes the fallback well, and
+the validity tests, gathering and double-precision refinement that dominate
+the stage do not use the explicit kernels, so the specification's
+3$\times$ kernel target (issue \#8) is not met. The field-sampling
+benchmark (arrangement, brick classification and kernel, four threads;
+\code{docs/validation/compare/bench-field-zen5.txt}) gives the same
+picture: AVX2 is \val{x86-bench-avx2-min}--\val{x86-bench-avx2-max} and
+AVX-512 \val{x86-bench-avx512-min}--\val{x86-bench-avx512-max} times
+faster than the fallback on crambin and haemoglobin at 0.5 and 0.25\Ang. With
+16 threads, 1AON and 1JJ2 at 0.5\Ang{} run \val{x86-speedup-1AON} and
+\val{x86-speedup-1JJ2} times faster than with one (parallel efficiency
+\val{x86-eff-1AON} and \val{x86-eff-1JJ2}\,\%; at 8 threads
+\val{x86-eff8-1AON} and \val{x86-eff8-1JJ2}\,\%, above the
+specification's 75\,\% target, issue \#10; \cref{fig:x86-scaling}). These
+are complete runs, so the serial reading, assembly and writing are
+included.
+
+\begin{table}[t]
+  \centering
+  \caption{\sesmesh{} at $h = 0.25$\Ang{} on the Zen~5 machine with the
+    field kernel forced to each SIMD level: wall time of the complete run and
+    time of the meshing stage, in seconds (median of three runs).}
+  \label{tab:x86-simd}
+  \small
+  \begin{tabular}{@{}lrrrrrr@{}}
+    \toprule
+    & \multicolumn{2}{c}{4HHB, 1 thread} & \multicolumn{2}{c}{4HHB, 16 threads} & \multicolumn{2}{c}{1AON, 16 threads} \\
+    \cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(l){6-7}
+    Kernel & wall & mesh & wall & mesh & wall & mesh \\
+    \midrule
+    \tablerows{generated/tab-x86-simd.tex}
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}
+    \begin{axis}[width=0.55\linewidth, height=0.42\linewidth,
+        xlabel={threads}, ylabel={speed-up}, xmin=0.5, xmax=16.5, ymin=0, ymax=16.5,
+        xtick={1,2,4,8,12,16}, ytick={1,4,8,12,16}, grid=major, grid style={black!10},
+        legend pos=north west, legend cell align=left]
+      \addplot[mark=*, mark size=1.5pt, blue!70!black] table[x=threads, y=saon] {generated/scaling-x86.dat};
+      \addlegendentry{1AON, 0.5\Ang}
+      \addplot[mark=square*, mark size=1.5pt, orange!80!black] table[x=threads, y=sjj2] {generated/scaling-x86.dat};
+      \addlegendentry{1JJ2, 0.5\Ang}
+      \addplot[dashed, black!60, domain=1:16, samples=2] {x};
+      \addlegendentry{ideal}
+    \end{axis}
+  \end{tikzpicture}
+  \caption{Speed-up of complete \sesmesh{} runs on the 16-core Zen~5
+    machine relative to one thread (median of three runs).}
+  \label{fig:x86-scaling}
 \end{figure}
 
 \subsection{Large inputs and memory}

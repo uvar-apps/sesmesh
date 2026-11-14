@@ -23,7 +23,9 @@ available, so — by decision — the references are internal:
 This measures the **discretization** error of the mesh. It does not detect
 differences in surface *definition* (radii handling, probe-region details)
 from other tools; those need the cross-tool comparison of issue #5, moved
-to after 1.0.
+to after 1.0. *Done 2026-11-14:* [`comparison.md`](comparison.md) — NanoShaper
+and ESES agree with sesmesh to ≤ 0.03 % (area) and ≤ 0.006 % (volume) at
+0.25 Å on the same spheres.
 
 ## 2. Accuracy (T9.3)
 
@@ -231,7 +233,8 @@ for the work after 1.0.
 ## 7. Not done in this phase
 
 * Cross-tool references (T9.2) and the benchmark comparison with other tools
-  (T9.6): no tools installed — issues #5, #6.
+  (T9.6): no tools installed — issues #5, #6. *Done after 1.0:*
+  [`comparison.md`](comparison.md).
 * The 24 CPU-hour fuzzing campaign per parser (T9.8): moved to after 1.0
   (#22). For 1.0 every target ran 10 minutes (pdb, mmcif, cif_lexer, xyz,
   pqr, detect, assembly; ≈ 18 M inputs from the fixture corpus) without a
