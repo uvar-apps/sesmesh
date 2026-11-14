@@ -7,7 +7,6 @@
 Fast, accurate **Solvent Excluded Surface** (SES, also called the Connolly or
 molecular surface) meshing for molecular structures, written in Rust.
 
-By Ugo Varetto · Copyright (c) 2026 Ugo Varetto · MIT OR Apache-2.0 ·
 [website](https://uvar-apps.github.io/sesmesh/)
 
 * Reads PDB, PDBx/mmCIF, XYZ / extended XYZ and PQR files (optionally
