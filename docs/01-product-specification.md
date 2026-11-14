@@ -360,6 +360,13 @@ measured after 1.0 (#8, #10).
   For v1.0 these bounds are verified against internal references (analytic
   surfaces and the *h* → 0 extrapolation of each entry's mesh, validation
   report §2–3); the cross-tool comparison follows after 1.0 (#5, #6).
+  *After 1.0 (2026-11-14, #5):* on the same spheres, NanoShaper and ESES
+  (both with vertices on the exact SES) agree with sesmesh at the same grid
+  spacing to ≤ 0.03 % in area and ≤ 0.006 % in volume at 0.25 Å over the
+  53-entry corpus, so the protein bounds hold against external references.
+  MSMS's analytic areas lie 0.9 % higher (median), and parts of its meshes
+  lie in the solvent region (example and measurements in
+  `docs/comparison.md` §4–5).
 * Vertex distance to the analytic SES ≤ 10⁻³ Å (with refinement enabled).
 * *Note (Phase 4 measurement):* for single spheres and sphere pairs with
   atomic radii (1.2–1.8 Å) the Marching Cubes mesh, whose vertices lie on the
@@ -432,7 +439,7 @@ measured after 1.0 (#8, #10).
 *As applied to 1.0.0 (2026-11-13):* 1 met (NFR-MEM per-atom budget revised,
 #21); 2 revised with justification (§5.1, #20); 3 met against internal
 references (§5.3, analytic bound revised, #4), cross-tool references after
-1.0 (#5, #6); 4 robustness sweep 200/200 and a 10-minute run of every fuzz
+1.0 (#5, #6; done 2026-11-14, `docs/comparison.md`); 4 robustness sweep 200/200 and a 10-minute run of every fuzz
 target (7 targets, ≈ 18 M inputs, no failures), the 24 CPU-hour campaign
 per parser after 1.0 (#22); 5 met.
 

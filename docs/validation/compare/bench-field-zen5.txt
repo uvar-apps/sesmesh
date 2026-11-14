@@ -1,0 +1,20 @@
+# sesmesh field benchmark (crates/sesmesh/benches/field.rs: arrangement, brick classification and SIMD kernel),
+# criterion, 4 threads pinned to 4 cores of an AMD Ryzen AI Max+ 395 (Zen 5) while other cores ran ESES; 2026-11-14.
+# Format: criterion's [lower estimate upper] per SIMD level.
+field/1CRN/h0.5/scalar time: [11.071 ms 11.142 ms 11.225 ms]
+field/1CRN/h0.5/sse4.2 time: [10.398 ms 10.467 ms 10.530 ms]
+field/1CRN/h0.5/avx2 time: [9.3962 ms 9.4230 ms 9.4731 ms]
+field/1CRN/h0.5/avx512 time: [9.3066 ms 9.3331 ms 9.3710 ms]
+field/1CRN/h0.25/scalar time: [25.644 ms 25.756 ms 25.856 ms]
+field/1CRN/h0.25/sse4.2 time: [24.072 ms 24.163 ms 24.237 ms]
+field/1CRN/h0.25/avx2 time: [21.351 ms 21.430 ms 21.498 ms]
+field/1CRN/h0.25/avx512 time: [21.144 ms 21.216 ms 21.303 ms]
+field/4HHB/h0.5/scalar time: [148.49 ms 148.86 ms 149.17 ms]
+field/4HHB/h0.5/sse4.2 time: [140.17 ms 140.62 ms 141.04 ms]
+field/4HHB/h0.5/avx2 time: [126.62 ms 127.23 ms 128.14 ms]
+field/4HHB/h0.5/avx512 time: [125.60 ms 125.98 ms 126.41 ms]
+field/4HHB/h0.25/scalar time: [352.67 ms 354.44 ms 357.07 ms]
+field/4HHB/h0.25/sse4.2 time: [332.00 ms 335.54 ms 339.21 ms]
+field/4HHB/h0.25/avx2 time: [297.71 ms 300.61 ms 303.93 ms]
+field/4HHB/h0.25/avx512 time: [293.01 ms 293.76 ms 294.50 ms]
+field/1AON/h0.5/avx512 time: [1.7295 s 1.7324 s 1.7354 s]

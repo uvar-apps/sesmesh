@@ -369,6 +369,10 @@ Exit (v0.3): all Must/Should requirements implemented.
 >   `xtask sample-sweep` (`[sets.sweep]`: 200 random entries, seed 2026).
 > * T9.2/T9.6: **not done** — no external tools installed (issues #5, #6);
 >   internal references instead (analytic + h → 0 extrapolation).
+>   *Done after 1.0 (2026-11-14):* `tools/compare`, `tests/data/reference/`,
+>   `crates/sesmesh/tests/references.rs`, `docs/comparison.md` (MSMS,
+>   NanoShaper, ESES, EDTSurf, ChimeraX, sesa on two 16-core x86-64 hosts;
+>   also the x86 SIMD and thread-scaling measurements of #8, #10).
 > * T9.3: `xtask validate` → `docs/validation/accuracy.csv`; area −0.20 % /
 >   volume −0.02 % mean at 0.25 Å; NFR-ACC protein bounds met; analytic
 >   small-sphere bound still open (issue #4, recommendation in the report).

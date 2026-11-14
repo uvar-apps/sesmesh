@@ -6,6 +6,32 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Cross-tool comparison (#5, #6; x86 measurements for #8, #10):
+  `tools/compare/` holds a container with MSMS 2.6.2, NanoShaper 0.7.5,
+  ESES, EDTSurf, UCSF ChimeraX 1.12 and sesa, a checker (`meshcheck`) that
+  measures any program's mesh against the exact SES of the same spheres, and
+  the run, campaign and report scripts. Results in `docs/comparison.md` and
+  `docs/validation/compare/`: on the same spheres, NanoShaper and ESES agree
+  with sesmesh to ≤ 0.03 % in area and ≤ 0.006 % in volume at 0.25 Å over the
+  53-entry corpus, and on 2PTN's 14 cavities.
+- Stored reference numbers of the six programs for the validation corpus
+  (`tests/data/reference/*.toml`) and `tests/references.rs`, which compares
+  sesmesh with NanoShaper and ESES on the vendored fixtures (CI) and on the
+  whole corpus (ignored test, needs `tests/data/cache`).
+- Paper draft in `paper/` (LaTeX; tables and plots generated from the
+  validation and comparison data).
+
+### Changed
+
+- Crate metadata: `homepage` points to the website, category
+  `science::bioinformatics` added, keyword `ses` replaced by `protein`.
+- `CITATION.cff` added (GitHub "Cite this repository", Zenodo).
+- Website: canonical links, Open Graph tags on every page, JSON-LD
+  software description on the home page, `sitemap.xml`; the 404 page is not
+  indexed.
+
 ### Fixed
 
 - Exact vertex refinement (Design §8.2) could leave a vertex well off the
@@ -24,15 +50,6 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   (by up to 0.15 Å), triangles are unchanged (1CRN: no change; 4HHB 17 / 10,
   1AON 158 / 107, 6VXX 74 / 42 vertices at 0.5 / 0.25 Å). Vertices of edges
   that converged before are bit-identical.
-
-### Changed
-
-- Crate metadata: `homepage` points to the website, category
-  `science::bioinformatics` added, keyword `ses` replaced by `protein`.
-- `CITATION.cff` added (GitHub "Cite this repository", Zenodo).
-- Website: canonical links, Open Graph tags on every page, JSON-LD
-  software description on the home page, `sitemap.xml`; the 404 page is not
-  indexed.
 
 ## [1.1.0] - 2026-11-14
 

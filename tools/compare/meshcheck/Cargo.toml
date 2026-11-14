@@ -1,0 +1,30 @@
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+# Stand-alone helper of the cross-tool comparison (tools/compare, issues #5
+# and #6); not a member of the repository workspace.
+#
+#   meshcheck spheres <structure> <prefix> [--assembly ID]
+#       writes <prefix>.xyzr, <prefix>.pqr and <prefix>.pdb with the atoms
+#       and radii sesmesh uses by default (first model, no H or waters,
+#       Bondi radii), so every program sees the same spheres.
+#   meshcheck check <prefix>.xyzr <mesh> [--format F] [--probe R] [--sample N]
+#       reads a mesh written by any of the compared programs and prints one
+#       JSON object: counts, topology defects, area, volume, distance of the
+#       vertices to the exact SES and normal errors.
+
+[package]
+name = "meshcheck"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+sesmesh = { path = "../../../crates/sesmesh" }
+rayon = "1.12"
+
+[workspace]
+
+[profile.release]
+debug = false

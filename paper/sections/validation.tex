@@ -1,0 +1,241 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+
+\section{Validation}
+\label{sec:validation}
+
+Unless stated otherwise, inputs use the default selection (first model, no
+hydrogens or waters, highest-occupancy alternate locations), Bondi radii,
+$r_p = 1.4$\Ang, the SES with cavities kept, the default brick size and the
+automatically selected SIMD level. Tables and plots in this section are
+generated from the data files in the repository by a script that ships with
+the paper (\cref{app:reproduce}).
+
+\subsection{Analytic references}
+\label{sec:analytic}
+
+A single sphere is its own SES, with area $4\pi r^2$ and volume
+$\tfrac43\pi r^3$. Two spheres give an axially symmetric SES: two spherical
+zones joined by the arc of the probe circle swept around the axis. Its area
+$\int 2\pi R(x)\sqrt{1 + R'(x)^2}\,dx$ and volume $\int \pi R(x)^2\,dx$ are
+integrated by composite Gauss--Legendre quadrature to machine precision,
+split at the points where the profile is clipped by the axis in the
+self-intersecting regime (the probe circle crosses the axis and the SES
+splits into two components meeting at cusps); for equal radii the result
+matches the closed form of the saddle area. Four configurations cover
+overlapping spheres, a probe-bridged pair and a self-intersecting torus
+(\cref{tab:analytic}).
+
+\begin{table}[t]
+  \centering
+  \caption{Analytic references meshed at $h = 0.25$ and 0.125\Ang{}
+    ($r_p = 1.4$\Ang; radii $r$ and centre distance $d$ in \AA). $C$ is the
+    number of components; $A$ and $V$ the exact area and volume; relative
+    errors of the mesh in \%; $p$ the observed order
+    $\log_2(e_{0.25}/e_{0.125})$. Generated from \code{data/analytic.csv}.}
+  \label{tab:analytic}
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}lrrrrrrrrr@{}}
+    \toprule
+    & & & & \multicolumn{3}{c}{Area error} & \multicolumn{3}{c}{Volume error} \\
+    \cmidrule(lr){5-7}\cmidrule(l){8-10}
+    Configuration & $C$ & $A$ (\AA$^2$) & $V$ (\AA$^3$) &
+      0.25\Ang & 0.125\Ang & $p$ & 0.25\Ang & 0.125\Ang & $p$ \\
+    \midrule
+    \tablerows{generated/tab-analytic.tex}
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The mesh is \emph{inscribed}: its vertices lie on the surface and its flat
+triangles cut the convex parts, so it underestimates both area and volume
+by $O(h^2)$ (\cref{fig:convergence}a). At $h = 0.25$\Ang{} the area error is
+$-$\val{an-area-lo-0.25} to $-$\val{an-area-hi-0.25}\,\% and the volume
+error $-$\val{an-vol-lo-0.25} to $-$\val{an-vol-hi-0.25}\,\%; at
+0.125\Ang{} they fall to $-$\val{an-area-lo-0.125} to
+$-$\val{an-area-hi-0.125}\,\% and $-$\val{an-vol-lo-0.125} to
+$-$\val{an-vol-hi-0.125}\,\%, with observed orders between
+\val{an-order-min} and \val{an-order-max}. Small atom-sized spheres are the
+worst case for an inscribed mesh; the specification's accuracy requirement
+for these references is therefore an $O(h^2)$ bound of 0.7\,\% for area and
+1.5\,\% for volume at 0.25\Ang, which every case meets. Proteins behave
+much better (\cref{sec:proteins}).
+
+\paragraph{Vertices and normals.}
+Over all meshes of \cref{tab:analytic} at the four spacings
+$h \in \{1, 0.5, 0.25, 0.125\}$\Ang, the largest field value at a vertex,
+$\max|F(\vect v)|$, i.e.\ the distance to the exact SES from inside
+(\ref{p:dist}), is $\val{an-f-over-h}\,h$: the edge clamp of
+\cref{sec:refine}, not the refinement tolerance. The largest angle between
+a mesh normal and the analytic normal at the vertex position is
+\val{an-normal-max}$^\circ$.
+
+\begin{figure}[t]
+  \centering
+  \begin{tikzpicture}
+    \begin{groupplot}[group style={group size=3 by 1, horizontal sep=19mm},
+        width=0.32\linewidth, height=0.32\linewidth,
+        xmode=log, log basis x=2, xlabel={$h$ (\AA)},
+        xtick={0.125,0.25,0.5,1}, xticklabels={0.125,0.25,0.5,1},
+        grid=major, grid style={black!10}]
+      % (a) analytic references
+      \nextgroupplot[ymode=log, log ticks with fixed point, ylabel={$|$relative error$|$ (\%)},
+        title={\small (a) analytic references},
+        ymin=0.05, ymax=30, legend pos=south east, legend cell align=left]
+      \foreach \c in {0,...,4} {
+        \addplot[mark=*, mark size=1.2pt, blue!70!black, thin, forget plot]
+          table[x=h, y=a\c] {generated/analytic-conv.dat};
+        \addplot[mark=square*, mark size=1.2pt, orange!80!black, thin, forget plot]
+          table[x=h, y=v\c] {generated/analytic-conv.dat};
+      }
+      \addlegendimage{mark=*, blue!70!black}\addlegendentry{area}
+      \addlegendimage{mark=square*, orange!80!black}\addlegendentry{volume}
+      \addplot[dashed, black, domain=0.11:1.1, samples=2] {8*x^2};
+      \addlegendentry{$\propto h^2$}
+      % (b) proteins: area
+      \nextgroupplot[ymode=log, log ticks with fixed point, ylabel={$|$area error$|$ (\%)},
+        title={\small (b) \val{corpus-n} structures, area},
+        ymin=0.1, ymax=5, legend pos=south east, legend cell align=left]
+      \addplot[only marks, mark=o, mark size=1pt, blue!60!black, opacity=0.5]
+        table[x=h, y=area] {generated/conv-entries.dat};
+      \addlegendentry{entries}
+      \addplot[dashed, black, domain=0.22:1.1, samples=2] {3.2*x^2};
+      \addlegendentry{$\propto h^2$}
+      % (c) proteins: signed volume error
+      \nextgroupplot[ylabel={signed volume error (\%)},
+        title={\small (c) \val{corpus-n} structures, volume},
+        ymin=-1.5, ymax=0.3, legend pos=south east, legend cell align=left]
+      \addplot[name path=lo, draw=none, forget plot]
+        table[x=h, y=vol_min] {generated/conv-summary.dat};
+      \addplot[name path=hi, draw=none, forget plot]
+        table[x=h, y=vol_max] {generated/conv-summary.dat};
+      \addplot[orange!25, forget plot] fill between[of=lo and hi];
+      \addplot[mark=square*, mark size=1.2pt, orange!80!black]
+        table[x=h, y=vol_mean] {generated/conv-summary.dat};
+      \addlegendentry{mean}
+      \addlegendimage{area legend, fill=orange!25, draw=none}
+      \addlegendentry{range}
+    \end{groupplot}
+  \end{tikzpicture}
+  \caption{Convergence. (a)~Absolute relative error of area (circles) and
+    volume (squares) for the five analytic references of
+    \cref{tab:analytic}. (b)~Area error of each of the \val{corpus-n}
+    validation structures relative to its $h \to 0$ extrapolation.
+    (c)~Signed volume error: mean and range over the corpus. The
+    extrapolation is fitted on $h = 0.5$, 0.35 and 0.25\Ang, so the points
+    at 1 and 0.7\Ang{} are out-of-sample.}
+  \label{fig:convergence}
+\end{figure}
+
+\subsection{Proteins and nucleic acids}
+\label{sec:proteins}
+
+No closed form exists for real molecules, and no external surface program
+was available when this study was made (\cref{sec:comparison}). Because the
+vertices of \sesmesh{} lie on the exact SES, the area and volume of its
+inscribed mesh converge as $A(h) = A_0 + c\,h^2$; we take the least-squares
+fits $A_0$ and $V_0$ over $h \in \{0.5, 0.35, 0.25\}$\Ang{} as references
+and report errors relative to them. This measures the \emph{discretization}
+error of the mesh. It cannot detect a difference in the \emph{definition}
+of the surface (radii, selection, probe-region details) with respect to
+other programs; that requires the cross-program comparison of
+\cref{sec:comparison}.
+
+The validation corpus has \val{corpus-n} PDB entries from
+\val{corpus-atoms-min} atoms (\val{corpus-atoms-min-id}) to
+\val{corpus-atoms-max} atoms (\val{corpus-atoms-max-id}): peptides, small
+and medium proteins, haemoglobins, nucleic acids, nucleosomes, antibodies,
+a spike trimer, GroEL--GroES, ribosomal subunits and the human 80S ribosome
+(\cref{app:corpus}). \Cref{tab:accuracy} and \cref{fig:convergence}b,c
+summarize the errors. The area is always underestimated, and halving $h$
+from 0.5 to 0.25\Ang{} divides the mean area error by \val{area-ratio-half};
+the slope of the mean area error over all five spacings is
+\val{area-order}. The volume error is an order of magnitude smaller than
+for single spheres because convex and concave patches bias it in opposite
+directions: inscribed triangles lie inside the solid on convex patches and
+on the solvent side on concave ones; small, highly curved molecules
+(peptides and the
+\pdb{1BNA} DNA dodecamer) have the largest volume errors. The
+specification's accuracy targets for proteins---area within 1\,\% and
+volume within 0.5\,\% at $h = 0.25$\Ang, 3\,\% and 1\,\% at 0.5\Ang---are
+met with a wide margin with respect to this discretization reference.
+
+\begin{table}[t]
+  \centering
+  \caption{Mesh area and volume error relative to the $h \to 0$
+    extrapolation over the \val{corpus-n} validation structures (in \%;
+    ``worst'' is the most negative entry, ``max'' the most positive).
+    Generated from \code{docs/validation/accuracy.csv}.}
+  \label{tab:accuracy}
+  \small
+  \begin{tabular}{@{}rrrrrr@{}}
+    \toprule
+    & \multicolumn{2}{c}{Area error} & \multicolumn{3}{c}{Volume error} \\
+    \cmidrule(lr){2-3}\cmidrule(l){4-6}
+    $h$ (\AA) & mean & worst & mean & worst & max \\
+    \midrule
+    \tablerows{generated/tab-accuracy.tex}
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Vertex density}
+\label{sec:density}
+
+The level-of-detail model of \cref{sec:lod} predicts
+$\text{vertices}\cdot h^2/\text{area} = 1.5$ for Marching Cubes on a smooth
+surface of random orientation. Over the corpus the measured constant is
+\val{dens-pooled-mean}~$\pm$~\val{dens-pooled-sd} (mean $\pm$ standard
+deviation for $h \le 0.5$\Ang; \cref{tab:density}), so the density mode
+uses 1.5 without calibration, and its test was tightened to hit the
+requested density within $\pm5$\,\%.
+
+\begin{table}[t]
+  \centering
+  \caption{Vertex density constant $\text{vertices}\cdot h^2/\text{area}$
+    over the \val{corpus-n} validation structures (theory: 1.5).}
+  \label{tab:density}
+  \small
+  \begin{tabular}{@{}rrrr@{}}
+    \toprule
+    $h$ (\AA) & mean & SD & range \\
+    \midrule
+    \tablerows{generated/tab-density.tex}
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Robustness}
+\label{sec:robustness}
+
+\paragraph{Random PDB entries.}
+\val{sweep-n} entries were drawn at random (seed 2026) from the 263\,196
+entries of the PDB at the time and meshed from mmCIF at $h = 0.5$\Ang. The
+plan called for 1\,000 entries; the sweep was reduced to \val{sweep-n} by
+decision. All \val{sweep-ok} produced a mesh that passed the built-in
+validation (closed, consistently oriented, edge-manifold, no degenerate or
+duplicate triangles), with no input errors. The entries range from
+\val{sweep-atoms-min} to \val{sweep-atoms-max} atoms (median
+\val{sweep-atoms-median}); together they have \val{sweep-cavities}
+cavities, and one entry has \val{sweep-components-max} components. The
+whole sweep took \val{sweep-seconds-total}\,s of wall time; the slowest
+entry, \pdb{\val{sweep-slowest-id}} (\val{sweep-slowest-atoms} atoms,
+\val{sweep-slowest-tri}\,M triangles), took \val{sweep-seconds-max}\,s. The
+component counts include the sub-grid fragments of \cref{sec:fragments}
+(1\,026 in 119 entries, at most 2.7\AA$^2$ each).
+
+\paragraph{Degenerate geometry.}
+Synthetic inputs that are known to be hard for analytic methods are part of
+the test suite: cubic lattices (many exactly equal distances and four-sphere
+coincidences), symmetric cages made of the vertices of an icosahedron and a
+dodecahedron, collinear chains, exact duplicates and spheres nested inside
+others, and random protein-like chains, each for the SES, SAS and vdW
+surfaces. Further tests place a molecule $10^4$\Ang{} from the origin (the
+single-precision kernel frame follows the molecule), use probes of 0.1 and
+10\Ang, and use a 5\,000\Ang{} extent, which selects the double-precision
+sampling path automatically. The C$_{60}$ fullerene of NanoShaper's examples, on which MSMS misses the
+internal cavity~\cite{decherchi2013}, is part of the comparison's synthetic
+set (\cref{sec:cmp-cavities}): \sesmesh{} meshes it with its cavity,
+like NanoShaper and ESES.

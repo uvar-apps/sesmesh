@@ -1,0 +1,279 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+
+\section{Comparison with other programs}
+\label{sec:comparison}
+
+We compared \sesmesh{} 1.1.0 with five programs that produce SES meshes and
+one that computes analytic SES areas (\cref{tab:cmp-programs}), on the
+\val{corpus-n}-entry validation corpus at $h = 0.5$ and 0.25\Ang, the
+\val{sweep-n}-entry random sweep at 0.5\Ang, nine degenerate synthetic
+inputs and the benchmark set. Harness, container, raw data and the reference
+numbers used by \sesmesh's tests are in the repository (\code{tools/compare},
+\code{docs/validation/compare}, \code{tests/data/reference});
+\code{docs/comparison.md} documents the protocol in full.
+
+\begin{table}[t]
+  \centering
+  \caption{Programs compared. ``Same spheres'': the program accepts the
+    atoms and radii used by \sesmesh{}; EDTSurf and sesa assign their own
+    radii (sesa also adds hydrogens), so only their robustness, topology and
+    speed compare directly.}
+  \label{tab:cmp-programs}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}llp{0.40\linewidth}lc@{}}
+    \toprule
+    Program & Version & Method & Licence & Same spheres \\
+    \midrule
+    MSMS~\cite{sanner1996} & 2.6.2 (2026) & analytic reduced surface, template triangulation & non-commercial & yes \\
+    NanoShaper~\cite{decherchi2013} & 0.7.5 & analytic patches, ray casting, Marching Cubes tables & GPL-3 & yes \\
+    ESES~\cite{liu2017eses} & git 0b4cd51 & exact intersections on a Cartesian grid, Marching Cubes & none stated & yes \\
+    ChimeraX~\cite{chimeraxsurface} & 1.12 (2026) & distance grid, contouring & non-commercial & yes \\
+    EDTSurf~\cite{xu2009edtsurf} & 0.2009 & Euclidean distance transform, Marching Cubes & permissive & no \\
+    sesa~\cite{wang2024sesa} & V001 & analytic SES area (no mesh) & GPL-3 & no \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Protocol.}
+A helper writes the atoms and radii that \sesmesh{} uses by default (first
+model, no hydrogens or waters, Bondi radii) in each program's input format,
+with coordinates kept to three decimals as in the PDB archive and every atom
+written as an \code{ATOM} record, because some programs skip or treat
+\code{HETATM} ligands differently; for ChimeraX, which reads no PQR files,
+the script sets every atom radius explicitly. Resolution is matched by the
+grid spacing $h$ (grid scale $1/h$ for NanoShaper and EDTSurf, vertex density
+$1.5/h^2$ for MSMS, from \cref{sec:density}). Cavities are kept everywhere
+(MSMS \code{-all\_components}); NanoShaper runs without its optional mesh
+smoothing, which moves vertices off the surface; ChimeraX builds one surface
+around all atoms. A single checker reads every program's mesh and reports
+its topology, area, signed volume and components, the distance of every
+vertex to the exact SES of the same spheres, $|F(\vect v)|$, and the angle
+between each vertex normal and the analytic normal. All runs used two
+identical machines with an AMD Ryzen AI Max+ 395 (16 Zen~5 cores, SMT off,
+128\,GB) and one Ubuntu 24.04 container holding every program; performance
+runs had a machine to themselves.
+
+\subsection{Accuracy}
+\label{sec:cmp-accuracy}
+
+NanoShaper and ESES construct the surface independently of \sesmesh{} and
+also place their vertices on the exact SES, so they are the decisive
+reference. At the same grid spacing their meshes agree with \sesmesh's to
+within \val{cmp-nanoshaper-darea-max-0.25}\,\% (NanoShaper) and
+\val{cmp-eses-darea-max-0.25}\,\% (ESES) in area and
+\val{cmp-nanoshaper-dvol-max-0.25}\,\% and \val{cmp-eses-dvol-max-0.25}\,\%
+in volume on every corpus entry at $h = 0.25$\Ang, and within
+\val{cmp-nanoshaper-darea-max-0.5}\,\% and \val{cmp-eses-darea-max-0.5}\,\%
+in area at 0.5\Ang{} (\cref{tab:cmp-accuracy}). All three are inscribed
+meshes below the $h \to 0$ extrapolation by the same $O(h^2)$ amount, which
+confirms the extrapolation of \cref{sec:proteins} with external references:
+the specification's protein targets (area within 1\,\%, volume within
+0.5\,\% at 0.25\Ang) hold against them.
+
+MSMS's analytic SES area lies \val{cmp-msms-analytic-median}\,\% above the
+extrapolation (median of \val{cmp-msms-analytic-n} entries; range
+\val{cmp-msms-analytic-min} to \val{cmp-msms-analytic-max}\,\%), and its
+mesh area scatters by up to \val{cmp-msms-area-worst-0.25}\,\%; the vertex
+analysis below shows surface in the solvent region, which would have that
+effect. ChimeraX's surfaces are smaller in area
+(median \val{cmp-chimerax-area-med-0.5}\,\% at 0.5\Ang,
+\val{cmp-chimerax-area-med-0.25}\,\% at 0.25\Ang) and larger in volume
+(\val{cmp-chimerax-vol-med-0.5}\,\% and \val{cmp-chimerax-vol-med-0.25}\,\%).
+EDTSurf's numbers refer to its own radii and are not listed.
+
+\begin{table}[t]
+  \centering
+  \caption{Mesh area and volume relative to the $h \to 0$ extrapolation of
+    each corpus entry (in \%, median and worst entry; same spheres). The
+    last row is MSMS's analytic SES area (all components): median and
+    range.}
+  \label{tab:cmp-accuracy}
+  \footnotesize
+  \setlength{\tabcolsep}{4pt}
+  \begin{tabular}{@{}lrrrrrrrr@{}}
+    \toprule
+    & \multicolumn{4}{c}{$h = 0.5$\Ang} & \multicolumn{4}{c}{$h = 0.25$\Ang} \\
+    \cmidrule(lr){2-5}\cmidrule(l){6-9}
+    & \multicolumn{2}{c}{area} & \multicolumn{2}{c}{volume} & \multicolumn{2}{c}{area} & \multicolumn{2}{c}{volume} \\
+    Program & median & worst & median & worst & median & worst & median & worst \\
+    \midrule
+    \tablerows{generated/tab-cmp-accuracy.tex}
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Vertices, normals and mesh validity}
+\label{sec:cmp-validity}
+
+\Cref{tab:cmp-validity} summarizes every run. \sesmesh, NanoShaper and ESES
+wrote closed, consistently oriented, edge-manifold meshes in every run that
+produced one; the median 99th-percentile vertex distance was
+\val{cmp-p99-sesmesh}, \val{cmp-p99-nanoshaper} and \val{cmp-p99-eses}\Ang{}
+respectively. NanoShaper still had a few vertices far from the surface on
+some sweep entries (up to \val{cmp-worst-nanoshaper}\Ang).
+
+\emph{MSMS} meshes had vertices more than 0.1\Ang{} from the SES in
+\val{cmp-acc-off-msms} of \val{cmp-acc-meshed-msms} corpus runs and in
+\val{cmp-sweep-off-msms} of \val{cmp-sweep-meshed-msms} sweep runs, up to
+\val{cmp-worst-msms}\Ang; \val{cmp-acc-nm-msms} corpus and
+\val{cmp-sweep-nm-msms} sweep meshes had non-manifold edges, mostly at the
+higher density. On the small inhibitor 5PTI, for example, the worst MSMS
+vertex has $F = +1.387$\Ang: it lies 0.013\Ang{} from a feasible probe
+centre, i.e.\ in the solvent, which is consistent with concave patches of
+overlapping probe positions not being clipped against each other. MSMS's
+documentation also states that it restarts a failing computation up to five
+times after enlarging the radii of the offending atoms by
+0.1\Ang~\cite{msmsmanual}, which moves those parts of the surface.
+\emph{ChimeraX} writes each patch with its own vertices, so none of its
+meshes is closed as written (after merging coincident vertices nearly all
+are), and its grid distances leave a median 99th-percentile vertex error of
+\val{cmp-p99-chimerax}\Ang{} at 0.5\Ang. \emph{EDTSurf}'s vertices follow its
+own radius model and are not comparable.
+
+The checker also exposed a defect in \sesmesh{} 1.1.0 itself: on a few edges
+where $F$ is not monotone (two concave patches meeting at a kink), the root
+finder exhausted its evaluations and placed the vertex at an unevaluated
+point, up to \val{cmp-worst-sesmesh}\Ang{} from the surface (one corpus
+entry at 0.5\Ang{} and three sweep entries; at most 0.011\,\% of the
+vertices of an affected mesh). This has since been fixed by bisecting such
+edges, so every vertex is an evaluated point within $2.4\cdot10^{-5}$\Ang{}
+of the SES away from the edge clamp \todo{name the release that contains the
+fix (development branch \code{claude/intelligent-pasteur-0b9022}) and update
+\cref{sec:refine,sec:analytic} accordingly}.
+
+\begin{table}[t]
+  \centering
+  \caption{Robustness and mesh validity. Corpus: \val{corpus-n} entries at
+    $h = 0.5$ and 0.25\Ang; sweep: \val{sweep-n} random PDB entries at
+    0.5\Ang; synthetic: nine degenerate inputs. ``Closed'': closed,
+    consistently oriented meshes as written, of those produced;
+    ``n-m'': meshes with non-manifold edges; ``off'': meshes with a vertex
+    more than 0.1\Ang{} from the exact SES (meaningful only for programs
+    using the same spheres); last column: median 99th-percentile vertex
+    distance on the corpus at 0.5\Ang.}
+  \label{tab:cmp-validity}
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{@{}lrrrrrrrrrrrr@{}}
+    \toprule
+    & \multicolumn{5}{c}{Corpus} & \multicolumn{5}{c}{Sweep} & Synth. & \\
+    \cmidrule(lr){2-6}\cmidrule(lr){7-11}\cmidrule(lr){12-12}
+    Program & runs & failed & closed & n-m & off & runs & failed & closed & n-m & off & failed & p99 (\AA) \\
+    \midrule
+    \tablerows{generated/tab-cmp-validity.tex}
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Cavities}
+\label{sec:cmp-cavities}
+
+Trypsin (2PTN), the case of issue \#6, has \val{cmp-2ptn-sesmesh-0.25}
+cavities in \sesmesh, NanoShaper and ESES at both spacings, with the same
+total volume to 0.1\AA$^3$; MSMS reports \val{cmp-2ptn-msms-0.25} and
+ChimeraX \val{cmp-2ptn-chimerax-0.25} at 0.25\Ang. Over the corpus
+(\cref{tab:cmp-cavities}), cavities found by NanoShaper or ESES but not
+matched by a \sesmesh{} cavity have their vertices on the exact SES (median
+distance $\le 10^{-3}$\Ang): they are the same cavity space split or joined
+differently at necks thinner than the grid, and their number falls sharply
+from 0.5 to 0.25\Ang. MSMS reports about twice as many cavities as the
+three exact-vertex methods, and half of its unmatched ones have vertices
+0.5\Ang{} or more from the SES. The C$_{60}$ fullerene of NanoShaper's
+examples has one internal cavity in \sesmesh, NanoShaper, ESES and ChimeraX
+and none in MSMS, as Decherchi and Rocchia reported~\cite{decherchi2013}.
+
+\begin{table}[t]
+  \centering
+  \caption{Cavities (closed components of negative volume) on the corpus,
+    matched to \sesmesh's cavities by centroid within 1\Ang. ``Max dist'':
+    median over unmatched cavities of their largest vertex distance to the
+    exact SES.}
+  \label{tab:cmp-cavities}
+  \footnotesize
+  \begin{tabular}{@{}lrrrrrr@{}}
+    \toprule
+    Program & $h$ (\AA) & cavities & \sesmesh{} cavities & unmatched & max dist (\AA) & \sesmesh{} not found \\
+    \midrule
+    \tablerows{generated/tab-cmp-cavities.tex}
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Robustness and determinism}
+\label{sec:cmp-robustness}
+
+\sesmesh{} produced a valid mesh for every input. MSMS failed on
+\val{cmp-sweep-fail-msms} of \val{cmp-sweep-runs-msms} sweep entries, on the
+ribosomal subunit 1FFK at both densities (after its radius-enlarging
+restarts) and on the 2.44-million-atom HIV-1 capsid 3J3Q; Goddard reported
+that earlier MSMS versions crash on most structures above 10\,000
+atoms~\cite{goddard2013}, and version 2.6.2 lists many such crashes as
+fixed. NanoShaper crashed (segmentation fault) on the 80S ribosome 4V6X at
+4 grid points per \AA{}, also with five-fold larger acceleration-grid limits,
+and stopped with an error status and no message on 3J3Q at 1\Ang{} and on
+the one- and two-atom synthetic inputs. ESES crashed on the input placed
+$10^4$\Ang{} from the origin and misplaced vertices by up to 1.3\Ang{} on
+exact duplicate atoms; ChimeraX also failed on the offset input. EDTSurf
+aborted on both capsids at 1\Ang, and sesa crashed on 3J3Q. Memory sets the
+other limits: ESES needed 21\,GiB for 1AON at 0.25\Ang{} and 42\,GiB for
+3J3Q at 1\Ang, and was stopped at a 40\,GiB cap on 4V6X at 0.25\Ang; MSMS
+needed 47\,GiB for the 1K4R capsid.
+
+Outputs were compared byte for byte (ignoring comment lines, since
+NanoShaper writes a date into its header) for 1, 2, 4, 8 and 16 threads and
+repeated runs on 4HHB and 1AON. \sesmesh, NanoShaper and ChimeraX produced
+identical files at every thread count, MSMS and EDTSurf (single-threaded)
+across repeats; ESES's output for 1AON differed at every thread count.
+
+\subsection{Performance}
+\label{sec:cmp-performance}
+
+\Cref{tab:cmp-perf} lists wall time and peak memory on the benchmark set,
+with all 16 cores available to the multi-threaded programs. \sesmesh{},
+ESES and ChimeraX completed every entry; NanoShaper, MSMS and EDTSurf
+failed on the largest. \sesmesh{} was the fastest program on every entry at
+matched resolution: NanoShaper took \val{ratio-nanoshaper-min} to
+\val{ratio-nanoshaper-max} times as long (median
+\val{ratio-nanoshaper-med}), ChimeraX \val{ratio-chimerax-min} to
+\val{ratio-chimerax-max} times, ESES \val{ratio-eses-min} to
+\val{ratio-eses-max} times, and single-threaded MSMS \val{ratio-msms-min}
+to \val{ratio-msms-max} times; the median memory ratios are
+\val{memratio-nanoshaper-med} (NanoShaper), \val{memratio-chimerax-med}
+(ChimeraX), \val{memratio-eses-med} (ESES) and \val{memratio-msms-med}
+(MSMS). EDTSurf is faster on 1AON at 0.25\Ang, but its grid does not
+reach the requested resolution on large molecules: it produced
+\val{tri-edtsurf-1AON-0.25}\,M triangles there, against
+\val{tri-sesmesh-1AON-0.25}\,M for \sesmesh.
+
+\begin{table}[t]
+  \centering
+  \caption{Wall time in seconds (peak memory in GiB) of complete runs on one
+    16-core Zen~5 machine; median of three runs where repeated. Each program
+    writes its own output format; ESES also writes many auxiliary files.
+    \sesmesh, NanoShaper, ESES and ChimeraX use 16 threads; MSMS, EDTSurf
+    and sesa are single-threaded; sesa computes areas only, with its own
+    radii, independent of $h$. ``fail'': crash or error.}
+  \label{tab:cmp-perf}
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{@{}lrrrrrrrr@{}}
+    \toprule
+    Entry & $h$ & \sesmesh{} & NanoShaper & ESES & MSMS & ChimeraX & EDTSurf & sesa \\
+    \midrule
+    \tablerows{generated/tab-cmp-perf.tex}
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\paragraph{Limitations of the comparison.}
+All timings come from one machine type, with the programs' default build
+options; settings that trade accuracy for speed (MSMS density, NanoShaper's
+grid scale) were matched to \sesmesh's resolution rather than tuned per
+program. The programs write different output formats, which is part of
+their cost. EDTSurf and sesa cannot use the same radii. sesx, the exact
+triangulator by the author of sesa, is an interactive viewer without mesh
+export, and GPU programs~\cite{hermosilla2017,martinez2019quickses} are
+outside the scope of a CPU comparison.

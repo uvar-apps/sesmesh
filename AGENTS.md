@@ -165,12 +165,33 @@ tick them in #19. Summary:
 1. Fuzzing campaign ≥ 24 CPU-hours per target (#22): a manual GitHub Actions workflow with one
    job per target and shard (4 vCPU × ≈ 5.5 h each) was sketched, not committed; local
    cargo-fuzz lives in the session scratchpad only (`cargo install cargo-fuzz` for a new one).
-2. Cross-tool references (#5, #6): MSMS/NanoShaper/EDTSurf/sesa numbers stored in
-   `tests/data/reference/*.toml` (D§15), CI comparison without external tools.
-3. Performance on the reference machines and x86 SIMD (#8, #9, #10, #13), robustness sweep to
+2. Cross-tool comparison (#5, #6) done 2026-11-14, merged into `main`:
+   `tools/compare/` (README there), `docs/comparison.md`, `docs/validation/compare/`,
+   `tests/data/reference/*.toml`, `tests/references.rs`. Close #5/#6 (and report #8/#10
+   numbers) when it is pushed. Paper draft in `paper/` (`make`; README lists the open items).
+3. Rare 1.1.0 refinement outliers on non-monotone edges, found by the comparison
+   (`docs/validation/compare/runs.csv`, sesmesh `dist_max`): 0.22 Å on sweep entry 1RCL,
+   0.19 Å 2IEM, 0.17 Å 1GZM, 0.16 Å 8Y7M (all at 0.5 Å), 0.094 Å 1AON at 0.5 Å, 0.083 Å 6VXX
+   at 0.25 Å. Fixed in d358dcf + c97a0bb (merged into `main`, unreleased);
+   release it as 1.1.1, then update `paper/` (§7, §3.5) and the site's accuracy wording ("≤ 1e-4·h"
+   holds near the origin; the edge clamp is ≥ 4 f32 ulps farther out).
+4. Apple Silicon 8-P-core reference timings, x86 kernel work (#9, #13), robustness sweep to
    1 000 entries (#23), Ubuntu 26 CI image (#18), optional marching tetrahedra (#14).
 
 ## Gotchas learned
+
+- The comparison ran on two identical 16-core Zen 5 Linux machines with podman (see
+  `tools/compare/README.md`; work dir `~/sesmesh-bench`, image `localhost/sesmesh-compare`).
+  Ask the user before using them; never publish the image (MSMS and ChimeraX licences forbid
+  redistribution).
+- macOS `openrsync` silently transfers nothing with `-c`; use `rsync -a` and touch Rust sources
+  before rebuilding on the hosts (rsync keeps older mtimes than the last build). Start
+  detached remote jobs with `ssh -f host 'setsid nohup … &'`, else ssh never returns.
+- Compared programs' quirks: ESES reads only `ATOM` records by fixed columns and aborts on atom
+  names not starting with C/H/O/N/P/S; NanoShaper 0.7.5 needs `#include <memory>` (GCC 13),
+  `-DENABLE_EXE=ON`, and writes a date into its OFF header; MSMS writes component k to
+  `mesh_k.vert/.face`; ChimeraX reads no PQR (set radii on the atoms) and writes unshared
+  vertices per patch.
 
 - Timing on this machine is noisy (Defender and other apps; load average often 10–25): write
   outputs to `/dev/null`, check `uptime`, compare with criterion baselines

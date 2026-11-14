@@ -1,0 +1,62 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+
+\section{Validation corpus}
+\label{app:corpus}
+
+\Cref{tab:corpus} lists the \val{corpus-n} entries of the accuracy study
+of \cref{sec:proteins} with their results at $h = 0.25$\Ang{} and the area
+and volume errors at 0.5\Ang. $A_0$ is the $h \to 0$ extrapolation of the
+area. Components include cavities and, in this data set (made with
+version 1.0.0), the sub-grid fragments of \cref{sec:fragments}. Times are
+those of the meshing call alone on the loaded 10-core machine.
+
+{\small
+\setlength{\tabcolsep}{4pt}
+\begin{longtable}{@{}lrrrrrrrrr@{}}
+  \caption{Validation corpus at $h = 0.25$\Ang{} (errors in \%; generated
+    from \code{docs/validation/accuracy.csv}).}\label{tab:corpus}\\
+  \toprule
+  & & & & & \multicolumn{2}{c}{Area error} & \multicolumn{2}{c}{Volume error} & \\
+  \cmidrule(lr){6-7}\cmidrule(lr){8-9}
+  Entry & Atoms & Triangles & Cavities & $A_0$ (\AA$^2$) & 0.5\Ang & 0.25\Ang &
+    0.5\Ang & 0.25\Ang & Time (s) \\
+  \midrule
+  \endfirsthead
+  \toprule
+  Entry & Atoms & Triangles & Cavities & $A_0$ (\AA$^2$) & 0.5\Ang & 0.25\Ang &
+    0.5\Ang & 0.25\Ang & Time (s) \\
+  \midrule
+  \endhead
+  \bottomrule
+  \endfoot
+  \tablerows{generated/tab-corpus.tex}
+\end{longtable}
+}
+
+\section{Reproducing the data in this paper}
+\label{app:reproduce}
+
+From a checkout of the repository at the release tag \todo{tag or commit
+the final paper refers to}:
+
+\begin{lstlisting}
+cargo xtask fetch --set validation --set sweep --set bench   # PDB entries (~70 MB)
+cargo run --release -p xtask -- validate     # docs/validation/accuracy.csv
+cargo run --release -p xtask -- sweep        # docs/validation/sweep.csv
+cargo build --release                        # target/release/sesmesh
+/usr/bin/time -l target/release/sesmesh tests/data/cache/3J3Q.cif.gz -s 1.0 \
+    -o /dev/null --stats /dev/stdout         # large inputs (time, peak RSS)
+cd paper && make                             # analytic data, tables, plots, PDF
+\end{lstlisting}
+
+\noindent The analytic data (\code{paper/\allowbreak data/\allowbreak analytic.csv})
+come from a small program in \code{paper/\allowbreak scripts/\allowbreak analytic}
+that links the library and the analytic references of its test kit;
+\code{paper/\allowbreak scripts/\allowbreak make\_data.py}
+(Python~3 standard library only) turns the CSV files into the tables, the
+\code{\textbackslash val\{\}} numbers in the text and the data of the plots.
+The thread-scaling data (\code{paper/data/scaling.csv}) are transcribed from
+the design document, and the timings of \cref{tab:perf} and the 1.1.0 memory
+figures of \cref{tab:large} from the validation report.
