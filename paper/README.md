@@ -1,6 +1,6 @@
 # sesmesh paper (draft)
 
-LaTeX sources of a full-length research/software paper on sesmesh 1.1.1,
+LaTeX sources of a full-length research/software paper on sesmesh 1.1.2,
 meant for an arXiv preprint (primary **q-bio.BM**, cross-lists **cs.CG** and
 **physics.comp-ph**) and later a journal (J. Appl. Cryst. "computer
 programs", Bioinformatics or JCIM application note, or Computer Physics
@@ -56,22 +56,16 @@ Other targets:
 
 ## Open items (`\todo`)
 
-Numbers match the red markers in the PDF (draft of 2026-11-14, describing
-1.1.1).
+Numbers match the red markers in the PDF (draft of 2026-11-15, describing
+1.1.2).
 
 | # | Where | Item |
 |---|---|---|
-| 1 | title | Affiliation (or "Independent researcher"), city, country |
-| 2 | title | ORCID iD |
-| 3 | abstract | Final abstract length/format for the target venue (Bioinformatics: 150 words, structured; J. Appl. Cryst.: unstructured) |
-| 4 | §9 Archive | Mint a Zenodo DOI for the described version (1.1.1); cite it in the paper and `CITATION.cff` |
-| 5 | Declarations | Review and finalize the AI-use statement; check the venue's policy |
-| 6 | Declarations | Confirm "no competing interests" |
-| 7 | Declarations | Funding statement |
-| 8 | Declarations | CRediT statement if required |
-| 9 | Declarations | Acknowledgements |
-| 10 | Declarations | Cite the PDB reference recommended by RCSB/wwPDB |
-| 11 | Appendix B | Release tag or commit the paper refers to: `v1.1.2` (2026-11-15) holds the code described, 1.1.1 plus the extended-XYZ overflow fix (default meshes byte-identical to 1.1.1), but not this version of the paper |
+| 1 | abstract | Final abstract length/format for the target venue (Bioinformatics: 150 words, structured; J. Appl. Cryst.: unstructured) |
+| 2 | §9 Archive | Mint a Zenodo DOI for the described version (1.1.2); cite it in the paper and `CITATION.cff` |
+| 3 | Declarations | Review and finalize the AI-use statement; check the venue's policy |
+| 4 | Declarations | Acknowledgements |
+| 5 | Appendix B | Release tag or commit the paper refers to (the `v1.1.2` tree holds the code described, not this version of the paper) |
 
 Resolved by the comparison (previous items 5–8, 9, 11–18): the MSMS and
 NanoShaper statements are now checked against Goddard's notes and the
@@ -92,14 +86,28 @@ Phase 9, committed before the stable toolchain was updated to 1.100.0 that
 morning; 1.100.0 for all later runs).
 Resolved on 2026-11-14 (previous item 4, "Open measurements"): the
 1 000-entry sweep (#23, `docs/validation/sweep1000.csv`, §5.4) and the
-fuzzing campaign (#22, `docs/validation/fuzz.csv`, §4.5) are done; §8 now
-names only the 8-performance-core Apple timings, kept open by decision.
+fuzzing campaign (#22, `docs/validation/fuzz.csv`, §4.5) are done. The
+8-performance-core Apple timings were closed by decision on 2026-11-15:
+the specification (§5.1) now takes the two measured machines (10-core M4,
+16-core Zen 5) as its reference machines; §6 and §8 ("Measurement scope")
+say so.
+Resolved on 2026-11-15 (previous items 1, 2): the title gives "Independent
+researcher, Nedlands, WA, Australia", the ORCID iD and the author's personal
+email; Declarations → Affiliations names CSIRO, Pawsey and UWA and states
+that the work was done independently of them, on the author's own time,
+equipment and expense.
+Resolved on 2026-11-15 (previous items 4–6): competing interests (none),
+funding (none; the author bore all costs) and a single-author CRediT
+statement are written.
+Resolved on 2026-11-15 (previous item 10): the acknowledgements cite the
+archive as the RCSB PDB and wwPDB policies ask (Berman et al. 2000; Berman,
+Henrick, Nakamura 2003; wwPDB consortium 2019; checked against Crossref).
 
 ### Bibliography gaps (not marked in the PDF)
 
 `references.bib` deliberately contains only what the repository states,
-except the continuum-electrostatics section (complete, checked against
-Crossref). Before submission:
+except the continuum-electrostatics, Protein Data Bank and structures
+sections (complete, checked against Crossref). Before submission:
 
 * DOIs missing for Richards 1977, Connolly 1983 (*Science*), Sanner et al.
   1996, Can et al. 2006 (LSMS), Custódio et al. 2013, Ju et al. 2002, Taubin
@@ -109,13 +117,21 @@ Crossref). Before submission:
   hybrid-36, extended XYZ, PQR, OBJ, rayon, fearless_simd, flate2,
   rust-sasa, Rust issue 86656) have no year or access date (BibTeX warns
   "empty year"); add `urldate`/`note = {accessed …}` and versions.
-* The sesmesh entry should carry the Zenodo DOI (item 5).
+* The sesmesh entry should carry the Zenodo DOI (item 2).
+* PDB entries: the RCSB policy asks that an entry be cited by its PDB ID
+  and its primary publication. The 16 entries named in the text are cited
+  at first mention (primary citations from the RCSB Data API, checked
+  against Crossref; `make_data.py` asserts that the IDs the text takes from
+  the data are still the cited ones). The 53-entry corpus of Appendix A and
+  the 1 200 sweep entries (`tests/data/sets.toml`) are identified by PDB ID
+  only; a journal may want the corpus cited too (supplementary table).
 
 ## What reviewers will flag
 
 1. **Refinement outliers in 1.1.0**: the comparison found rare vertices up
-   to 0.22 Å off the SES in sesmesh 1.1.0. 1.1.1 fixes them and is the
-   version described; §7.2 reports both. The sesmesh accuracy, sweep,
+   to 0.22 Å off the SES in sesmesh 1.1.0. 1.1.1 fixes them; 1.1.2, the
+   version described, writes the same meshes as 1.1.1 (only `io/xyz.rs`
+   differs under `crates/`); §7.2 reports both. The sesmesh accuracy, sweep,
    synthetic, determinism and capsid runs were repeated with 1.1.1 on the
    Apple Silicon machine (same sphere files and checker); the comparison
    timings are still 1.1.0, backed by a same-machine 1.1.0/1.1.1 timing
@@ -131,13 +147,14 @@ Crossref). Before submission:
    from here).
 3. **SIMD**: explicit AVX2/AVX-512 kernels gain only 1.2× over the
    auto-vectorized fallback in the field benchmark (target 3×, #8).
-4. **Apple Silicon timings** still come from one loaded 10-core machine
-   (the x86-64 runs are clean); the 8-performance-core reference machine
-   was never measured.
+4. **Apple Silicon timings** come from one loaded, fanless 4 + 6-core
+   laptop (the x86-64 runs are clean). The specification's original
+   8-performance-core reference machine was replaced by decision with the
+   two measured machines, so the paper has no 8-core Apple figure.
 5. **A parser bug found after 1.1.1**: the fuzzing campaign found an
    integer overflow in the extended-XYZ `Properties` parser (a panic on
-   crafted input, no wrong mesh); the fix is released in 1.1.2, so the code
-   the paper describes is 1.1.1 plus this fix, tag `v1.1.2` (item 11).
+   crafted input, no wrong mesh), fixed in 1.1.2, the version the paper
+   describes (§4.5); the 1.1.1 measurements hold for 1.1.2 (§5, §7).
    The robustness evidence itself is now at the planned scale: 1 000 + 200
    random entries and ≥ 24.9 CPU-hours per fuzz target.
 6. **Inscribed-mesh bias**: area always underestimated (−0.20 % at 0.25 Å

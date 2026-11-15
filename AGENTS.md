@@ -42,7 +42,7 @@ any deviation from the plan.
   the working tree changes with a sensible message"): imperative subject, bullet body, trailer
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Then, when asked, fast-forward
   `main` (`git merge --ff-only`). Push only when asked: `origin` =
-  https://github.com/uvar-apps/sesmesh (private); push `main` and the phase branches.
+  https://github.com/uvar-apps/sesmesh (public); push `main` and the phase branches.
 - Validate locally before every push (full list: `docs/release.md`, *Local validation*: fmt,
   both clippy commands, debug + release `--include-ignored` tests, examples, rustdoc, MSRV,
   cargo-deny, publish dry run); never push and rely on GitHub CI, which is manual-only
@@ -80,7 +80,8 @@ any deviation from the plan.
   size limits, #21 memory (arrangement compaction, chunked build/meshing via `par::chunk_len`).
 - Spec decisions for 1.0 (2026-11-13): NFR-MEM 150 B/triangle + 800 B/atom (#21), NFR-ACC
   analytic bound area ≤ 0.7 % / volume ≤ 1.5 % at 0.25 Å (#4), NFR-PERF = Phase 9
-  measurements (#20). After 1.0 (tracking #19): cross-tool references #5/#6, 24 CPU-h fuzz
+  measurements (#20); NFR-PERF reference machines = the measured 10-core M4 and 16-core
+  Zen 5 (2026-11-15, no 8-P-core Apple machine). After 1.0 (tracking #19): cross-tool references #5/#6, 24 CPU-h fuzz
   campaign #22 (only 10 min per target before 1.0), x86 measurements #8/#9/#10, #13, #14,
   #18, #23 (#5/#6, #22 and #23 done 2026-11-14).
 
@@ -172,9 +173,9 @@ tick them in #19. Summary:
    on the two comparison hosts (podman, toolchain and corpora in `~/sesmesh-fuzz` there):
    ≥ 24.9 CPU-h per target, 174.5 in total, results in `docs/validation/fuzz.csv`. It found
    one bug, an extended-XYZ `Properties=` column-count overflow (a panic), fixed after 1.1.1
-   with a regression test in `io::xyz` and released in 1.1.2 (the paper describes 1.1.1;
-   `v1.1.2` is the tag holding the code it describes). The 1 000-entry sweep (#23) is done too
-   (`xtask sweep --set sweep1000`, 1 000/1 000 ok).
+   with a regression test in `io::xyz` and released in 1.1.2, the version the paper
+   describes (1.1.1 measurements hold: only `io/xyz.rs` differs). The 1 000-entry sweep
+   (#23) is done too (`xtask sweep --set sweep1000`, 1 000/1 000 ok).
 2. Cross-tool comparison (#5, #6) done 2026-11-14, merged into `main`:
    `tools/compare/` (README there), `docs/comparison.md`, `docs/validation/compare/`,
    `tests/data/reference/*.toml`, `tests/references.rs`. Close #5/#6 (and report #8/#10
@@ -184,12 +185,13 @@ tick them in #19. Summary:
    0.22 Å on 1RCL, 0.19 Å 2IEM, 0.17 Å 1GZM, 0.16 Å 8Y7M (all at 0.5 Å), 0.094 Å 1AON at
    0.5 Å, 0.083 Å 6VXX at 0.25 Å. Fixed in d358dcf + c97a0bb, released in 1.1.1. The sesmesh comparison runs
    were repeated with 1.1.1 on this Mac (campaigns `acc`/`sw`/`synth`/`det`/`large`; 1.1.0
-   kept as `*110`, `tools/compare/README.md`) and the paper describes 1.1.1 (§3.5, §7).
+   kept as `*110`, `tools/compare/README.md`); the paper describes 1.1.2 (§3.5, §7).
    Still to do: the site's accuracy wording ("≤ 1e-4·h" holds near the origin; the edge
    clamp is ≥ 4 f32 ulps farther out). arm64 and x86-64 builds write files that differ
    in the last bits (same counts and areas); determinism is per binary.
-4. Apple Silicon 8-P-core reference timings (kept open by decision, paper §8), x86 kernel
-   work (#9, #13), Ubuntu 26 CI image (#18), optional marching tetrahedra (#14).
+4. x86 kernel work (#9, #13), Ubuntu 26 CI image (#18), optional marching tetrahedra (#14).
+   The 8-P-core Apple reference timings were dropped by decision (2026-11-15, Spec §5.1).
+   #8 and #10 measured and closed (2026-11-15; results in Design §7.7, §11.1).
 
 ## Gotchas learned
 

@@ -64,7 +64,7 @@ Purpose-built readers parse PDB (fixed columns, hybrid-36 serial
 numbers~\cite{pdbformat33,hybrid36}, chunked parallel parsing of large
 files), PDBx/mmCIF~\cite{mmcif} (a full CIF~1.1 lexer and the
 \code{\_atom\_site} loop in any column order; about 350\,MiB/s on one core;
-the gzipped 2.44-million-atom 3J3Q entry reads in about 0.8\,s), XYZ
+the gzipped 2.44-million-atom 3J3Q entry~\cite{pdb3j3q} reads in about 0.8\,s), XYZ
 and extended XYZ~\cite{extxyz}, and PQR~\cite{pqr}, each optionally gzip
 compressed~\cite{flate2}. Biological assemblies are generated from mmCIF
 \code{pdbx\_struct\_\allowbreak assembly\_gen} and
@@ -115,7 +115,7 @@ links the larger root to the smaller (\cref{sec:cavities}); and parallel
 sorts break ties by index. Memory-saving chunking
 ($\mathrm{clamp}(n/256, 1, 4096)$ items per chunk) is likewise invisible in
 the result. A test suite compares OBJ files byte for byte for 1, 2, 4, 8
-and 16 threads and for repeated runs on crambin and trypsin (2PTN) in
+and 16 threads and for repeated runs on crambin and trypsin (2PTN~\cite{pdb2ptn}) in
 continuous integration, and on 4HHB and 1AON nightly. Determinism also
 makes memory-limited runs reproducible: the memory estimate deliberately
 ignores the thread count, so the automatically coarsened spacing, and with
@@ -190,7 +190,7 @@ After 1.1.1 every target ran for at least \val{fuzz-cpuh-min} CPU-hours
 \val{fuzz-execs-total} million inputs in total). The first minutes of that
 campaign found one bug: the column counts of an extended-XYZ
 \code{Properties} descriptor could overflow when added, which panicked
-instead of reporting an input error. After the fix (made after 1.1.1, with a
+instead of reporting an input error. After the fix (released in 1.1.2, with a
 regression test) the campaign was restarted from the seed corpus and
 reported no crash, timeout or out-of-memory input. Continuous
 integration runs formatting, a strict lint configuration, tests on macOS

@@ -6,6 +6,19 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Paper draft describes 1.1.2 (same meshes as 1.1.1; the 1.1.1
+  measurements stand for it), Appendix B lists the `sweep1000` commands, and
+  the PDB archive (acknowledgements) and the primary publications of the
+  16 entries named in the text are cited as the RCSB PDB and wwPDB ask.
+- Specification §5.1: the NFR-PERF reference machines are the two measured
+  ones (10-core Apple M4, 16-core Zen 5 with 8-thread runs for the 8-core
+  desktop); no 8-performance-core Apple machine will be measured. Paper §6
+  and §8 ("Measurement scope") updated.
+- Paper §8 "Future work" names the planned GPU back ends (HIP, CUDA,
+  Metal).
+
 ## [1.1.2] - 2026-11-15
 
 A fix for a panic in the extended-XYZ reader found by the 24 CPU-hour

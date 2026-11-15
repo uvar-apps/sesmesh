@@ -58,17 +58,20 @@ both other programs' defects and a rare root-finding failure in \sesmesh{}
     (\cref{sec:cmp-robustness}).
 \end{itemize}
 
-\paragraph{Open measurements.}
-Still missing are timings on the specification's Apple Silicon reference
-machine with 8 performance cores; the x86-64 measurements of
-\cref{sec:x86} cover the homogeneous-core case. The two other measurements
-left open at 1.0, a robustness sweep of 1\,000 entries and a fuzzing
-campaign of at least 24 CPU-hours per parser, were completed after 1.1.1
-(\cref{sec:robustness,sec:qa}).
+\paragraph{Measurement scope.}
+The Apple Silicon timings come from one fanless laptop with 4 performance
+and 6 efficiency cores under background load; a machine with 8 performance
+cores, the specification's original reference, was not measured, and the
+specification now takes the two measured machines as its reference
+(\cref{sec:performance}). The x86-64 measurements of \cref{sec:x86} cover
+the homogeneous-core case. The robustness sweep of 1\,000 entries and the
+fuzzing campaign of at least 24 CPU-hours per parser, open at 1.0, were
+completed after 1.1.1 (\cref{sec:robustness,sec:qa}).
 
 \paragraph{Future work.}
 The brick and structure-of-arrays kernel design maps directly to GPU
-compute; other planned extensions are MC33 and dual
+compute, and GPU back ends for HIP (AMD), CUDA (NVIDIA) and Metal (Apple)
+are planned; other planned extensions are MC33 and dual
 meshers~\cite{gibson1998,ju2002}, adaptive resolution, analytic area and
 volume, Gaussian and skin surfaces as further field kinds, region-restricted
 surfaces (for example a binding pocket), Python bindings and a WebAssembly

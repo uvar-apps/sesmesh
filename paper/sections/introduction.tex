@@ -68,7 +68,7 @@ triangulates the result with Marching Cubes tables, so its vertices lie on
 the surface. On GPUs, Hermosilla et al.~\cite{hermosilla2017} and
 QuickSES~\cite{martinez2019quickses} compute narrow-band distance grids
 organized in bricks; Hermosilla et al.\ report about 1.65\,s for the
-545\,000-atom 1K4R capsid on a $512^3$ grid (GeForce GTX 970), with
+545\,000-atom 1K4R capsid~\cite{pdb1k4r} on a $512^3$ grid (GeForce GTX 970), with
 distances approximated grid point to grid point. Finally, the SES can be
 written as a level set of an implicit
 function~\cite{parulek2012,quan2016}: Quan and Stamm proved that it is
@@ -157,7 +157,7 @@ discusses limitations, and \cref{sec:availability} gives availability.
     \includegraphics[width=\linewidth]{1crn-sas}
     \caption{SAS}
   \end{subfigure}
-  \caption{The three surfaces of crambin (PDB 1CRN, 327 atoms) computed by
+  \caption{The three surfaces of crambin (PDB 1CRN~\cite{pdb1crn}, 327 atoms) computed by
     \sesmesh{} at $h = 0.25$\Ang. (a)~vdW surface, coloured by element
     (198\,268 triangles). (b)~SES coloured by the patch type of each vertex:
     convex (blue), saddle (green), concave (orange). (c)~SAS, atom radii

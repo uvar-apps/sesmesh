@@ -60,7 +60,9 @@ the corpus, the sweep, the synthetic inputs and the determinism set were
 repeated with 1.1.1 on the arm64 machine of \cref{sec:performance} with the
 same sphere files and checker. Tables and numbers in this section are those
 of 1.1.1 except the timings (\cref{sec:cmp-performance}); the 1.1.0 runs
-remain in the published data.
+remain in the published data. Version 1.1.2, the one this paper describes,
+differs from 1.1.1 only in rejecting malformed extended-XYZ headers
+(\cref{sec:qa}) and writes the same meshes.
 
 \subsection{Accuracy}
 \label{sec:cmp-accuracy}
@@ -126,7 +128,7 @@ some sweep entries (up to \val{cmp-worst-nanoshaper}\Ang).
 \val{cmp-sweep-off-msms} of \val{cmp-sweep-meshed-msms} sweep runs, up to
 \val{cmp-worst-msms}\Ang; \val{cmp-acc-nm-msms} corpus and
 \val{cmp-sweep-nm-msms} sweep meshes had non-manifold edges, mostly at the
-higher density. On the small inhibitor 5PTI, for example, the worst MSMS
+higher density. On the small inhibitor 5PTI~\cite{pdb5pti}, for example, the worst MSMS
 vertex has $F = +1.387$\Ang: it lies 0.013\Ang{} from a feasible probe
 centre, i.e.\ in the solvent, which is consistent with concave patches of
 overlapping probe positions not being clipped against each other. MSMS's
@@ -148,14 +150,14 @@ the \val{cmp-acc-meshed-sesmesh} corpus meshes and
 sweep meshes had a vertex more than 0.01\Ang{} from the SES
 (\val{cmp-acc-off-sesmesh-110} and \val{cmp-sweep-off-sesmesh-110} of them
 more than 0.1\Ang), up to \val{cmp-worst-sesmesh-110}\Ang{} on the sweep
-entry 1RCL; such vertices were at most \val{cmp-frac-sesmesh-110}\,\% of a
+entry 1RCL~\cite{pdb1rcl}; such vertices were at most \val{cmp-frac-sesmesh-110}\,\% of a
 mesh's vertices; on the capsids at 1\Ang{} the worst vertex was
 \val{cmp-capsid-worst-110}\Ang{} off. Version 1.1.1 bisects these edges.
 Rerun on the same sphere files, it produced the same vertex, triangle,
 component and cavity counts in every run, and the worst vertex of each mesh
 now lies at the edge clamp of \cref{sec:refine}, four single-precision ulps
 of the largest coordinate: at most \val{cmp-worst-sesmesh}\Ang{} over the
-corpus and the sweep (6ESB, whose atoms reach 540\Ang{} from the origin)
+corpus and the sweep (6ESB~\cite{pdb6esb}, whose atoms reach 540\Ang{} from the origin)
 and \val{cmp-capsid-worst-111}\Ang{} on 3J3Q (1\,105\Ang).
 
 \begin{table}[t]
@@ -221,7 +223,7 @@ and none in MSMS, as Decherchi and Rocchia reported~\cite{decherchi2013}.
 
 \sesmesh{} produced a valid mesh for every input. MSMS failed on
 \val{cmp-sweep-fail-msms} of \val{cmp-sweep-runs-msms} sweep entries, on the
-ribosomal subunit 1FFK at both densities (after its radius-enlarging
+ribosomal subunit 1FFK~\cite{pdb1ffk} at both densities (after its radius-enlarging
 restarts) and on the 2.44-million-atom HIV-1 capsid 3J3Q; Goddard reported
 that earlier MSMS versions crash on most structures above 10\,000
 atoms~\cite{goddard2013}, and version 2.6.2 lists many such crashes as

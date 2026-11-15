@@ -239,6 +239,13 @@ rounded up (Spec §5.1: 1CRN < 60 ms, 4HHB < 250 / 600 ms, 1AON < 3.5 s,
 1JJ2 < 5 s, 4V6X < 15 s, 3J3Q < 75 s); the provisional targets remain goals
 for the work after 1.0.
 
+**Decision (2026-11-15, after 1.1.2):** the reference machines are the two
+measured ones (Spec §5.1): this 10-core M4 and the 16-core Zen 5 machine of
+the comparison (`comparison.md`), whose 8-thread runs stand for the 8-core
+x86 desktop; no 8-performance-core Apple machine will be measured. On the
+Zen 5 machine with 16 threads all v1.0 targets and all provisional targets
+except 4HHB at 0.5 Å (0.10–0.12 s against < 100 ms) are met.
+
 ## 7. Not done in this phase
 
 * Cross-tool references (T9.2) and the benchmark comparison with other tools

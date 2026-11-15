@@ -10,14 +10,16 @@
 % filled in from memory; paper/README.md lists them as open items. Exception:
 % the continuum-electrostatics section, which the repository does not cite;
 % its entries were checked against Crossref (authors, title, venue, volume,
-% pages, year, DOI) on 2026-11-14.
+% pages, year, DOI) on 2026-11-14; and the Protein Data Bank and structures
+% sections, taken from the RCSB PDB and wwPDB citation policies and the RCSB
+% Data API and checked against Crossref on 2026-11-15.
 
 % ------------------------------------------------------------------ software
 @misc{sesmesh,
   author       = {Varetto, Ugo},
   title        = {sesmesh: Solvent Excluded Surface meshes for molecules},
   year         = {2026},
-  howpublished = {Software, version 1.1.1, released 2026-11-14},
+  howpublished = {Software, version 1.1.2, released 2026-11-15},
   url          = {https://github.com/uvar-apps/sesmesh},
 }
 
@@ -507,6 +509,229 @@
   pages   = {253--266},
   year    = {1999},
   doi     = {10.1006/jmbi.1999.2829},
+}
+
+% ---------------------------------------------------------- Protein Data Bank
+% The archive references requested by https://www.rcsb.org/pages/policies
+% (RCSB PDB: Berman et al. 2000, full author list from that page; Crossref
+% lists only the first author) and https://www.wwpdb.org/about/cite-us
+% (wwPDB: Berman, Henrick, Nakamura 2003 and wwPDB consortium 2019).
+@article{berman2000pdb,
+  author  = {Berman, H. M. and Westbrook, J. and Feng, Z. and Gilliland, G. and Bhat, T. N. and Weissig, H. and Shindyalov, I. N. and Bourne, P. E.},
+  title   = {The {P}rotein {D}ata {B}ank},
+  journal = {Nucleic Acids Research},
+  volume  = {28},
+  number  = {1},
+  pages   = {235--242},
+  year    = {2000},
+  doi     = {10.1093/nar/28.1.235},
+}
+
+@article{berman2003wwpdb,
+  author  = {Berman, H. and Henrick, K. and Nakamura, H.},
+  title   = {Announcing the worldwide {P}rotein {D}ata {B}ank},
+  journal = {Nature Structural Biology},
+  volume  = {10},
+  number  = {12},
+  pages   = {980},
+  year    = {2003},
+  doi     = {10.1038/nsb1203-980},
+}
+
+@article{wwpdb2019,
+  author  = {{wwPDB consortium}},
+  title   = {{P}rotein {D}ata {B}ank: the single global archive for {3D} macromolecular structure data},
+  journal = {Nucleic Acids Research},
+  volume  = {47},
+  number  = {D1},
+  pages   = {D520--D528},
+  year    = {2019},
+  doi     = {10.1093/nar/gky949},
+}
+
+% ------------------------------------------ structures discussed in the text
+% Primary citations of the PDB entries named in the text (RCSB policy: an
+% entry is referenced by its PDB ID and its publication), from the RCSB
+% Data API (rcsb_primary_citation) and checked against Crossref on
+% 2026-11-15. Titles follow the publisher where Crossref gives the full
+% title; 1K4R and 5PTI take the full title from the RCSB record (Crossref
+% has a shortened one); the 2PTN DOI comes from Crossref (not in the RCSB
+% record). Entries of the corpus table (Appendix A) and the random sweeps
+% are identified by PDB ID only.
+@article{pdb1aon,
+  author  = {Xu, Z. and Horwich, A. L. and Sigler, P. B.},
+  title   = {The crystal structure of the asymmetric {GroEL}--{GroES}--({ADP})$_7$ chaperonin complex},
+  journal = {Nature},
+  volume  = {388},
+  number  = {6644},
+  pages   = {741--750},
+  year    = {1997},
+  doi     = {10.1038/41944},
+}
+
+@article{pdb1bna,
+  author  = {Drew, H. R. and Wing, R. M. and Takano, T. and Broka, C. and Tanaka, S. and Itakura, K. and Dickerson, R. E.},
+  title   = {Structure of a {B-DNA} dodecamer: conformation and dynamics},
+  journal = {Proceedings of the National Academy of Sciences},
+  volume  = {78},
+  number  = {4},
+  pages   = {2179--2183},
+  year    = {1981},
+  doi     = {10.1073/pnas.78.4.2179},
+}
+
+@article{pdb1crn,
+  author  = {Teeter, M. M.},
+  title   = {Water structure of a hydrophobic protein at atomic resolution: pentagon rings of water molecules in crystals of crambin},
+  journal = {Proceedings of the National Academy of Sciences},
+  volume  = {81},
+  number  = {19},
+  pages   = {6014--6018},
+  year    = {1984},
+  doi     = {10.1073/pnas.81.19.6014},
+}
+
+@article{pdb1ffk,
+  author  = {Ban, N. and Nissen, P. and Hansen, J. and Moore, P. B. and Steitz, T. A.},
+  title   = {The complete atomic structure of the large ribosomal subunit at 2.4~{\AA} resolution},
+  journal = {Science},
+  volume  = {289},
+  number  = {5481},
+  pages   = {905--920},
+  year    = {2000},
+  doi     = {10.1126/science.289.5481.905},
+}
+
+@article{pdb1jj2,
+  author  = {Klein, D. J. and Schmeing, T. M. and Moore, P. B. and Steitz, T. A.},
+  title   = {The kink-turn: a new {RNA} secondary structure motif},
+  journal = {The EMBO Journal},
+  volume  = {20},
+  number  = {15},
+  pages   = {4214--4221},
+  year    = {2001},
+  doi     = {10.1093/emboj/20.15.4214},
+}
+
+@article{pdb1k4r,
+  author  = {Kuhn, R. J. and Zhang, W. and Rossmann, M. G. and Pletnev, S. V. and Corver, J. and Lenches, E. and Jones, C. T. and Mukhopadhyay, S. and Chipman, P. R. and Strauss, E. G. and Baker, T. S. and Strauss, J. H.},
+  title   = {Structure of dengue virus: implications for flavivirus organization, maturation, and fusion},
+  journal = {Cell},
+  volume  = {108},
+  number  = {5},
+  pages   = {717--725},
+  year    = {2002},
+  doi     = {10.1016/S0092-8674(02)00660-8},
+}
+
+@article{pdb1l2y,
+  author  = {Neidigh, J. W. and Fesinmeyer, R. M. and Andersen, N. H.},
+  title   = {Designing a 20-residue protein},
+  journal = {Nature Structural Biology},
+  volume  = {9},
+  number  = {6},
+  pages   = {425--430},
+  year    = {2002},
+  doi     = {10.1038/nsb798},
+}
+
+@article{pdb1rcl,
+  author  = {Nakai, T. and Yoshikawa, W. and Nakamura, H. and Yoshida, H.},
+  title   = {The three-dimensional structure of guanine-specific ribonuclease {F}$_1$ in solution determined by {NMR} spectroscopy and distance geometry},
+  journal = {European Journal of Biochemistry},
+  volume  = {208},
+  number  = {1},
+  pages   = {41--51},
+  year    = {1992},
+  doi     = {10.1111/j.1432-1033.1992.tb17157.x},
+}
+
+@article{pdb2ptn,
+  author  = {Walter, J. and Steigemann, W. and Singh, T. P. and Bartunik, H. and Bode, W. and Huber, R.},
+  title   = {On the disordered activation domain in trypsinogen: chemical labelling and low-temperature crystallography},
+  journal = {Acta Crystallographica Section B},
+  volume  = {38},
+  number  = {5},
+  pages   = {1462--1472},
+  year    = {1982},
+  doi     = {10.1107/S0567740882006153},
+}
+
+@article{pdb3j3q,
+  author  = {Zhao, G. and Perilla, J. R. and Yufenyuy, E. L. and Meng, X. and Chen, B. and Ning, J. and Ahn, J. and Gronenborn, A. M. and Schulten, K. and Aiken, C. and Zhang, P.},
+  title   = {Mature {HIV-1} capsid structure by cryo-electron microscopy and all-atom molecular dynamics},
+  journal = {Nature},
+  volume  = {497},
+  number  = {7451},
+  pages   = {643--646},
+  year    = {2013},
+  doi     = {10.1038/nature12162},
+}
+
+@article{pdb4hhb,
+  author  = {Fermi, G. and Perutz, M. F. and Shaanan, B. and Fourme, R.},
+  title   = {The crystal structure of human deoxyhaemoglobin at 1.74~{\AA} resolution},
+  journal = {Journal of Molecular Biology},
+  volume  = {175},
+  number  = {2},
+  pages   = {159--174},
+  year    = {1984},
+  doi     = {10.1016/0022-2836(84)90472-8},
+}
+
+@article{pdb4v6x,
+  author  = {Anger, A. M. and Armache, J.-P. and Berninghausen, O. and Habeck, M. and Subklewe, M. and Wilson, D. N. and Beckmann, R.},
+  title   = {Structures of the human and {Drosophila} {80S} ribosome},
+  journal = {Nature},
+  volume  = {497},
+  number  = {7447},
+  pages   = {80--85},
+  year    = {2013},
+  doi     = {10.1038/nature12104},
+}
+
+@article{pdb5pti,
+  author  = {Wlodawer, A. and Walter, J. and Huber, R. and Sj{\"o}lin, L.},
+  title   = {Structure of bovine pancreatic trypsin inhibitor. {R}esults of joint neutron and {X}-ray refinement of crystal form {II}},
+  journal = {Journal of Molecular Biology},
+  volume  = {180},
+  number  = {2},
+  pages   = {301--329},
+  year    = {1984},
+  doi     = {10.1016/S0022-2836(84)80006-6},
+}
+
+@article{pdb5tax,
+  author  = {des Georges, A. and Clarke, O. B. and Zalk, R. and Yuan, Q. and Condon, K. J. and Grassucci, R. A. and Hendrickson, W. A. and Marks, A. R. and Frank, J.},
+  title   = {Structural basis for gating and activation of {RyR1}},
+  journal = {Cell},
+  volume  = {167},
+  number  = {1},
+  pages   = {145--157.e17},
+  year    = {2016},
+  doi     = {10.1016/j.cell.2016.08.075},
+}
+
+@article{pdb6esb,
+  author  = {Hurdiss, D. L. and Frank, M. and Snowden, J. S. and Macdonald, A. and Ranson, N. A.},
+  title   = {The structure of an infectious human polyomavirus and its interactions with cellular receptors},
+  journal = {Structure},
+  volume  = {26},
+  number  = {6},
+  pages   = {839--847.e3},
+  year    = {2018},
+  doi     = {10.1016/j.str.2018.03.019},
+}
+
+@article{pdb9ijj,
+  author  = {Zhu, Y. and Lin, T. and Yin, G. and Tai, L. and Chen, L. and Ma, J. and Huang, G. and Lu, Y. and Zhang, Z. and Wang, B. and Chen, S. and Sun, F.},
+  title   = {In situ structure of the mouse sperm central apparatus reveals mechanistic insights into asthenozoospermia},
+  journal = {Cell Research},
+  volume  = {35},
+  number  = {8},
+  pages   = {551--567},
+  year    = {2025},
+  doi     = {10.1038/s41422-025-01135-2},
 }
 
 % --------------------------------------------------------------- file formats

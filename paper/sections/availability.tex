@@ -8,8 +8,8 @@
 \begin{center}
 \small
 \begin{tabular}{@{}>{\bfseries}l p{0.7\linewidth}@{}}
-  Software & \sesmesh{} 1.1.1, released 2026-11-14 (first public release
-    0.9.0 and 1.0.0 on 2026-11-13, 1.1.0 on 2026-11-14); library crate \code{sesmesh}, command-line
+  Software & \sesmesh{} 1.1.2, released 2026-11-15 (first public release
+    0.9.0 and 1.0.0 on 2026-11-13, 1.1.0 and 1.1.1 on 2026-11-14); library crate \code{sesmesh}, command-line
     crate \code{sesmesh-cli} (binary \code{sesmesh})~\cite{sesmesh} \\
   Source code & \url{https://github.com/uvar-apps/sesmesh} \\
   Packages & \url{https://crates.io/crates/sesmesh},
@@ -19,7 +19,7 @@
     Windows x86-64 \\
   Website & \url{https://uvar-apps.github.io/sesmesh/} (guides, tutorials,
     gallery, interactive viewer) \\
-  Archive & Zenodo, DOI \todo{mint a Zenodo DOI for v1.1.1 (or the version
+  Archive & Zenodo, DOI \todo{mint a Zenodo DOI for v1.1.2 (or the version
     the paper describes) and cite it here and in \code{CITATION.cff}} \\
   Licence & MIT or Apache-2.0, at the user's option \\
   Language & Rust 1.89 or newer; no unsafe code; dependencies from
@@ -53,16 +53,28 @@ Commits to which the assistant contributed carry a
 the work, reviewed the code, the measurements and the text, and takes full
 responsibility for the content.
 
+\paragraph{Affiliations.}
+The author is also affiliated with CSIRO, the Pawsey Supercomputing Research
+Centre and The University of Western Australia. This work was carried out
+independently of those roles, on the author's own time and equipment and at
+the author's own expense; it received no support from these institutions and
+does not represent their views.
+
 \paragraph{Competing interests.}
-\todo{Confirm: the author declares no competing interests.}
+The author declares no competing interests.
 
 \paragraph{Funding.}
-\todo{Funding statement, or ``This work received no specific funding.''}
+This work received no funding; the author bore all costs.
 
 \paragraph{Author contributions.}
-\todo{CRediT statement if the venue requires one; single author.}
+Ugo Varetto is the sole author: conceptualization, methodology, software,
+validation, formal analysis, investigation, data curation, visualization,
+writing (original draft, review and editing).
 
 \paragraph{Acknowledgements.}
 \todo{Acknowledgements, if any.} The atomic coordinates used in this work
-were obtained from the Protein Data Bank \todo{cite the RCSB PDB / wwPDB
-reference recommended by the archive}.
+were obtained from the Protein Data Bank~\cite{berman2000pdb} through the
+RCSB PDB (\url{https://www.rcsb.org}), a member of the worldwide PDB
+(wwPDB, \url{https://www.wwpdb.org})~\cite{berman2003wwpdb,wwpdb2019}.
+Entries are identified by their PDB IDs; the full lists are in
+\code{tests/data/sets.toml}.

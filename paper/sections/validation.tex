@@ -10,7 +10,9 @@ hydrogens or waters, highest-occupancy alternate locations), Bondi radii,
 $r_p = 1.4$\Ang, the SES with cavities kept, the default brick size and the
 automatically selected SIMD level. Tables and plots in this section are
 generated from the data files in the repository by a script that ships with
-the paper (\cref{app:reproduce}).
+the paper (\cref{app:reproduce}). Version 1.1.2 writes the same meshes as
+1.1.1 (it differs only in rejecting malformed extended-XYZ headers,
+\cref{sec:qa}), so data measured with 1.1.1 hold for it.
 
 \subsection{Analytic references}
 \label{sec:analytic}
@@ -145,7 +147,7 @@ other programs; that requires the cross-program comparison of
 \cref{sec:comparison}.
 
 The validation corpus has \val{corpus-n} PDB entries from
-\val{corpus-atoms-min} atoms (\val{corpus-atoms-min-id}) to
+\val{corpus-atoms-min} atoms (\val{corpus-atoms-min-id}~\cite{pdb1l2y}) to
 \val{corpus-atoms-max} atoms (\val{corpus-atoms-max-id}): peptides, small
 and medium proteins, haemoglobins, nucleic acids, nucleosomes, antibodies,
 a spike trimer, GroEL--GroES, ribosomal subunits and the human 80S ribosome
@@ -158,7 +160,7 @@ for single spheres because convex and concave patches bias it in opposite
 directions: inscribed triangles lie inside the solid on convex patches and
 on the solvent side on concave ones; small, highly curved molecules
 (peptides and the
-\pdb{1BNA} DNA dodecamer) have the largest volume errors. The
+\pdb{1BNA} DNA dodecamer~\cite{pdb1bna}) have the largest volume errors. The
 specification's accuracy targets for proteins---area within 1\,\% and
 volume within 0.5\,\% at $h = 0.25$\Ang, 3\,\% and 1\,\% at 0.5\Ang---are
 met with a wide margin with respect to this discretization reference.
@@ -223,7 +225,7 @@ duplicate triangles), with no input errors. The entries range from
 \val{sweep-atoms-median}); together they have \val{sweep-cavities}
 cavities, and one entry has \val{sweep-components-max} components. The
 whole sweep took \val{sweep-seconds-total}\,s of wall time; the slowest
-entry, \pdb{\val{sweep-slowest-id}} (\val{sweep-slowest-atoms} atoms,
+entry, \pdb{\val{sweep-slowest-id}}~\cite{pdb5tax} (\val{sweep-slowest-atoms} atoms,
 \val{sweep-slowest-tri}\,M triangles), took \val{sweep-seconds-max}\,s. The
 component counts include the sub-grid fragments of \cref{sec:fragments}
 (1\,026 in 119 entries, at most 2.7\AA$^2$ each).
@@ -234,7 +236,7 @@ none in common with the first sample) and meshed in the same way, the
 \val{sweepk-ok} produced a valid mesh, with \val{sweepk-input-errors} input
 errors and \val{sweepk-failures} failures. They range from
 \val{sweepk-atoms-min} to \val{sweepk-atoms-max} atoms (median
-\val{sweepk-atoms-median}; the largest, \pdb{\val{sweepk-largest-id}}, a
+\val{sweepk-atoms-median}; the largest, \pdb{\val{sweepk-largest-id}}~\cite{pdb9ijj}, a
 \val{sweepk-largest-tri}-million-triangle mesh) and have \val{sweepk-cavities} cavities; the
 sweep took \val{sweepk-seconds-total}\,s of compute.
 

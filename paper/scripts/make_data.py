@@ -100,6 +100,8 @@ def accuracy() -> None:
     val("corpus-atoms-min-id", by_atoms[0][1])
     val("corpus-atoms-max", thousands(by_atoms[-1][0]))
     val("corpus-atoms-max-id", by_atoms[-1][1])
+    # validation.tex cites these entries (pdb1l2y, pdb4v6x in references.bib).
+    assert (by_atoms[0][1], by_atoms[-1][1]) == ("1L2Y", "4V6X"), "update the PDB citations"
 
     acc_lines = []
     den_lines = []
@@ -213,6 +215,7 @@ def sweep() -> None:
     val("sweep-largest-seconds", round1(big["seconds"]))
     slow = max(rows, key=lambda r: float(r["seconds"]))
     val("sweep-slowest-id", slow["entry"])
+    assert slow["entry"] == "5TAX", "validation.tex cites pdb5tax; update the citation"
     val("sweep-slowest-atoms", thousands(int(slow["atoms"])))
     val("sweep-slowest-tri", f"{int(slow['triangles']) / 1e6:.1f}")
     val(
@@ -247,6 +250,7 @@ def sweep1000() -> None:
     val("sweepk-cavities", thousands(sum(int(r["cavities"]) for r in ok)))
     big = max(ok, key=lambda r: int(r["atoms"]))
     val("sweepk-largest-id", big["entry"])
+    assert big["entry"] == "9IJJ", "validation.tex cites pdb9ijj; update the citation"
     val("sweepk-largest-tri", f"{int(big['triangles']) / 1e6:.0f}")
     val("sweepk-seconds-total", f"{sum(float(r['seconds']) for r in ok):.0f}")
 

@@ -62,7 +62,7 @@ $\norm{\vect q(\theta) - \vect c_k}^2 = \norm{\vect g}^2 + \rho^2 +
 full circle, or an interval centred at $\varphi_k + \pi$. Endpoints are
 computed as unit vectors with angle-addition formulas, and intervals are
 sorted and merged on a monotone, trigonometry-free pseudo-angle; this made
-the circle stage about $1.8\times$ faster on GroEL--GroES (PDB 1AON). A
+the circle stage about $1.8\times$ faster on GroEL--GroES (PDB 1AON~\cite{pdb1aon}). A
 circle covered completely is \emph{buried} and discarded; otherwise its
 blockers $K(i,j)$ are the spheres with non-empty intervals. The endpoints of
 exposed arcs are the SAS vertices---probe positions touching three atoms,
@@ -80,8 +80,8 @@ exact duplicates are covered by tests (\cref{sec:robustness}).
 The cost is $O(N\bar k^2)$ for $\bar k$ neighbours per atom, dominated by
 about 20 blocker tests for each of about 20 candidate circles per atom.
 Single-threaded, the arrangement took 3.3\,ms for crambin (1CRN), 56\,ms for
-haemoglobin (4HHB), 0.73\,s for 1AON (59\,k atoms) and 3.0\,s for the 80S
-ribosome 4V6X (238\,k atoms) when it was first built; it now runs in
+haemoglobin (4HHB~\cite{pdb4hhb}), 0.73\,s for 1AON (59\,k atoms) and 3.0\,s for the 80S
+ribosome 4V6X~\cite{pdb4v6x} (238\,k atoms) when it was first built; it now runs in
 parallel per sphere.
 
 \subsection{Sparse narrow-band brick lattice}

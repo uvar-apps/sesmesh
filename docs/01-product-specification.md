@@ -294,6 +294,16 @@ NEON, under background load), rounded up. Neither reference machine was
 available; measurements on them and the x86 SIMD speed-ups (#8, #10, #13)
 follow after 1.0, and the original provisional targets remain goals.
 
+*Reference machines revised after 1.1.2 (2026-11-15, decision):* the
+reference machines are the two that were measured: (A) the 10-core Apple
+M4 of Phase 9 (4 performance + 6 efficiency cores, NEON), and (B) a 16-core
+x86-64 machine (AMD Zen 5, SMT off, AVX2 and AVX-512; `docs/comparison.md`),
+whose 8-thread runs stand for the 8-core desktop. An Apple machine with 8
+performance cores is no longer required. On (B) with 16 threads every v1.0
+target is met, and every original provisional target except 4HHB at 0.5 Å
+(0.10–0.12 s against < 100 ms); with 8 threads 1AON and 1JJ2 at 0.5 Å take
+2.4 s and 3.5 s (v1.0 targets met, provisional 1.5 s and 2.5 s not).
+
 | Structure (PDB ID, atoms used) | Spacing | Target (v1.0) | Original provisional target |
 |---|---|---|---|
 | 1CRN crambin (327) | 0.25 Å | < 60 ms | < 60 ms |
@@ -437,7 +447,8 @@ measured after 1.0 (#8, #10).
 5. API documentation, examples, CLI manual, changelog; crates published.
 
 *As applied to 1.0.0 (2026-11-13):* 1 met (NFR-MEM per-atom budget revised,
-#21); 2 revised with justification (§5.1, #20); 3 met against internal
+#21); 2 revised with justification (§5.1, #20; reference machines revised to
+the two measured ones after 1.1.2, 2026-11-15); 3 met against internal
 references (§5.3, analytic bound revised, #4), cross-tool references after
 1.0 (#5, #6; done 2026-11-14, `docs/comparison.md`); 4 robustness sweep 200/200 and a 10-minute run of every fuzz
 target (7 targets, ≈ 18 M inputs, no failures), the 24 CPU-hour campaign

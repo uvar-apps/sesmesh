@@ -45,6 +45,8 @@ the final paper refers to}:
 cargo xtask fetch --set validation --set sweep --set bench   # PDB entries (~70 MB)
 cargo run --release -p xtask -- validate     # docs/validation/accuracy.csv
 cargo run --release -p xtask -- sweep        # docs/validation/sweep.csv
+cargo xtask fetch --set sweep1000            # 1 000 further entries
+cargo run --release -p xtask -- sweep --set sweep1000   # sweep1000.csv
 cargo build --release                        # target/release/sesmesh
 /usr/bin/time -l target/release/sesmesh tests/data/cache/3J3Q.cif.gz -s 1.0 \
     -o /dev/null --stats /dev/stdout         # large inputs (time, peak RSS)

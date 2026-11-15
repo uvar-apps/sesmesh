@@ -626,7 +626,14 @@ few percent are noise): 1CRN 0.25 Å ≈ 41 ms, 4HHB 0.5 Å ≈ 0.22 s, 4HHB
 0.25 Å ≈ 0.54 s (was ≈ 0.7 s), 1AON 0.5 Å ≈ 3.1 s (was ≈ 3.6 s). Sampling
 per level (`benches/field.rs`, $B = 8$): NEON is 3–6 % faster than the
 autovectorized fallback on Apple Silicon (1CRN/4HHB at 0.5 and 0.25 Å); the
-x86 AVX2-vs-SSE2 ratio is to be measured in Phase 9. Remaining levers:
+x86 AVX2-vs-SSE2 ratio is to be measured in Phase 9. *Measured after 1.0
+(2026-11-14, #8; `docs/comparison.md`, `docs/validation/compare/bench-field-zen5.txt`):*
+on a 16-core Zen 5 (4 threads, 1CRN/4HHB at 0.5 and 0.25 Å) SSE4.2 is
+1.06–1.07×, AVX2 1.17–1.20× and AVX-512 1.18–1.21× faster than the fallback;
+end to end the explicit kernels gain 3–13 %. The ≥ 3× AVX2 target (T6.7) is
+missed for the same reason as on NEON: LLVM vectorizes the fallback, and the
+validity tests, gathering and `f64` refinement do not use the explicit
+kernels (next lever: #13). Remaining levers:
 fewer validity tests per candidate (tighter per-candidate blocker sets,
 blocker ordering), reuse of the sampling gather for refinement (≈ 5 %).
 
@@ -1087,7 +1094,10 @@ the speed-up near 5×. The remaining serial work is small (read, assembly
 concatenation, ≈ 4 % of the 10-thread total). The plan's "≥ 75 % at 8
 cores" target needs a homogeneous 8+ core x86 machine to measure (Phase 9
 benchmark protocol); the results above are the documented analysis for this
-hardware.
+hardware. *Measured after 1.0 (2026-11-14, #10; `docs/comparison.md`):* on an
+idle 16-core Zen 5 (SMT off), complete CLI runs of 1AON and 1JJ2 at 0.5 Å
+reach 79 % parallel efficiency at 8 threads (target met) and 11.3× / 11.6×
+at 16 threads (71 % / 72 %).
 
 ### 11.2 SIMD strategy
 

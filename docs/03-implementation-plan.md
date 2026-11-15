@@ -456,7 +456,9 @@ derived numbers.
 ## 5. Benchmark protocol
 
 * Machines: (A) Apple Silicon 8 P-cores, macOS; (B) x86-64 8C/16T with AVX2
-  (and AVX-512 if available), Linux. Fixed CPU frequency where possible;
+  (and AVX-512 if available), Linux. *Revised 2026-11-15 (Spec §5.1):* the
+  measured machines, a 10-core Apple M4 (4 P + 6 E) and a 16-core Zen 5
+  (8-thread runs for B). Fixed CPU frequency where possible;
   report core counts, compiler version, `dist` profile.
 * Micro (criterion): CIF lexer, PDB parser, arrangement, kernel per SIMD
   level (samples/s), MC per brick, assembly, OBJ formatting (MB/s).

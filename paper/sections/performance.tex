@@ -16,9 +16,11 @@ runs of \cref{sec:comparison}) with rustc 1.100.0. The machine is fanless, so lo
 runs may be slowed by thermal throttling, and it carried a heavy background
 load from other applications during the runs (load average 15--27), so wall
 times are pessimistic and repeated runs vary by several percent. The
-reference machines of the specification---8 homogeneous performance
-cores, and an x86-64 desktop with AVX2---were not available for these runs;
-\cref{sec:x86} adds measurements on an idle 16-core x86-64 machine. Peak
+specification first named two reference machines, an Apple Silicon machine
+with 8 performance cores and an 8-core x86-64 desktop with AVX2. Neither was
+available, and the specification now takes the two measured machines as its
+reference: this one and the idle 16-core x86-64 machine of \cref{sec:x86},
+whose 8-thread runs stand for the desktop. Peak
 memory is the maximum resident set size reported by \code{/usr/bin/time
 -l}.
 
@@ -38,7 +40,7 @@ memory is the maximum resident set size reported by \code{/usr/bin/time
     4HHB & haemoglobin          & 4\,558     & 0.5  & 319\,k  & 0.19--0.22\,s & $<0.1$\,s \\
     4HHB & haemoglobin          & 4\,558     & 0.25 & 1.28\,M & 0.45--0.54\,s & $<0.35$\,s \\
     1AON & GroEL--GroES         & 58\,870    & 0.5  & 4.34\,M & 2.7--3.1\,s & $<1.5$\,s \\
-    1JJ2 & ribosomal subunit & 90\,650   & 0.5  & 5.98\,M & 4.4\,s      & $<2.5$\,s \\
+    1JJ2~\cite{pdb1jj2} & ribosomal subunit & 90\,650   & 0.5  & 5.98\,M & 4.4\,s      & $<2.5$\,s \\
     4V6X & human 80S ribosome   & 237\,685   & 0.5  & 18.0\,M & 13.3--14.0\,s & $<6$\,s \\
     3J3Q & HIV-1 capsid         & 2\,440\,800 & 1.0 & 48.7\,M & 70\,s       & $<60$\,s \\
     \bottomrule
