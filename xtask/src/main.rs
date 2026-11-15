@@ -78,7 +78,7 @@ enum Cmd {
         max_atoms: usize,
     },
     /// Robustness sweep over the `sweep` set (or `--set`, Plan T9.4) at one
-    /// spacing; writes docs/validation/<set>.csv.
+    /// spacing; writes `docs/validation/<set>.csv`.
     Sweep {
         /// Grid spacing (Å).
         #[arg(long, default_value_t = 0.5)]

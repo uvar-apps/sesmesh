@@ -17,8 +17,8 @@ abstract: >-
 authors:
   - given-names: Ugo
     family-names: Varetto
-version: 1.1.1
-date-released: "2026-11-14"
+version: 1.1.2
+date-released: "2026-11-15"
 license:
   - MIT
   - Apache-2.0

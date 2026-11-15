@@ -54,12 +54,13 @@ any deviation from the plan.
   `color/element_table.rs` (a test keeps both in sync). The root copy stays untracked.
 - The user reviews meshes in a viewer; the crambin SES was confirmed "perfect" (T4.10).
 
-## Repository state at handoff (2026-11-14)
+## Repository state at handoff (2026-11-15)
 
-- Latest release **1.1.1** (2026-11-14; 1.1.0 the same day; 1.0.0, 0.9.0 and 0.9.1 on
-  2026-11-13): tags `v0.9.0`, `v0.9.1`, `v1.0.0`, `v1.1.0`, `v1.1.1`, crates `sesmesh` and `sesmesh-cli` on crates.io (owner: the
+- Latest release **1.1.2** (2026-11-15; 1.1.1 and 1.1.0 on 2026-11-14; 1.0.0, 0.9.0 and
+  0.9.1 on 2026-11-13): tags `v0.9.0`, `v0.9.1`, `v1.0.0`, `v1.1.0`, `v1.1.1`, `v1.1.2`,
+  crates `sesmesh` and `sesmesh-cli` on crates.io (owner: the
   user's crates.io account), GitHub releases with tier-1 binaries. `main` = `origin/main` = the
-  1.1.1 release commit (branch `release-1.1.1`). Semantic versioning from 1.0
+  1.1.2 release commit (branch `release-1.1.2`). Semantic versioning from 1.0
   (`docs/api-review.md`); 1.x keeps default output byte-identical (new behaviour is opt-in),
   except correctness fixes that bring output to what the spec and design promise (user's
   decision, 2026-11-14): patch release, CHANGELOG names the meshes that change and by how much.
@@ -171,8 +172,8 @@ tick them in #19. Summary:
    on the two comparison hosts (podman, toolchain and corpora in `~/sesmesh-fuzz` there):
    ≥ 24.9 CPU-h per target, 174.5 in total, results in `docs/validation/fuzz.csv`. It found
    one bug, an extended-XYZ `Properties=` column-count overflow (a panic), fixed after 1.1.1
-   with a regression test in `io::xyz`; the fix is unreleased (a 1.1.2 patch candidate; the
-   paper describes 1.1.1 plus this fix). The 1 000-entry sweep (#23) is done too
+   with a regression test in `io::xyz` and released in 1.1.2 (the paper describes 1.1.1;
+   `v1.1.2` is the tag holding the code it describes). The 1 000-entry sweep (#23) is done too
    (`xtask sweep --set sweep1000`, 1 000/1 000 ok).
 2. Cross-tool comparison (#5, #6) done 2026-11-14, merged into `main`:
    `tools/compare/` (README there), `docs/comparison.md`, `docs/validation/compare/`,

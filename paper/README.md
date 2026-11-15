@@ -71,7 +71,7 @@ Numbers match the red markers in the PDF (draft of 2026-11-14, describing
 | 8 | Declarations | CRediT statement if required |
 | 9 | Declarations | Acknowledgements |
 | 10 | Declarations | Cite the PDB reference recommended by RCSB/wwPDB |
-| 11 | Appendix B | Release tag or commit the paper refers to (the `v1.1.1` tree holds the code described, not this version of the paper) |
+| 11 | Appendix B | Release tag or commit the paper refers to: `v1.1.2` (2026-11-15) holds the code described, 1.1.1 plus the extended-XYZ overflow fix (default meshes byte-identical to 1.1.1), but not this version of the paper |
 
 Resolved by the comparison (previous items 5–8, 9, 11–18): the MSMS and
 NanoShaper statements are now checked against Goddard's notes and the
@@ -136,8 +136,8 @@ Crossref). Before submission:
    was never measured.
 5. **A parser bug found after 1.1.1**: the fuzzing campaign found an
    integer overflow in the extended-XYZ `Properties` parser (a panic on
-   crafted input, no wrong mesh); the fix is unreleased, so the code the
-   paper describes is 1.1.1 plus this fix until a patch release (item 11).
+   crafted input, no wrong mesh); the fix is released in 1.1.2, so the code
+   the paper describes is 1.1.1 plus this fix, tag `v1.1.2` (item 11).
    The robustness evidence itself is now at the planned scale: 1 000 + 200
    random entries and ≥ 24.9 CPU-hours per fuzz target.
 6. **Inscribed-mesh bias**: area always underestimated (−0.20 % at 0.25 Å

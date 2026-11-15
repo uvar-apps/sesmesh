@@ -6,6 +6,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-11-15
+
+A fix for a panic in the extended-XYZ reader found by the 24 CPU-hour
+fuzzing campaign, plus the 1 000-entry robustness sweep and the campaign
+tooling. Default meshes are byte-identical to 1.1.1.
+
 ### Fixed
 
 - Extended XYZ: a `Properties=` descriptor whose column counts add up past
@@ -428,7 +434,8 @@ listed in `docs/release.md` and GitHub issue #19).
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by
   fuzzing: a count of 377 777 773 requested 36 GB).
 
-[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/uvar-apps/sesmesh/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/uvar-apps/sesmesh/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/uvar-apps/sesmesh/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/uvar-apps/sesmesh/compare/v0.9.1...v1.0.0
