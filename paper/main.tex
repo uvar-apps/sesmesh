@@ -39,8 +39,10 @@
 % ---------------------------------------------------------------- open items
 % \todo{...} marks a claim that needs a source, a measurement or a decision
 % by the author. Every one is listed at the end of the PDF ("Open items")
-% and in paper/README.md. Set \showtodosfalse only for a final build once
-% none is left (the build then fails on purpose if one remains).
+% and in paper/README.md. \todoquiet{...} is the same item listed only on
+% that page, with nothing printed where it stands. Set \showtodosfalse only
+% for a final build once none is left (the build then fails on purpose if
+% one remains).
 \newif\ifshowtodos
 \showtodostrue
 \makeatletter
@@ -52,6 +54,13 @@
     \addcontentsline{tdo}{todo}{\protect\numberline{\thetodo}#1}%
   \else
     \PackageError{paper}{Open \string\todo\space left in a final build}{}%
+  \fi}
+\DeclareRobustCommand{\todoquiet}[1]{%
+  \ifshowtodos
+    \refstepcounter{todo}%
+    \addcontentsline{tdo}{todo}{\protect\numberline{\thetodo}#1}%
+  \else
+    \PackageError{paper}{Open \string\todoquiet\space left in a final build}{}%
   \fi}
 \newcommand{\l@todo}{\@dottedtocline{1}{0em}{2.3em}}
 \newcommand{\listoftodos}{\section*{Open items (draft only)}\@starttoc{tdo}}

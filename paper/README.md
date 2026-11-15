@@ -13,7 +13,8 @@ Every number in the text comes from the repository: the validation CSVs
 CHANGELOG, or the analytic-reference program in `scripts/analytic`. Claims
 that need a source or a measurement the repository does not have are marked
 `\todo{…}`; they print in red and are collected on the last page of the PDF
-("Open items").
+("Open items"). `\todoquiet{…}` lists an item on that page only (used in the
+abstract).
 
 ## Build
 
