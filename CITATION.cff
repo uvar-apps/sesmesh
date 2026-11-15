@@ -4,8 +4,10 @@
 
 cff-version: 1.2.0
 message: >-
-  If you use sesmesh in your work, please cite the software as below and the
-  methods it implements (README, "How it works and what to cite").
+  If you use sesmesh in your work, please cite it as below, giving the version
+  you used (each release has its own Zenodo DOI). Where your work relies on a
+  method sesmesh implements, please cite that method too (README, "How it
+  works").
 type: software
 title: "sesmesh: Solvent Excluded Surface meshes for molecules"
 abstract: >-
@@ -23,7 +25,7 @@ date-released: "2026-11-15"
 license:
   - MIT
   - Apache-2.0
-doi: 10.5281/zenodo.24238836
+doi: 10.5281/zenodo.24238837
 identifiers:
   - type: doi
     value: 10.5281/zenodo.24238836

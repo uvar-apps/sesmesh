@@ -147,7 +147,34 @@ To download the optional test and benchmark structures from the RCSB PDB:
 cargo xtask fetch --set small
 ```
 
-## How it works and what to cite
+## Citing sesmesh
+
+If you use sesmesh in published work, please cite it, giving the version you
+used. Each release is archived on Zenodo with its own DOI:
+
+> Varetto, U. (2026). *sesmesh: Solvent Excluded Surface meshes for
+> molecules* (Version 1.1.2) [Computer software]. Zenodo.
+> https://doi.org/10.5281/zenodo.24238837
+
+```bibtex
+@software{varetto_sesmesh,
+  author    = {Varetto, Ugo},
+  title     = {{sesmesh: Solvent Excluded Surface meshes for molecules}},
+  version   = {1.1.2},
+  year      = {2026},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.24238837},
+  url       = {https://doi.org/10.5281/zenodo.24238837}
+}
+```
+
+[doi:10.5281/zenodo.24238836](https://doi.org/10.5281/zenodo.24238836)
+stands for all versions and resolves to the latest. The same metadata is in
+[CITATION.cff](https://github.com/uvar-apps/sesmesh/blob/main/CITATION.cff)
+(GitHub: *Cite this repository*). Where your work depends on a method sesmesh
+implements, please cite that method too ([How it works](#how-it-works)).
+
+## How it works
 
 sesmesh evaluates the exact implicit SES distance function of Quan & Stamm
 [1] on a sparse narrow-band grid, using the SAS arrangement (atom spheres,
@@ -158,11 +185,7 @@ exact surface and takes normals from the closest point. Optional smoothing
 uses Taubin's λ|μ filter [6] followed by exact re-projection. The SES itself
 goes back to Lee & Richards [7] and Richards [8].
 
-If you use sesmesh in published work, please cite the software
-([CITATION.cff](https://github.com/uvar-apps/sesmesh/blob/main/CITATION.cff);
-GitHub: *Cite this repository*; archived on Zenodo,
-[doi:10.5281/zenodo.24238836](https://doi.org/10.5281/zenodo.24238836) for all versions, each release with its own
-DOI there) and the methods above:
+The methods, to cite alongside sesmesh where your work relies on them:
 
 1. C. Quan, B. Stamm, "Mathematical analysis and calculation of molecular
    surfaces," *J. Comput. Phys.* 322:760–782, 2016.

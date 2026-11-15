@@ -47,7 +47,7 @@ Other targets:
 |---|---|
 | `main.tex` | Preamble, `\todo` and `\val` macros, section order |
 | `sections/*.tex` | Abstract, introduction, background, method, implementation, validation, performance (incl. x86-64 §6.2), comparison with six programs (§7), discussion, availability + declarations, appendices |
-| `references.bib` | Methods references of the README ("How it works and what to cite") and Spec §12, transcribed from the repository; plus a continuum-electrostatics section checked against Crossref |
+| `references.bib` | Methods references of the README ("How it works") and Spec §12, transcribed from the repository; plus a continuum-electrostatics section checked against Crossref |
 | `figures/*.jpg` | Gallery renders from `site/img/gallery/*.webp`, flattened on white and trimmed (`magick … -background white -alpha remove -trim`) |
 | `data/analytic.csv` | One/two-sphere references meshed at h = 1, 0.5, 0.25, 0.125 Å (from `make data`) |
 | `data/scaling.csv` | Thread-scaling numbers transcribed from Design §11.1 |

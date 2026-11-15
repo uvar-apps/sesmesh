@@ -89,9 +89,11 @@ such a machine.
 7. Zenodo (by hand; keep Zenodo's GitHub integration off so that every
    version stays under the one record): on https://doi.org/10.5281/zenodo.24238836 choose **New version**,
    upload the release's source archive (GitHub release → *Source code
-   (tar.gz)*), set the version and date, publish. Add the new version DOI to
-   `CITATION.cff` (`identifiers`) in the next commit; the all-versions DOI
-   (10.5281/zenodo.24238836) stays.
+   (tar.gz)*), set the version and date, publish. In the next commit, cite
+   the new version everywhere: `CITATION.cff` (`doi` and a new
+   `identifiers` entry), the reference and BibTeX in `README.md` ("Citing
+   sesmesh") and in `site/library.html` (`#cite`): version, year and version
+   DOI. The all-versions DOI (10.5281/zenodo.24238836) stays.
 
 Binaries use the `dist` profile (fat LTO, one codegen unit, stripped) and
 runtime SIMD dispatch, so one x86-64 binary uses AVX-512/AVX2/SSE4.2 as

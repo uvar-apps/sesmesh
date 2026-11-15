@@ -23,6 +23,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Citation: the README ("Citing sesmesh"), the website's library page
+  (`#cite`) and `CITATION.cff` now ask to cite sesmesh itself, with a
+  reference and BibTeX for the version DOI (1.1.2: 10.5281/zenodo.24238837;
+  all versions: 10.5281/zenodo.24238836); the methods it implements follow
+  as additional citations. `CITATION.cff`'s `doi` is the version DOI, and
+  release step 7 keeps all three current. The home page's JSON-LD carries the
+  all-versions DOI.
 - Paper draft describes 1.1.2 (same meshes as 1.1.1; the 1.1.1
   measurements stand for it), Appendix B lists the `sweep1000` commands, and
   the PDB archive (acknowledgements) and the primary publications of the
