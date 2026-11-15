@@ -30,6 +30,7 @@ RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --lock
 cargo +1.89 check --package sesmesh --package sesmesh-cli --locked
 cargo deny check
 cargo publish --workspace --dry-run --locked
+python3 -m unittest discover -s tools/ao
 ```
 
 This covers the host only (macOS arm64 here). Linux x86-64, Linux arm64 and

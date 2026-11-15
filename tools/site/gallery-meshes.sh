@@ -24,3 +24,15 @@ mesh 4hhb-chain    "$C/4HHB.cif.gz" -q high --vertex-colors chain --decimate 0.5
 mesh 1aon-chain    "$C/1AON.cif.gz" -s 0.5 --vertex-colors chain --max-triangles 1500000
 mesh 1aon-cavities "$C/1AON.cif.gz" -q high --cavities only --min-cavity-volume 5 --vertex-colors component
 mesh 1k4r-capsid   "$C/1K4R.cif.gz" --assembly 1 -q draft --vertex-colors chain --max-triangles 3000000
+
+# Ambient occlusion baked into the colours (tutorials page): needs aomesh
+# 0.4.0 or later, see tools/ao/README.md. Same mesh as 4hhb-chain.
+ao() {
+  name=$1; input=$2; shift 2
+  rm -rf "$W/ao-$name"
+  python3 tools/ao/ses_ao.py "$input" -o "$W/ao-$name" --bake-colors --quiet --sesmesh "$B" -- "$@"
+  mv "$W/ao-$name"/*_ao.ply "$W/$name.ply"
+  rm -r "$W/ao-$name"
+  python3 tools/site/ply2web.py "$W/$name.ply" "$W/$name.sesm.gz"
+}
+ao 4hhb-chain-ao "$C/4HHB.cif.gz" -q high --vertex-colors chain --decimate 0.5

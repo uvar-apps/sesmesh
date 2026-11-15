@@ -8,6 +8,15 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Ambient occlusion by post-processing with aomesh (#27):
+  `tools/ao/ses_ao.py` runs sesmesh to OBJ and then aomesh 0.4.0 or later,
+  which writes per-vertex AO as texture coordinates over a grey ramp
+  (`<stem>_ao.obj`, `.mtl`, `.png`); `--bake-colors` also writes a binary PLY
+  with the surface colours times the AO. Python standard library only, with
+  tests (`python3 -m unittest discover -s tools/ao`, also a CI job), a README
+  with examples and viewer notes, and the website tutorial "Ambient
+  occlusion" with a before/after figure (`4hhb-chain-ao.webp`). sesmesh
+  itself is unchanged.
 - Zenodo archive: 1.1.2 is doi:10.5281/zenodo.24238837, all versions doi:10.5281/zenodo.24238836
   (`CITATION.cff` with ORCID and both DOIs, README badge, paper §9, release
   step 7).

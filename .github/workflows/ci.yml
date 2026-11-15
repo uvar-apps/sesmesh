@@ -108,6 +108,14 @@ jobs:
       - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
 
+  scripts:
+    name: Python scripts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The end-to-end tests skip themselves: aomesh is not installed here.
+      - run: python3 -m unittest discover -s tools/ao -v
+
   msrv:
     name: MSRV (1.89)
     runs-on: ubuntu-latest

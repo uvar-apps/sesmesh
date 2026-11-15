@@ -132,6 +132,20 @@ small features better than a coarse grid with the same triangle count.
 | `--atom-areas FILE` | | Per-atom SES area CSV |
 | `--stats FILE` | | Statistics JSON (`-`: standard output) |
 
+## Ambient occlusion
+
+sesmesh does not compute ambient occlusion; [`tools/ao/ses_ao.py`](../tools/ao/README.md)
+adds it as a post-processing step. It runs sesmesh to an OBJ and then
+[aomesh](https://github.com/uvar-apps/aomesh) (0.4.0 or later), which stores
+each vertex's AO as a texture coordinate into a 256 × 1 grey ramp
+(`<stem>_ao.obj`, `.mtl`, `.png`); `--bake-colors` also writes a binary PLY
+whose vertex colours are the surface colours times the AO. Options after `--`
+go to `sesmesh surface`:
+
+```bash
+python3 tools/ao/ses_ao.py 4HHB.cif.gz -o out --bake-colors -- -q high --vertex-colors chain --decimate 0.5
+```
+
 ## Batch mode
 
 Several inputs write `<stem>.<ext>` into `--output-dir`. `-o` is then a usage

@@ -9,7 +9,7 @@ and the two fonts load from jsDelivr and Google Fonts.
 |---|---|
 | `site/index.html` | Home: hero with the live 3D viewer, features, CLI/library teaser, how it works, documentation links |
 | `site/cli.html`, `site/library.html` | Guides (every Rust snippet on the library page compiles against 1.1.0) |
-| `site/tutorials.html` | Four walkthroughs with real inputs and outputs |
+| `site/tutorials.html` | Five walkthroughs with real inputs and outputs |
 | `site/gallery.html` | Live viewer + figures with the command behind each |
 | `site/render.html` | Still renderer for the display meshes (not linked from the menu) |
 | `site/404.html` | Not-found page (absolute `/sesmesh/` links, `noindex`) |
@@ -66,6 +66,7 @@ missing file shows a hatched box with the expected path.
 | `1crn-coarse.webp`, `1crn-decimated.webp` | Same triangle budget, wireframe close-ups | 1600 × 1200 |
 | `4hhb-chain.webp`, `1aon-chain.webp`, `1aon-cavities.webp` | Haemoglobin, GroEL–GroES, its cavities | 1600 × 1200 |
 | `1k4r-capsid.webp` | Dengue virus capsid (full width) | 2400 × 1350 (16:9) |
+| `4hhb-chain-ao.webp` | Haemoglobin with ambient occlusion (tutorials page, beside `4hhb-chain`) | 1600 × 1200 |
 
 Frames crop to 4:3 (16:9 for the wide figures) with `object-fit: cover`, so
 other sizes work too. Keep files under about 600 KB; WebP or JPEG for
@@ -110,7 +111,7 @@ over the surface) or `wire=2` (edges only), `flat=1`, `format=webp|png`,
 | `1crn-patch`, `1crn-vdw` | `w=1600&h=1200&az=30&el=15&zoom=1.2` |
 | `1crn-sas` | `w=1600&h=1200&az=30&el=15&zoom=1.15` |
 | `1crn-coarse`, `1crn-decimated` | `w=1600&h=1200&az=30&el=15&zoom=2.4&wire=1&flat=1` |
-| `4hhb-chain` | `w=1600&h=1200&az=20&el=20&zoom=1.12` |
+| `4hhb-chain`, `4hhb-chain-ao` | `w=1600&h=1200&az=20&el=20&zoom=1.12` |
 | `1aon-chain`, `1aon-cavities` | `w=1600&h=1200&az=20&el=22&zoom=1.08` |
 | `1k4r-capsid` | `w=2400&h=1350&az=0&el=10&zoom=1.35` |
 

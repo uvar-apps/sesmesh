@@ -21,6 +21,7 @@ cargo xtask fetch --set validation --set sweep   # Phase 9 corpora (~70 MB)
 cargo run --release -p xtask -- validate   # accuracy study → docs/validation/accuracy.csv (~3 min)
 cargo run --release -p xtask -- sweep      # robustness sweep → docs/validation/sweep.csv (~2 min)
 SESMESH_BLESS=1 cargo test -p sesmesh mc_table   # regenerate mesh/mc_table.rs (then rerun tests)
+python3 -m unittest discover -s tools/ao   # ses_ao.py (end-to-end tests need aomesh >= 0.4.0)
 target/release/sesmesh data/1crn.cif -q high --timings   # CLI smoke run (writes 1crn.obj)
 ```
 
@@ -116,6 +117,12 @@ any deviation from the plan.
   `capture.py` on port 8777, `og-card.py`), search-engine notes (canonical, Open Graph, JSON-LD,
   `sitemap.xml`). Library-page snippets were compiled against 1.1.0;
   re-check them when the API changes.
+- `tools/ao/` ambient occlusion by post-processing (#27): `ses_ao.py` (stdlib Python) runs
+  sesmesh to OBJ, then aomesh (separate program, not a dependency; ≥ 0.4.0: plain
+  `map_Kd`, keeps OBJ header/objects/groups via objserde 0.3), `--bake-colors` writes a
+  binary PLY with colours × AO (readable by `ply2web.py`); tests `test_ses_ao.py`, README,
+  tutorial 04 on `site/tutorials.html`, figure `4hhb-chain-ao.webp` (`gallery-meshes.sh`).
+  Interior cavities bake black (no outside viewpoint sees them).
 - Docs: `docs/cli.md` (CLI manual), `docs/api-review.md` (API checklist, semver policy),
   `docs/release.md` (release process, v1.0 status), `.github/workflows/release.yml`
 - `crates/sesmesh/examples/` five runnable examples (run in CI)
@@ -194,6 +201,11 @@ tick them in #19. Summary:
 4. x86 kernel work (#9, #13), Ubuntu 26 CI image (#18), optional marching tetrahedra (#14).
    The 8-P-core Apple reference timings were dropped by decision (2026-11-15, Spec §5.1).
    #8 and #10 measured and closed (2026-11-15; results in Design §7.7, §11.1).
+5. Ambient occlusion (#27, branch `aomesh-tutorial`): needs objserde 0.3.0 and then aomesh
+   0.4.0 published first (user's repos `~/projects/objserde`, `~/projects/aomesh`; aomesh's
+   temporary `[patch.crates-io]` on objserde goes before its publish), then merge, so the
+   tutorial's `cargo install aomesh-cli` gets a version the script accepts. GPU back ends:
+   #24 HIP, #25 CUDA, #26 Metal (f32 plan in the issues).
 
 ## Gotchas learned
 

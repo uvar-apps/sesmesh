@@ -9,11 +9,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="author" content="Ugo Varetto">
 <title>Tutorials — sesmesh</title>
-<meta name="description" content="sesmesh tutorials: from a PDB ID to a rendered surface, cavities and per-atom areas, a 545 040-atom virus capsid on a laptop, and trajectories with the Rust library.">
+<meta name="description" content="sesmesh tutorials: from a PDB ID to a rendered surface, cavities and per-atom areas, a 545 040-atom virus capsid on a laptop, ambient occlusion with aomesh, and trajectories with the Rust library.">
 <link rel="canonical" href="https://uvar-apps.github.io/sesmesh/tutorials.html">
 <meta property="og:site_name" content="sesmesh">
 <meta property="og:title" content="Tutorials — sesmesh">
-<meta property="og:description" content="sesmesh tutorials: from a PDB ID to a rendered surface, cavities and per-atom areas, a 545 040-atom virus capsid on a laptop, and trajectories with the Rust library.">
+<meta property="og:description" content="sesmesh tutorials: from a PDB ID to a rendered surface, cavities and per-atom areas, a 545 040-atom virus capsid on a laptop, ambient occlusion with aomesh, and trajectories with the Rust library.">
 <meta property="og:type" content="website">
 <meta property="og:image" content="https://uvar-apps.github.io/sesmesh/img/og.png">
 <meta property="og:url" content="https://uvar-apps.github.io/sesmesh/tutorials.html">
@@ -44,9 +44,9 @@
 <main>
 <section>
   <div class="wrap pagehead">
-    <span class="label inv">Learn · four walkthroughs</span>
+    <span class="label inv">Learn · five walkthroughs</span>
     <h1>Tuto<span class="knock">rials</span></h1>
-    <p class="lede">Four short, complete walkthroughs with real inputs from the PDB and the output they produce. Commands assume <code>sesmesh</code> 1.1 on your <code>PATH</code> (<code>cargo install sesmesh-cli</code>), plus <code>curl</code> and <code>jq</code>.</p>
+    <p class="lede">Five short, complete walkthroughs with real inputs from the PDB and the output they produce. Commands assume <code>sesmesh</code> 1.1 on your <code>PATH</code> (<code>cargo install sesmesh-cli</code>), plus <code>curl</code> and <code>jq</code>.</p>
   </div>
 </section>
 
@@ -57,6 +57,7 @@
       <li><a href="#picture">PDB ID → picture</a></li>
       <li><a href="#cavities">Cavities &amp; areas</a></li>
       <li><a href="#capsid">A virus on a laptop</a></li>
+      <li><a href="#ao">Ambient occlusion</a></li>
       <li><a href="#rust">Trajectories in Rust</a></li>
     </ol>
   </nav>
@@ -140,8 +141,40 @@ for (chain, name, seq), a in sorted(area.items(), key=lambda kv: -kv[1])[:10]:
 <span class="c">sesmesh: 745560 vertices, 1500000 triangles, 979 component(s) (810 cavities), ...</span></code></pre></div><div class="note">The estimate is deliberately conservative: this run peaked at about 0.65 GB against an estimate of 1008 MiB. The grid chosen and the estimate are the same on every run and for any thread count.</div></li><li><h3>Stop any time</h3><p>Ctrl-C cancels within about 100 ms and exits with code 130.</p></li></ol>
     </section>
 
-    <section id="rust">
+    <section id="ao">
       <span class="label">04</span>
+      <h2>Ambient occlusion</h2>
+<p class="mute">CLI + Python · 10 minutes · haemoglobin (4HHB)</p><ol class="steps"><li><h3>Get aomesh and the script</h3><p>Ambient occlusion darkens what little light reaches: pockets, clefts, the seams between chains. sesmesh does not compute it; <a href="https://github.com/uvar-apps/aomesh">aomesh</a>, a separate program, bakes it into any OBJ afterwards, and <code>ses_ao.py</code> (Python standard library only) runs the two in a row.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>cargo install aomesh-cli          <span class="c"># 0.4.0 or later</span>
+<span class="p">$ </span>curl -LO https://raw.githubusercontent.com/uvar-apps/sesmesh/main/tools/ao/ses_ao.py</code></pre></div></li><li><h3>Mesh and bake</h3><p>Options after <code>--</code> go to sesmesh unchanged. <code>--bake-colors</code> also writes a PLY whose vertex colours are the chain colours times the AO.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>python3 ses_ao.py 4HHB.cif.gz -o out --bake-colors \
+<span class="c">    -- -q high --vertex-colors chain --decimate 0.5</span>
+<span class="c">sesmesh: 320764 vertices, 641472 triangles, 33 component(s) (31 cavities), ...</span>
+<span class="c">visibility  min 0.000  mean 0.445  max 1.000</span>
+<span class="c">ses_ao: 4HHB.cif.gz: wrote 4HHB_ao.obj, 4HHB_ao.mtl, 4HHB_ao.png, 4HHB_ao.ply in out</span>
+<span class="c">        (sesmesh 1.19 s, aomesh 3.34 s, colours 1.42 s)</span></code></pre></div></li><li><h3>What is in the files</h3><p><code>4HHB_ao.obj</code> is the sesmesh surface unchanged (colours, normals, header) plus one texture coordinate per vertex, its AO value; <code>4HHB_ao.mtl</code> names <code>4HHB_ao.png</code>, a 256 × 1 grey ramp from black (occluded) to white (open), as the diffuse map. Any renderer that draws textured OBJ shows the occlusion with no special support. The value is the cosine-weighted share of 256 viewpoints around the molecule that see the vertex: <code>ao = (256·u − 0.5)/255</code> from the coordinate <code>u</code>.</p><div class="gallery"><figure class="fig w6">
+      <div class="frame"><img src="img/gallery/4hhb-chain.webp" width="1600" height="1200" loading="lazy" alt="Haemoglobin coloured by chain, no ambient occlusion">
+        <div class="slot">MISSING IMAGE<br>img/gallery/4hhb-chain.webp</div></div>
+      <figcaption><b>Colours</b>The surface as sesmesh writes it.</figcaption>
+    </figure><figure class="fig w6">
+      <div class="frame"><img src="img/gallery/4hhb-chain-ao.webp" width="1600" height="1200" loading="lazy" alt="Haemoglobin coloured by chain, with ambient occlusion">
+        <div class="slot">MISSING IMAGE<br>img/gallery/4hhb-chain-ao.webp</div></div>
+      <figcaption><b>Colours × AO</b>The baked PLY: chain colours times the AO, same mesh and light.</figcaption>
+    </figure></div></li><li><h3>Open it</h3><p><b>three.js</b>: <code>MTLLoader</code> and <code>OBJLoader</code> load the texture; turn on vertex colours to multiply the chain colours by the AO.</p><div class="code"><div class="code-head"><span>JavaScript</span><button type="button">Copy</button></div>
+<pre><code>import { OBJLoader } from "three/addons/loaders/OBJLoader.js";
+import { MTLLoader } from "three/addons/loaders/MTLLoader.js";
+
+const materials = await new MTLLoader().loadAsync("out/4HHB_ao.mtl");
+materials.preload();
+const surface = await new OBJLoader().setMaterials(materials).loadAsync("out/4HHB_ao.obj");
+surface.traverse((o) =&gt; { if (o.isMesh) o.material.vertexColors = true; });
+scene.add(surface);</code></pre></div><p><b>Blender</b>: File ▸ Import ▸ Wavefront (.obj) wires the ramp into Base Color; for colours × AO put a <i>Mix</i> node set to Multiply between the <i>Color Attribute</i> and the image texture, or import <code>4HHB_ao.ply</code> and feed its <i>Color Attribute</i> to Base Color. <b>MeshLab</b> and <b>ParaView</b>: open the PLY.</p></li><li><h3>Scale it up</h3><p>aomesh's time and memory grow with the vertex count: GroEL–GroES at 0.5 Å has 2.2 million vertices and took 32 s and 3.1 GB. Cap the triangles first, and drop the cavities, which no outside viewpoint sees and which therefore come out black.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>python3 ses_ao.py 1AON.cif.gz -o out --bake-colors \
+<span class="c">    -- -s 0.5 --cavities remove --vertex-colors chain --max-triangles 1000000</span></code></pre></div><div class="note">All options, more examples and the viewer notes: <a href="https://github.com/uvar-apps/sesmesh/blob/main/tools/ao/README.md">tools/ao/README.md</a>. A surface you already have is baked as is: <code>python3 ses_ao.py surface.obj --samples 1024</code>.</div></li></ol>
+    </section>
+
+    <section id="rust">
+      <span class="label">05</span>
       <h2>Trajectories in Rust</h2>
 <p class="mute">Rust · 15 minutes · Trp-cage NMR ensemble (1L2Y)</p><ol class="steps"><li><h3>Create a project</h3><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
 <pre><code><span class="p">$ </span>cargo new ensemble &amp;&amp; cd ensemble

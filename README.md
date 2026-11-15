@@ -109,6 +109,8 @@ fn main() -> sesmesh::Result<()> {
 * [Validation report](https://github.com/uvar-apps/sesmesh/blob/main/docs/validation-report.md): accuracy, robustness,
   large inputs, performance
 * [CLI manual](https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md): every option, examples, exit codes
+* [Ambient occlusion](https://github.com/uvar-apps/sesmesh/blob/main/tools/ao/README.md): shaded surfaces by
+  post-processing with [aomesh](https://github.com/uvar-apps/aomesh)
 * Library: crate documentation (`cargo doc --open -p sesmesh`) and
   [examples](https://github.com/uvar-apps/sesmesh/blob/main/crates/sesmesh/examples/)
 * [API review](https://github.com/uvar-apps/sesmesh/blob/main/docs/api-review.md) (semver policy) and
@@ -125,6 +127,7 @@ fn main() -> sesmesh::Result<()> {
 | `tests/data` | Test fixtures, download sets and checksums ([README](https://github.com/uvar-apps/sesmesh/blob/main/tests/data/README.md)) |
 | `docs` | Specification, design and plan |
 | `site` | Project website (GitHub Pages; [tools/site/README.md](https://github.com/uvar-apps/sesmesh/blob/main/tools/site/README.md)) |
+| `tools/ao` | Ambient occlusion with aomesh: `ses_ao.py`, tests ([README](https://github.com/uvar-apps/sesmesh/blob/main/tools/ao/README.md)) |
 
 ## Building
 
