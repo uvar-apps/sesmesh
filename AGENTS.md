@@ -48,10 +48,10 @@ any deviation from the plan.
   cargo-deny, publish dry run); never push and rely on GitHub CI, which is manual-only
   (`workflow_dispatch`). Release tags only on a locally validated commit.
 - Never commit `out/` (review meshes: prototype files plus `*-sesmesh.obj` from the real CLI).
-- `atom-colors.json` (user-provided, 118 element colours,
+- `crates/sesmesh/data/atom-colors.json` (user-provided, 118 element colours,
   `{"format":"eigenvista-atom-colors","version":1,"colors":[{"z","symbol","color":"#rrggbb"}]}`)
-  is the default element palette: copied to `crates/sesmesh/data/atom-colors.json`, turned into
-  `color/element_table.rs` (a test keeps both in sync). The root copy stays untracked.
+  is the default element palette, turned into `color/element_table.rs` (a test keeps both in
+  sync). The user's original root copy was removed on 2026-11-15 (identical to this one).
 - The user reviews meshes in a viewer; the crambin SES was confirmed "perfect" (T4.10).
 
 ## Repository state at handoff (2026-11-15)
@@ -69,7 +69,7 @@ any deviation from the plan.
 - The crates.io token lives in the user's `~/.cargo/credentials.toml` (never read or print it).
   Next releases follow `docs/release.md` (bump `[workspace.package] version` and the `sesmesh`
   workspace dependency, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).
-- Root `atom-colors.json` and `out/` are untracked on purpose.
+- `out/` is untracked on purpose.
 - Discoverability (2026-11-14): repo description + 13 topics set, `CITATION.cff` (bump
   `version`/`date-released` per release), crates' `homepage` + `science::bioinformatics`
   (on crates.io from the next publish). Left to the user: social preview upload, Google
