@@ -6,6 +6,28 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Extended XYZ: a `Properties=` descriptor whose column counts add up past
+  `usize::MAX` is now an input error. Before, the sum overflowed (a panic
+  in debug builds; in release builds the wrapped count let short lines
+  through and indexing panicked). Found by the 24 CPU-hour fuzzing
+  campaign (#22) after 276 s; regression test in `io::xyz`.
+
+### Added
+
+- Robustness sweep of 1 000 further random PDB entries (#23): set
+  `sweep1000` (seed 2027) in `tests/data/sets.toml`,
+  `docs/validation/sweep1000.csv`, 1 000/1 000 ok. `xtask sample-sweep`
+  and `xtask sweep` take `--set` (default `sweep`, the 200 entries of
+  Phase 9 that the comparison uses).
+- `fuzz/campaign.sh`: long fuzzing campaigns (fork mode, CPU time
+  recorded). The campaign of Plan T9.8 (#22) ran every one of the 7
+  targets for ≥ 24.9 CPU-hours (174.5 in total, 494 M inputs) on two
+  16-core x86-64 Linux machines; after the XYZ fix above it reported no
+  crash, timeout or out-of-memory input (`docs/validation/fuzz.csv`,
+  validation report §7).
+
 ### Changed
 
 - Cross-tool comparison: the sesmesh accuracy, sweep, synthetic,
@@ -13,7 +35,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   than 0.01 Å off the SES; 1.1.0 had up to 0.22 Å); the 1.1.0 runs stay in
   `docs/validation/compare/` as separate campaigns. `tools/compare/run.py`
   runs outside the container (`BENCH_DIR`, `GNU_TIME`).
-- Paper draft describes 1.1.1 (refinement fallback in §3.5, reruns in §7).
+- Paper draft describes 1.1.1 (refinement fallback in §3.5, reruns in §7),
+  cites Poisson–Boltzmann solvers, names the measurement machine and
+  compilers, and reports the 1 000-entry sweep and the fuzzing campaign;
+  only the 8-performance-core Apple timings remain open (§8).
 
 ## [1.1.1] - 2026-11-14
 

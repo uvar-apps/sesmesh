@@ -74,7 +74,8 @@ tightened from ±25 % to ±5 %. Presets were not changed.
 ## 4. Robustness sweep (T9.4)
 
 200 random current PDB entries (seed 2026, from 263 196 entries;
-`[sets.sweep]`), mmCIF, 0.5 Å — reduced from the planned 1 000 by decision.
+`[sets.sweep]`), mmCIF, 0.5 Å — reduced from the planned 1 000 by decision;
+the 1 000-entry sweep followed after 1.1.1 (below).
 
 * **200 ok, 0 input errors, 0 failures.** Every mesh passed the built-in
   validation (closed, consistently oriented, edge-manifold, no degenerate or
@@ -88,6 +89,14 @@ tightened from ±25 % to ±5 %. Presets were not changed.
   0.5 Å has 1 026 in 119 of 200 entries (at most 2.7 Å² each; the smallest
   true solid component has 36 Å²). The accuracy figures above are
   unaffected.
+* *After 1.1.1 (2026-11-14, #23):* 1 000 further random current entries
+  (seed 2027, from 263 196 entries, none in common with `sweep`;
+  `[sets.sweep1000]`), `cargo run --release -p xtask -- sweep --set
+  sweep1000` → `sweep1000.csv`: **1 000 ok, 0 input errors, 0 failures**,
+  every mesh validated as above. Sizes 43–1 637 265 atoms (median 3 564);
+  the 6 entries above 200 000 atoms were meshed at 1 Å (largest 9IJJ:
+  32.2 M triangles in 36.8 s); 46 425 cavities; 363 s of compute in total
+  (10-core Apple M4, loaded, rustc 1.100.0).
 
 ## 5. Large inputs and memory (T9.7, NFR-MEM)
 
@@ -238,7 +247,22 @@ for the work after 1.0.
 * The 24 CPU-hour fuzzing campaign per parser (T9.8): moved to after 1.0
   (#22). For 1.0 every target ran 10 minutes (pdb, mmcif, cif_lexer, xyz,
   pqr, detect, assembly; ≈ 18 M inputs from the fixture corpus) without a
-  crash, timeout or out-of-memory report.
+  crash, timeout or out-of-memory report. *Done after 1.1.1 (2026-11-14,
+  #22):* `fuzz/campaign.sh` on two 16-core Zen 5 Linux machines (host-a:
+  pdb, mmcif, cif_lexer, assembly with 4 fork-mode workers each for 6.3 h;
+  host-b: xyz, pqr, detect with 5 workers each for 5.0 h), nightly rustc
+  1.102.0 (2026-11-13), cargo-fuzz 0.13.2, AddressSanitizer, release with
+  debug assertions, 2 GB RSS limit, corpus seeded from
+  `tests/data/fixtures`. The first run found one bug in 276 s: the column
+  counts of an extended-XYZ `Properties=` descriptor overflowed when added
+  (`attempt to add with overflow` at `io/xyz.rs`; in release builds an
+  index out of bounds). Fixed with a checked sum (an input error now) and a
+  regression test; all 19 saved crash inputs pass. The campaign was then
+  restarted from the seed corpus on the fixed code: **every target ≥ 24.9
+  CPU-hours (user + system time of all workers, GNU time), 174.5 CPU-hours
+  and 494 M inputs in total, 0 crashes, 0 timeouts, 0 out-of-memory
+  inputs** (`validation/fuzz.csv`: execs, coverage, features and corpus
+  size per target; xyz 274 M inputs, assembly 4.1 M).
 * Brick size, culling and refinement tuning (T9.5) was done in Phase 6
   (Design §7.5, §7.7); not repeated.
 
@@ -254,6 +278,25 @@ cargo run --release -p xtask -- validate
 
 ```bash
 cargo run --release -p xtask -- sweep
+```
+
+```bash
+cargo xtask fetch --set sweep1000
+```
+
+```bash
+cargo run --release -p xtask -- sweep --set sweep1000
+```
+
+Fuzzing campaign (x86-64 Linux, nightly toolchain, cargo-fuzz; one call per
+target, here 4 workers for 22 500 s):
+
+```bash
+bash fuzz/campaign.sh build
+```
+
+```bash
+bash fuzz/campaign.sh run pdb 4 22500
 ```
 
 Large inputs: `sesmesh <input> [--assembly 1] -s <h> -o /dev/null --stats

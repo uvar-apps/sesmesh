@@ -1,6 +1,6 @@
 # sesmesh paper (draft)
 
-LaTeX sources of a full-length research/software paper on sesmesh 1.1.0,
+LaTeX sources of a full-length research/software paper on sesmesh 1.1.1,
 meant for an arXiv preprint (primary **q-bio.BM**, cross-lists **cs.CG** and
 **physics.comp-ph**) and later a journal (J. Appl. Cryst. "computer
 programs", Bioinformatics or JCIM application note, or Computer Physics
@@ -46,7 +46,7 @@ Other targets:
 |---|---|
 | `main.tex` | Preamble, `\todo` and `\val` macros, section order |
 | `sections/*.tex` | Abstract, introduction, background, method, implementation, validation, performance (incl. x86-64 §6.2), comparison with six programs (§7), discussion, availability + declarations, appendices |
-| `references.bib` | Methods references of the README ("How it works and what to cite") and Spec §12, transcribed from the repository only |
+| `references.bib` | Methods references of the README ("How it works and what to cite") and Spec §12, transcribed from the repository; plus a continuum-electrostatics section checked against Crossref |
 | `figures/*.jpg` | Gallery renders from `site/img/gallery/*.webp`, flattened on white and trimmed (`magick … -background white -alpha remove -trim`) |
 | `data/analytic.csv` | One/two-sphere references meshed at h = 1, 0.5, 0.25, 0.125 Å (from `make data`) |
 | `data/scaling.csv` | Thread-scaling numbers transcribed from Design §11.1 |
@@ -64,17 +64,14 @@ Numbers match the red markers in the PDF (draft of 2026-11-14, describing
 | 1 | title | Affiliation (or "Independent researcher"), city, country |
 | 2 | title | ORCID iD |
 | 3 | abstract | Final abstract length/format for the target venue (Bioinformatics: 150 words, structured; J. Appl. Cryst.: unstructured) |
-| 4 | §1 Molecular surfaces | Cite representative Poisson–Boltzmann BEM/FEM solvers that consume SES meshes (none in the repository's reference list) |
-| 5 | §6 Machine | Exact chip, memory size, macOS and rustc versions of the Apple Silicon machine |
-| 6 | §8 Open measurements | Update the paragraph as items are completed |
-| 7 | §9 Archive | Mint a Zenodo DOI for the described version (1.1.1); cite it in the paper and `CITATION.cff` |
-| 8 | Declarations | Review and finalize the AI-use statement; check the venue's policy |
-| 9 | Declarations | Confirm "no competing interests" |
-| 10 | Declarations | Funding statement |
-| 11 | Declarations | CRediT statement if required |
-| 12 | Declarations | Acknowledgements |
-| 13 | Declarations | Cite the PDB reference recommended by RCSB/wwPDB |
-| 14 | Appendix B | Release tag or commit the paper refers to (the `v1.1.1` tree holds the code described, not this version of the paper) |
+| 4 | §9 Archive | Mint a Zenodo DOI for the described version (1.1.1); cite it in the paper and `CITATION.cff` |
+| 5 | Declarations | Review and finalize the AI-use statement; check the venue's policy |
+| 6 | Declarations | Confirm "no competing interests" |
+| 7 | Declarations | Funding statement |
+| 8 | Declarations | CRediT statement if required |
+| 9 | Declarations | Acknowledgements |
+| 10 | Declarations | Cite the PDB reference recommended by RCSB/wwPDB |
+| 11 | Appendix B | Release tag or commit the paper refers to (the `v1.1.1` tree holds the code described, not this version of the paper) |
 
 Resolved by the comparison (previous items 5–8, 9, 11–18): the MSMS and
 NanoShaper statements are now checked against Goddard's notes and the
@@ -87,11 +84,22 @@ Resolved by 1.1.1 (previous item 6): the refinement fix is released; §3.5
 describes it, §7 reports the sesmesh runs repeated with 1.1.1, and the
 analytic data of §5.1 are unchanged under 1.1.1 (`make data` gives the same
 `data/analytic.csv`).
+Resolved on 2026-11-14 (previous items 4, 5): §1 cites Poisson–Boltzmann
+solvers (review, three boundary-element and two finite-element papers,
+checked against Crossref); §6 names the machine (MacBook Air 15″, Apple M4,
+4 + 6 cores, 32 GB, fanless, macOS 27.0) and the compilers (rustc 1.99 for
+Phase 9, committed before the stable toolchain was updated to 1.100.0 that
+morning; 1.100.0 for all later runs).
+Resolved on 2026-11-14 (previous item 4, "Open measurements"): the
+1 000-entry sweep (#23, `docs/validation/sweep1000.csv`, §5.4) and the
+fuzzing campaign (#22, `docs/validation/fuzz.csv`, §4.5) are done; §8 now
+names only the 8-performance-core Apple timings, kept open by decision.
 
 ### Bibliography gaps (not marked in the PDF)
 
-`references.bib` deliberately contains only what the repository states.
-Before submission:
+`references.bib` deliberately contains only what the repository states,
+except the continuum-electrostatics section (complete, checked against
+Crossref). Before submission:
 
 * DOIs missing for Richards 1977, Connolly 1983 (*Science*), Sanner et al.
   1996, Can et al. 2006 (LSMS), Custódio et al. 2013, Ju et al. 2002, Taubin
@@ -101,7 +109,7 @@ Before submission:
   hybrid-36, extended XYZ, PQR, OBJ, rayon, fearless_simd, flate2,
   rust-sasa, Rust issue 86656) have no year or access date (BibTeX warns
   "empty year"); add `urldate`/`note = {accessed …}` and versions.
-* The sesmesh entry should carry the Zenodo DOI (item 7).
+* The sesmesh entry should carry the Zenodo DOI (item 5).
 
 ## What reviewers will flag
 
@@ -126,9 +134,12 @@ Before submission:
 4. **Apple Silicon timings** still come from one loaded 10-core machine
    (the x86-64 runs are clean); the 8-performance-core reference machine
    was never measured.
-5. **Scale of the robustness evidence**: 200 random entries instead of the
-   planned 1 000 (#23); fuzzing 10 min per target instead of 24 CPU-hours
-   (#22).
+5. **A parser bug found after 1.1.1**: the fuzzing campaign found an
+   integer overflow in the extended-XYZ `Properties` parser (a panic on
+   crafted input, no wrong mesh); the fix is unreleased, so the code the
+   paper describes is 1.1.1 plus this fix until a patch release (item 11).
+   The robustness evidence itself is now at the planned scale: 1 000 + 200
+   random entries and ≥ 24.9 CPU-hours per fuzz target.
 6. **Inscribed-mesh bias**: area always underestimated (−0.20 % at 0.25 Å
    for proteins, up to −0.64 % for atom-sized spheres); no analytic area.
 7. **Sub-grid fragments** are counted in the default output; removal is

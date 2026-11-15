@@ -20,3 +20,22 @@ mkdir -p fuzz/corpus/pdb && for f in tests/data/fixtures/*.pdb.gz; do gzcat "$f"
 
 Crashes found by fuzzing are minimized and added as regression tests in the
 library (`crates/sesmesh`).
+
+## Long campaigns
+
+`fuzz/campaign.sh` runs the ≥ 24 CPU-hour campaign of Plan T9.8 (#22) on
+x86-64 Linux with a nightly toolchain and cargo-fuzz: `build` builds every
+target (AddressSanitizer, release, debug assertions); `run TARGET WORKERS
+SECONDS` seeds `corpus/TARGET` from the fixtures and runs libFuzzer in fork
+mode with WORKERS processes for SECONDS (WORKERS × SECONDS ≥ 86 400 for
+24 CPU-hours), keeping crashes, timeouts and out-of-memory inputs in
+`artifacts/TARGET/` and going on. GNU time's report in `logs/TARGET.time`
+gives the CPU time actually spent.
+
+```bash
+bash fuzz/campaign.sh build
+```
+
+```bash
+bash fuzz/campaign.sh run pdb 4 22500
+```

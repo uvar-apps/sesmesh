@@ -228,6 +228,54 @@ def sweep() -> None:
     write("sweep.dat", "\n".join(lines) + "\n", DAT_HEADER)
 
 
+def sweep1000() -> None:
+    """The 1 000-entry sweep (set sweep1000, seed 2027, version 1.1.1)."""
+    if not (VAL / "sweep1000.csv").exists():
+        return
+    rows = read(VAL / "sweep1000.csv")
+    ok = [r for r in rows if r["status"] == "ok"]
+    atoms = [int(r["atoms"]) for r in ok]
+    val("sweepk-n", thousands(len(rows)))
+    val("sweepk-ok", thousands(len(ok)))
+    val("sweepk-input-errors", str(sum(1 for r in rows if r["status"] == "input-error")))
+    val("sweepk-failures", str(sum(1 for r in rows if r["status"] == "failure")))
+    val("sweepk-missing", str(sum(1 for r in rows if r["status"] == "missing")))
+    val("sweepk-atoms-min", thousands(min(atoms)))
+    val("sweepk-atoms-max", thousands(max(atoms)))
+    val("sweepk-atoms-median", thousands(round(st.median(atoms))))
+    val("sweepk-coarse", str(sum(1 for r in ok if float(r["spacing"]) == 1.0)))
+    val("sweepk-cavities", thousands(sum(int(r["cavities"]) for r in ok)))
+    big = max(ok, key=lambda r: int(r["atoms"]))
+    val("sweepk-largest-id", big["entry"])
+    val("sweepk-largest-tri", f"{int(big['triangles']) / 1e6:.0f}")
+    val("sweepk-seconds-total", f"{sum(float(r['seconds']) for r in ok):.0f}")
+
+
+# -------------------------------------------------------------------- fuzz
+def fuzz() -> None:
+    """The fuzzing campaign after 1.1.1 (#22, fuzz/campaign.sh)."""
+    if not (VAL / "fuzz.csv").exists():
+        return
+    rows = read(VAL / "fuzz.csv")
+    cpuh = [
+        (float(r["cpu_user_seconds"]) + float(r["cpu_system_seconds"])) / 3600 for r in rows
+    ]
+    execs = [int(r["execs"]) for r in rows]
+    findings = sum(
+        int(r[k]) for r in rows for k in ("crashes", "timeouts", "ooms", "artifacts")
+    )
+    assert min(cpuh) >= 24.0, "a target ran less than 24 CPU-hours"
+    # The paper says "Seven fuzz targets" and "no crash, timeout or out-of-memory input".
+    assert len(rows) == 7 and findings == 0, "update the fuzzing text in implementation.tex"
+    val("fuzz-targets", str(len(rows)))
+    val("fuzz-cpuh-min", f"{min(cpuh):.1f}")
+    val("fuzz-cpuh-total", f"{sum(cpuh):.0f}")
+    val("fuzz-execs-total", f"{sum(execs) / 1e6:.0f}")
+    val("fuzz-execs-min", f"{min(execs) / 1e6:.1f}")
+    val("fuzz-execs-max", f"{max(execs) / 1e6:.0f}")
+    val("fuzz-findings", str(findings))
+
+
 # ------------------------------------------------------------------- large
 def large() -> None:
     rows = read(VAL / "large.csv")
@@ -627,6 +675,8 @@ def main() -> None:
     OUT.mkdir(exist_ok=True)
     accuracy()
     sweep()
+    sweep1000()
+    fuzz()
     large()
     analytic()
     scaling()

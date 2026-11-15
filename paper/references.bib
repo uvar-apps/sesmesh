@@ -7,14 +7,17 @@
 % docs/01-product-specification.md §12 (reference ids [R1]..[R54] noted in
 % each entry's `note`-free comment line). Fields that the repository does not
 % give (missing DOIs, page ranges of conference papers, access dates) are NOT
-% filled in from memory; paper/README.md lists them as open items.
+% filled in from memory; paper/README.md lists them as open items. Exception:
+% the continuum-electrostatics section, which the repository does not cite;
+% its entries were checked against Crossref (authors, title, venue, volume,
+% pages, year, DOI) on 2026-11-14.
 
 % ------------------------------------------------------------------ software
 @misc{sesmesh,
   author       = {Varetto, Ugo},
   title        = {sesmesh: Solvent Excluded Surface meshes for molecules},
   year         = {2026},
-  howpublished = {Software, version 1.1.0, released 2026-11-14},
+  howpublished = {Software, version 1.1.1, released 2026-11-14},
   url          = {https://github.com/uvar-apps/sesmesh},
 }
 
@@ -107,6 +110,73 @@
   pages   = {178--204},
   year    = {2017},
   doi     = {10.1111/cgf.13072},
+}
+
+% ------------------------------------------------- continuum electrostatics
+% Not in the repository's reference list; metadata checked against Crossref.
+@article{lu2008pbreview,
+  author  = {Lu, B. Z. and Zhou, Y. C. and Holst, M. J. and McCammon, J. A.},
+  title   = {Recent progress in numerical methods for the {P}oisson--{B}oltzmann equation in biophysical applications},
+  journal = {Communications in Computational Physics},
+  volume  = {3},
+  number  = {5},
+  pages   = {973--1009},
+  year    = {2008},
+  doi     = {10.4208/cicp.2008.v3.p973},
+}
+
+@article{lu2010afmpb,
+  author  = {Lu, B. and Cheng, X. and Huang, J. and McCammon, J. A.},
+  title   = {{AFMPB}: an adaptive fast multipole {P}oisson--{B}oltzmann solver for calculating electrostatics in biomolecular systems},
+  journal = {Computer Physics Communications},
+  volume  = {181},
+  number  = {6},
+  pages   = {1150--1160},
+  year    = {2010},
+  doi     = {10.1016/j.cpc.2010.02.015},
+}
+
+@article{geng2013tabipb,
+  author  = {Geng, W. and Krasny, R.},
+  title   = {A treecode-accelerated boundary integral {P}oisson--{B}oltzmann solver for electrostatics of solvated biomolecules},
+  journal = {Journal of Computational Physics},
+  volume  = {247},
+  pages   = {62--78},
+  year    = {2013},
+  doi     = {10.1016/j.jcp.2013.03.056},
+}
+
+@article{cooper2014pygbe,
+  author  = {Cooper, C. D. and Bardhan, J. P. and Barba, L. A.},
+  title   = {A biomolecular electrostatics solver using {P}ython, {GPU}s and boundary elements that can handle solvent-filled cavities and {S}tern layers},
+  journal = {Computer Physics Communications},
+  volume  = {185},
+  number  = {3},
+  pages   = {720--729},
+  year    = {2014},
+  doi     = {10.1016/j.cpc.2013.10.028},
+}
+
+@article{holst2000fem,
+  author  = {Holst, M. and Baker, N. and Wang, F.},
+  title   = {Adaptive multilevel finite element solution of the {P}oisson--{B}oltzmann equation {I}. {A}lgorithms and examples},
+  journal = {Journal of Computational Chemistry},
+  volume  = {21},
+  number  = {15},
+  pages   = {1319--1342},
+  year    = {2000},
+  doi     = {10.1002/1096-987X(20001130)21:15<1319::AID-JCC1>3.0.CO;2-8},
+}
+
+@article{yu2008gamer,
+  author  = {Yu, Z. and Holst, M. J. and Cheng, Y. and McCammon, J. A.},
+  title   = {Feature-preserving adaptive mesh generation for molecular shape modeling and simulation},
+  journal = {Journal of Molecular Graphics and Modelling},
+  volume  = {26},
+  number  = {8},
+  pages   = {1370--1380},
+  year    = {2008},
+  doi     = {10.1016/j.jmgm.2008.01.007},
 }
 
 % ------------------------------------------------- SES algorithms and tools

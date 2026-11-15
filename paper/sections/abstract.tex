@@ -22,8 +22,9 @@ On a corpus of \val{corpus-n} structures (\val{corpus-atoms-min} to
 \val{corpus-atoms-max} atoms) the mesh area and volume differ from their
 $h \to 0$ extrapolation by \val{area-mean-0.25}\,\% and
 \val{vol-mean-0.25}\,\% on average at $h = 0.25$\Ang, with clean $O(h^2)$
-convergence; \val{sweep-ok} of \val{sweep-n} randomly drawn Protein Data
-Bank entries produced valid meshes. On the same spheres, NanoShaper and
+convergence; \val{sweepk-ok} of \val{sweepk-n} randomly drawn Protein Data
+Bank entries (and all \val{sweep-n} of an earlier sample) produced valid
+meshes. On the same spheres, NanoShaper and
 ESES, which also place vertices on the exact surface, agree with \sesmesh{}
 to \val{cmp-nanoshaper-darea-max-0.25}\,\% in area at $h = 0.25$\Ang,
 while MSMS, ChimeraX and EDTSurf show failures, non-manifold or open meshes,

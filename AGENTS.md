@@ -81,7 +81,7 @@ any deviation from the plan.
   analytic bound area ≤ 0.7 % / volume ≤ 1.5 % at 0.25 Å (#4), NFR-PERF = Phase 9
   measurements (#20). After 1.0 (tracking #19): cross-tool references #5/#6, 24 CPU-h fuzz
   campaign #22 (only 10 min per target before 1.0), x86 measurements #8/#9/#10, #13, #14,
-  #18, #23.
+  #18, #23 (#5/#6, #22 and #23 done 2026-11-14).
 
 ## Layout (crates/sesmesh/src)
 
@@ -154,7 +154,8 @@ any deviation from the plan.
   assembly, decimation corner lists). Measure memory with a counting global allocator in a
   scratch crate outside the workspace (`malloc_size` + `getrusage` per `Progress` stage).
 - Phase 9 (docs/validation-report.md): 53-entry accuracy study (area −0.20 %, volume −0.02 % at
-  0.25 Å vs h → 0 extrapolation), density constant 1.4999 ± 0.0025, 200/200 sweep ok, large
+  0.25 Å vs h → 0 extrapolation), density constant 1.4999 ± 0.0025, 200/200 sweep ok (after
+  1.1.1 also `sweep1000`: 1 000/1 000, #23), large
   inputs (3J3Q 1 Å: 48.7 M triangles, 70 s, 5.3 GB). Open: cross-tool references (#5, #6), NFR-ACC
   decision (#4), NFR-PERF targets missed ≤ 2× on this machine, per-atom memory ≈ 600–800 B.
 
@@ -166,9 +167,13 @@ engine, export, cli, ci), `phase:` (8, 9, 10, backlog; deferred items carry `pha
 `priority:` (must/should/could = spec MoSCoW). Close issues from commits/PRs (`Fixes #N`) and
 tick them in #19. Summary:
 
-1. Fuzzing campaign ≥ 24 CPU-hours per target (#22): a manual GitHub Actions workflow with one
-   job per target and shard (4 vCPU × ≈ 5.5 h each) was sketched, not committed; local
-   cargo-fuzz lives in the session scratchpad only (`cargo install cargo-fuzz` for a new one).
+1. Fuzzing campaign ≥ 24 CPU-hours per target (#22) done 2026-11-14 with `fuzz/campaign.sh`
+   on the two comparison hosts (podman, toolchain and corpora in `~/sesmesh-fuzz` there):
+   ≥ 24.9 CPU-h per target, 174.5 in total, results in `docs/validation/fuzz.csv`. It found
+   one bug, an extended-XYZ `Properties=` column-count overflow (a panic), fixed after 1.1.1
+   with a regression test in `io::xyz`; the fix is unreleased (a 1.1.2 patch candidate; the
+   paper describes 1.1.1 plus this fix). The 1 000-entry sweep (#23) is done too
+   (`xtask sweep --set sweep1000`, 1 000/1 000 ok).
 2. Cross-tool comparison (#5, #6) done 2026-11-14, merged into `main`:
    `tools/compare/` (README there), `docs/comparison.md`, `docs/validation/compare/`,
    `tests/data/reference/*.toml`, `tests/references.rs`. Close #5/#6 (and report #8/#10
@@ -182,8 +187,8 @@ tick them in #19. Summary:
    Still to do: the site's accuracy wording ("≤ 1e-4·h" holds near the origin; the edge
    clamp is ≥ 4 f32 ulps farther out). arm64 and x86-64 builds write files that differ
    in the last bits (same counts and areas); determinism is per binary.
-4. Apple Silicon 8-P-core reference timings, x86 kernel work (#9, #13), robustness sweep to
-   1 000 entries (#23), Ubuntu 26 CI image (#18), optional marching tetrahedra (#14).
+4. Apple Silicon 8-P-core reference timings (kept open by decision, paper §8), x86 kernel
+   work (#9, #13), Ubuntu 26 CI image (#18), optional marching tetrahedra (#14).
 
 ## Gotchas learned
 
@@ -203,8 +208,10 @@ tick them in #19. Summary:
 - Timing on this machine is noisy (Defender and other apps; load average often 10–25): write
   outputs to `/dev/null`, check `uptime`, compare with criterion baselines
   (`--save-baseline` / `--baseline`), repeat runs. Single-thread runs are steadier.
-- zsh does not word-split `$var`; use `${=var}` in loops. Foreground `sleep` is blocked; run
-  long jobs in the background.
+- zsh does not word-split `$var`; use `${=var}` in loops. In zsh `"$h:path"` applies a `:`
+  modifier to `$h` (scp then writes a local file): write `"${h}:path"`. `podman rm a b c`
+  removes nothing when one name is missing; remove containers one by one. Foreground
+  `sleep` is blocked; run long jobs in the background.
 - The nightly fuzz jobs must pass `cargo fuzz run --target x86_64-unknown-linux-gnu`: the
   prebuilt cargo-fuzz from `taiki-e/install-action` is a musl build and defaults to the musl
   target, where AddressSanitizer fails ("sanitizer is incompatible with statically linked libc").

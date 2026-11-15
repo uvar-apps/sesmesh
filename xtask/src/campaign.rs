@@ -29,7 +29,7 @@ impl Rng {
 
 /// Samples `count` current PDB entries (RCSB holdings) with `seed` and
 /// writes them as `[sets.sweep]` into tests/data/sets.toml.
-pub(crate) fn sample_sweep(data_dir: &Path, count: usize, seed: u64) -> Result<()> {
+pub(crate) fn sample_sweep(data_dir: &Path, count: usize, seed: u64, set: &str) -> Result<()> {
     let tmp = data_dir.join("cache").join("holdings.json.part");
     fs::create_dir_all(data_dir.join("cache"))?;
     crate::download(
@@ -55,8 +55,9 @@ pub(crate) fn sample_sweep(data_dir: &Path, count: usize, seed: u64) -> Result<(
         .map(|id| format!("{id}.cif.gz"))
         .collect();
     chosen.sort_unstable();
+    let header = format!("[sets.{set}]");
     let mut section = format!(
-        "[sets.sweep]\ndescription = \"Robustness sweep (Plan T9.4): {count} random current PDB entries \
+        "{header}\ndescription = \"Robustness sweep (Plan T9.4): {count} random current PDB entries \
          (seed {seed}, sampled from {} entries), mmCIF\"\nfiles = [\n",
         ids.len()
     );
@@ -67,7 +68,7 @@ pub(crate) fn sample_sweep(data_dir: &Path, count: usize, seed: u64) -> Result<(
     section.push_str("]\n");
     let path = data_dir.join("sets.toml");
     let mut toml = fs::read_to_string(&path)?;
-    if let Some(start) = toml.find("[sets.sweep]") {
+    if let Some(start) = toml.find(&header) {
         let end = toml[start + 1..]
             .find("\n[sets.")
             .map_or(toml.len(), |e| start + 1 + e + 1);
@@ -79,7 +80,7 @@ pub(crate) fn sample_sweep(data_dir: &Path, count: usize, seed: u64) -> Result<(
     toml.push_str(&section);
     fs::write(&path, toml)?;
     println!(
-        "wrote [sets.sweep] with {count} entries (seed {seed}); now run `cargo xtask fetch --set sweep`"
+        "wrote {header} with {count} entries (seed {seed}); now run `cargo xtask fetch --set {set}`"
     );
     Ok(())
 }
@@ -255,6 +256,7 @@ pub(crate) fn sweep(
     files: &[String],
     spacing: f64,
     coarse_above: usize,
+    set: &str,
 ) -> Result<()> {
     let cache = root.join("tests/data/cache");
     let out_dir = root.join("docs/validation");
@@ -312,9 +314,9 @@ pub(crate) fn sweep(
             }
         }
     }
-    fs::write(out_dir.join("sweep.csv"), csv)?;
+    fs::write(out_dir.join(format!("{set}.csv")), csv)?;
     println!(
-        "sweep: {ok} ok, {input_errors} input errors, {failures} failures; wrote docs/validation/sweep.csv"
+        "{set}: {ok} ok, {input_errors} input errors, {failures} failures; wrote docs/validation/{set}.csv"
     );
     if failures > 0 {
         bail!("{failures} surface failures");

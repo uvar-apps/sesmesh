@@ -6,11 +6,15 @@
 \label{sec:performance}
 
 \paragraph{Machine and protocol.}
-All measurements were made on one Apple Silicon machine with 10 cores
-(4 performance and 6 efficiency cores) under macOS, with release builds,
-all cores and the NEON kernel \todo{state the exact chip, memory size,
-macOS and rustc versions}. The machine carried a heavy background load
-from other applications during the runs (load average 15--27), so wall
+All measurements were made on one Apple Silicon machine, a 15-inch MacBook
+Air (Mac16,13) with an Apple M4 chip (10 cores: 4 performance and 6
+efficiency cores) and 32\,GB of unified memory, under macOS 27.0, with
+release builds, all cores and the NEON kernel. The Phase~9 measurements were
+built with rustc 1.99, the later runs on this machine (the 1.0
+development code and 1.1.0 in \cref{tab:large}, and the 1.1.0 and 1.1.1
+runs of \cref{sec:comparison}) with rustc 1.100.0. The machine is fanless, so long
+runs may be slowed by thermal throttling, and it carried a heavy background
+load from other applications during the runs (load average 15--27), so wall
 times are pessimistic and repeated runs vary by several percent. The
 reference machines of the specification---8 homogeneous performance
 cores, and an x86-64 desktop with AVX2---were not available for these runs;

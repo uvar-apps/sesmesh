@@ -173,6 +173,7 @@ requested at 0.1\Ang{} under 512\,MiB at 0.634\Ang{} (estimate 497\,MiB,
 peak 352\,MiB).
 
 \subsection{Quality assurance}
+\label{sec:qa}
 
 Every optimized path has a simple reference: a brute-force double-precision
 oracle of $F$ over all features, against which the exact point evaluator,
@@ -182,8 +183,16 @@ surfaces (\cref{sec:analytic}); the exhaustive Marching Cubes table tests
 (\cref{sec:mc}); mesh validation of every result; and the determinism suite.
 Seven fuzz targets cover the PDB, mmCIF, CIF lexer, XYZ, PQR, format
 detection and assembly code; before 1.0 each ran for 10 minutes (about 18
-million inputs in total) without a crash, timeout or out-of-memory report,
-and a longer campaign is pending (\cref{sec:discussion}). Continuous
+million inputs in total) without a crash, timeout or out-of-memory report.
+After 1.1.1 every target ran for at least \val{fuzz-cpuh-min} CPU-hours
+(libFuzzer in fork mode with AddressSanitizer and debug assertions, on two
+16-core x86-64 Linux machines; \val{fuzz-cpuh-total} CPU-hours and
+\val{fuzz-execs-total} million inputs in total). The first minutes of that
+campaign found one bug: the column counts of an extended-XYZ
+\code{Properties} descriptor could overflow when added, which panicked
+instead of reporting an input error. After the fix (made after 1.1.1, with a
+regression test) the campaign was restarted from the seed corpus and
+reported no crash, timeout or out-of-memory input. Continuous
 integration runs formatting, a strict lint configuration, tests on macOS
 arm64, Linux x86-64, Linux arm64 and Windows x86-64, documentation, licence
 and advisory checks, the minimum compiler version, and five runnable

@@ -377,6 +377,9 @@ Exit (v0.3): all Must/Should requirements implemented.
 >   volume −0.02 % mean at 0.25 Å; NFR-ACC protein bounds met; analytic
 >   small-sphere bound still open (issue #4, recommendation in the report).
 > * T9.4: `xtask sweep` → 200/200 ok (1 000 planned; reduced by decision).
+>   *Done after 1.1.1 (2026-11-14, #23):* `xtask sample-sweep --set
+>   sweep1000 --count 1000 --seed 2027`, `xtask sweep --set sweep1000` →
+>   `docs/validation/sweep1000.csv`, 1 000/1 000 ok (43–1 637 265 atoms).
 > * T9.5: density constant confirmed (1.4999 ± 0.0025), test tightened to
 >   ±5 %; brick tuning done in Phase 6; memory estimate recalibrated.
 > * T9.7: 4V6X, 3J3Q, 1K4R assembly, 1AON — within NFR-MEM except the
@@ -384,6 +387,13 @@ Exit (v0.3): all Must/Should requirements implemented.
 >   development (#21): compaction to ≈ 700 B/atom and the budget revised
 >   to 800 B/atom (Spec §5.2).
 > * T9.8: left to the nightly fuzz job.
+>   *Done after 1.1.1 (2026-11-14, #22):* `fuzz/campaign.sh` (libFuzzer fork
+>   mode, ASan) on two 16-core x86-64 hosts, every one of the 7 targets
+>   ≥ 24.9 CPU-hours (174.5 in total, 494 M inputs). One finding (extended-XYZ
+>   column-count overflow, a panic) fixed with a regression test in
+>   `io::xyz` (the repository's convention, `fuzz/README.md`, instead of a
+>   corpus file); the restarted campaign was clean
+>   (`docs/validation/fuzz.csv`, validation report §7).
 > * NFR-PERF provisional targets missed by up to ≈ 2× on this machine.
 
 ### Phase 10 — Documentation and release (M5 = v1.0)
@@ -437,6 +447,7 @@ Exit (v1.0): Spec §6.2 release criteria.
 | `bench` | 1AON, 1JJ2, 4V6X, 3J3Q, 1K4R | `xtask fetch` (≈ 300 MB gz) |
 | `validation` | ≈ 50 entries (T9.1) | `xtask fetch` |
 | `sweep` | ≥ 1 000 random entries (T9.4), seed recorded | `xtask fetch --set sweep --seed N` |
+| `sweep1000` | *As built:* 1 000 random entries (seed 2027) after 1.1.1; `sweep` keeps the 200 of Phase 9 used by the comparison | `xtask sample-sweep --set sweep1000`, `xtask fetch --set sweep1000` |
 | `reference` | Offline numbers from external tools with provenance | vendored TOML |
 
 PDB archive data is CC0; external tools' outputs are not vendored, only

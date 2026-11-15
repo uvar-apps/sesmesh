@@ -31,7 +31,8 @@ molecular surface) meshing for molecular structures, written in Rust.
 > A comparison with MSMS, NanoShaper, ESES, EDTSurf, ChimeraX and sesa on
 > the same spheres is in
 > [docs/comparison.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/comparison.md).
-> Work after 1.0 (a long fuzzing campaign, the 1 000-entry sweep) is tracked in
+> Work after 1.0 (reference-machine timings, x86 kernel work, marching
+> tetrahedra) is tracked in
 > [issue #19](https://github.com/uvar-apps/sesmesh/issues/19).
 
 ## Install

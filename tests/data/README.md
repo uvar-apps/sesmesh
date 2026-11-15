@@ -3,7 +3,7 @@
 | Location | Content | In git |
 |---|---|---|
 | `tests/data/fixtures/` | Small structure files tests need offline (see its [README](fixtures/README.md)). PDB archive data is CC0. Keep the total under 5 MB. | yes |
-| `tests/data/sets.toml` | Named download sets (`small`, `bench`, later `validation` and `sweep`). Edited by hand. | yes |
+| `tests/data/sets.toml` | Named download sets (`small`, `bench`, `validation`, `sweep` with 200 random entries, `sweep1000` with 1 000; the sweep sets are written by `xtask sample-sweep`, the others edited by hand). | yes |
 | `tests/data/sets.lock` | SHA-256 of every downloaded file. Written by `cargo xtask fetch`. | yes |
 | `tests/data/cache/` | Downloaded files. | no (git-ignored) |
 | `tests/data/reference/` (Plan T9.2) | Numbers produced offline by external tools (MSMS, NanoShaper, ESES, EDTSurf, ChimeraX, sesa) with tool versions and command lines, written by `tools/compare/report.py`; read by `crates/sesmesh/tests/references.rs`. Only derived numbers, never the tools' output files. | yes |

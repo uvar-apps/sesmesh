@@ -9,8 +9,8 @@
 //! * `cargo xtask sets` — list the data sets defined in `tests/data/sets.toml`.
 //! * `cargo xtask fetch --set <name>` — download a set into
 //!   `tests/data/cache/` and verify it against `tests/data/sets.lock`.
-//! * `cargo xtask sample-sweep --count N --seed S` — record N random current
-//!   PDB entries as the `sweep` set (Plan T9.4).
+//! * `cargo xtask sample-sweep --count N --seed S [--set NAME]` — record N
+//!   random current PDB entries as the `sweep` set, or set NAME (Plan T9.4).
 //! * `cargo xtask validate` / `cargo xtask sweep` — the accuracy study and the
 //!   robustness sweep of Plan Phase 9 (run with `--release`:
 //!   `cargo run --release -p xtask -- validate`).
@@ -54,7 +54,7 @@ enum Cmd {
         force: bool,
     },
     /// Record a reproducible random sample of current PDB entries as the
-    /// `sweep` set in tests/data/sets.toml.
+    /// `sweep` set (or `--set`) in tests/data/sets.toml.
     SampleSweep {
         /// Number of entries.
         #[arg(long, default_value_t = 200)]
@@ -62,6 +62,9 @@ enum Cmd {
         /// Random seed.
         #[arg(long, default_value_t = 2026)]
         seed: u64,
+        /// Name of the set to write.
+        #[arg(long, default_value = "sweep")]
+        set: String,
     },
     /// Accuracy study on the validation set (Plan T9.3, T9.5): area and
     /// volume vs grid spacing, extrapolated to h → 0; writes
@@ -74,8 +77,8 @@ enum Cmd {
         #[arg(long, default_value_t = 300_000)]
         max_atoms: usize,
     },
-    /// Robustness sweep over the `sweep` set (Plan T9.4) at one spacing;
-    /// writes docs/validation/sweep.csv.
+    /// Robustness sweep over the `sweep` set (or `--set`, Plan T9.4) at one
+    /// spacing; writes docs/validation/<set>.csv.
     Sweep {
         /// Grid spacing (Å).
         #[arg(long, default_value_t = 0.5)]
@@ -83,6 +86,9 @@ enum Cmd {
         /// Use 1.0 Å above this many atoms.
         #[arg(long, default_value_t = 200_000)]
         coarse_above: usize,
+        /// Set to mesh.
+        #[arg(long, default_value = "sweep")]
+        set: String,
     },
 }
 
@@ -128,7 +134,9 @@ fn main() -> Result<()> {
             update_lock,
             force,
         } => fetch(&data_dir, &sets, &requested, update_lock, force),
-        Cmd::SampleSweep { count, seed } => campaign::sample_sweep(&data_dir, count, seed),
+        Cmd::SampleSweep { count, seed, set } => {
+            campaign::sample_sweep(&data_dir, count, seed, &set)
+        }
         Cmd::Validate {
             spacings,
             max_atoms,
@@ -141,13 +149,14 @@ fn main() -> Result<()> {
         Cmd::Sweep {
             spacing,
             coarse_above,
+            set,
         } => {
             let files = sets
                 .sets
-                .get("sweep")
+                .get(&set)
                 .map(|s| s.files.clone())
-                .context("no `sweep` set: run `cargo xtask sample-sweep` first")?;
-            campaign::sweep(&workspace_root(), &files, spacing, coarse_above)
+                .with_context(|| format!("no `{set}` set: run `cargo xtask sample-sweep` first"))?;
+            campaign::sweep(&workspace_root(), &files, spacing, coarse_above, &set)
         }
     }
 }

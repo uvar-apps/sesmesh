@@ -24,10 +24,12 @@ concave spherical triangles where it touches three
 (\cref{fig:gallery-kinds}). It is widely used to visualize
 macromolecules~\cite{kozlikova2017}, to measure their area, volume and
 internal cavities, and as the dielectric boundary in continuum
-electrostatics, where boundary- and finite-element solvers need a closed,
-manifold triangulation \todo{cite representative Poisson--Boltzmann BEM/FEM
-solvers that consume SES meshes; none is in the repository's reference
-list}.
+electrostatics~\cite{lu2008pbreview}: boundary-element Poisson--Boltzmann
+solvers discretize the surface
+itself~\cite{lu2010afmpb,geng2013tabipb,cooper2014pygbe} and
+finite-element solvers mesh the volume around
+it~\cite{holst2000fem,yu2008gamer}, so both need a closed, manifold
+triangulation.
 
 \paragraph{Existing programs.}
 Two families of programs triangulate the SES. \emph{Analytic} methods
@@ -124,8 +126,10 @@ contributions are:
     peak memory and can coarsen the grid to fit a limit
     (\cref{sec:implementation});
   \item a validation against analytic references, a \val{corpus-n}-entry
-    accuracy study, a \val{sweep-n}-entry robustness sweep and inputs of up
-    to 2.44 million atoms (\cref{sec:validation,sec:performance}), and a
+    accuracy study, robustness sweeps of \val{sweep-n} and \val{sweepk-n} random
+    PDB entries, inputs of up to 2.44 million atoms
+    (\cref{sec:validation,sec:performance}) and \val{fuzz-cpuh-total}
+    CPU-hours of parser fuzzing (\cref{sec:qa}), and a
     comparison on the same spheres with MSMS, NanoShaper, ESES, EDTSurf,
     ChimeraX and sesa (\cref{sec:comparison}).
 \end{enumerate}

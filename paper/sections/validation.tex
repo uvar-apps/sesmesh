@@ -213,9 +213,10 @@ requested density within $\pm5$\,\%.
 
 \paragraph{Random PDB entries.}
 \val{sweep-n} entries were drawn at random (seed 2026) from the 263\,196
-entries of the PDB at the time and meshed from mmCIF at $h = 0.5$\Ang. The
-plan called for 1\,000 entries; the sweep was reduced to \val{sweep-n} by
-decision. All \val{sweep-ok} produced a mesh that passed the built-in
+entries of the PDB at the time and meshed from mmCIF at $h = 0.5$\Ang{}
+with the Phase~9 code. The plan called for 1\,000 entries; this first sweep
+was reduced to \val{sweep-n} by decision, and the full one followed after
+version 1.1.1 (below). All \val{sweep-ok} produced a mesh that passed the built-in
 validation (closed, consistently oriented, edge-manifold, no degenerate or
 duplicate triangles), with no input errors. The entries range from
 \val{sweep-atoms-min} to \val{sweep-atoms-max} atoms (median
@@ -226,6 +227,16 @@ entry, \pdb{\val{sweep-slowest-id}} (\val{sweep-slowest-atoms} atoms,
 \val{sweep-slowest-tri}\,M triangles), took \val{sweep-seconds-max}\,s. The
 component counts include the sub-grid fragments of \cref{sec:fragments}
 (1\,026 in 119 entries, at most 2.7\AA$^2$ each).
+
+With version 1.1.1, \val{sweepk-n} further entries were drawn (seed 2027,
+none in common with the first sample) and meshed in the same way, the
+\val{sweepk-coarse} with more than 200\,000 atoms at 1\Ang. All
+\val{sweepk-ok} produced a valid mesh, with \val{sweepk-input-errors} input
+errors and \val{sweepk-failures} failures. They range from
+\val{sweepk-atoms-min} to \val{sweepk-atoms-max} atoms (median
+\val{sweepk-atoms-median}; the largest, \pdb{\val{sweepk-largest-id}}, a
+\val{sweepk-largest-tri}-million-triangle mesh) and have \val{sweepk-cavities} cavities; the
+sweep took \val{sweepk-seconds-total}\,s of compute.
 
 \paragraph{Degenerate geometry.}
 Synthetic inputs that are known to be hard for analytic methods are part of

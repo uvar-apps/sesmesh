@@ -441,7 +441,9 @@ measured after 1.0 (#8, #10).
 references (§5.3, analytic bound revised, #4), cross-tool references after
 1.0 (#5, #6; done 2026-11-14, `docs/comparison.md`); 4 robustness sweep 200/200 and a 10-minute run of every fuzz
 target (7 targets, ≈ 18 M inputs, no failures), the 24 CPU-hour campaign
-per parser after 1.0 (#22); 5 met.
+per parser after 1.0 (#22; done after 1.1.1, 2026-11-14: ≥ 24.9 CPU-hours
+per target, one XYZ parser bug found and fixed, then clean; the 1 000-entry
+sweep, #23, 1 000/1 000 ok); 5 met.
 
 ---
 

@@ -72,7 +72,9 @@ impl Layout {
                 }
                 radius = Some(column);
             }
-            column += n;
+            column = column
+                .checked_add(n)
+                .ok_or_else(|| format!("column count too large in Properties entry '{name}'"))?;
         }
         let (species, atomic_numbers) =
             species.ok_or("Properties descriptor has no species (or Z) column")?;
@@ -283,5 +285,18 @@ mod tests {
         );
         let p = parse(b"1\nc\nXq 0 0 0\n", None).unwrap();
         assert_eq!(p.diagnostics.count(WarningKind::UnknownElement), 1);
+        // Fuzzer regression (24 CPU-hour campaign, #22): column counts whose
+        // sum overflows must be an error. Before the fix the sum wrapped in
+        // release builds, the line-length check passed and indexing panicked.
+        let text = format!(
+            "1\nProperties=species:S:1:pos:R:3:a:R:{}:b:R:2\nC 0 0 0\n",
+            usize::MAX - 1
+        );
+        let e = parse(text.as_bytes(), None).unwrap_err();
+        assert!(
+            e.message.contains("column count too large"),
+            "{}",
+            e.message
+        );
     }
 }
