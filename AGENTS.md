@@ -201,11 +201,12 @@ tick them in #19. Summary:
 4. x86 kernel work (#9, #13), Ubuntu 26 CI image (#18), optional marching tetrahedra (#14).
    The 8-P-core Apple reference timings were dropped by decision (2026-11-15, Spec §5.1).
    #8 and #10 measured and closed (2026-11-15; results in Design §7.7, §11.1).
-5. Ambient occlusion (#27, branch `aomesh-tutorial`): needs objserde 0.3.0 and then aomesh
-   0.4.0 published first (user's repos `~/projects/objserde`, `~/projects/aomesh`; aomesh's
-   temporary `[patch.crates-io]` on objserde goes before its publish), then merge, so the
-   tutorial's `cargo install aomesh-cli` gets a version the script accepts. GPU back ends:
-   #24 HIP, #25 CUDA, #26 Metal (f32 plan in the issues).
+5. Ambient occlusion (#27) done 2026-11-15: `tools/ao/` plus tutorial 04, merged into
+   `main`. Upstream fixes released the same day (user's repos `~/projects/objserde`,
+   `~/projects/aomesh`): objserde 0.3.0 (keeps header comments, `o`, `g`) and aomesh 0.4.0
+   (plain `map_Kd`, passes them through; AO values byte-identical to 0.3.1), both tagged
+   with GitHub releases. Left open in #27: MeshLab check, optional gallery AO toggle.
+   GPU back ends: #24 HIP, #25 CUDA, #26 Metal (f32 plan in the issues).
 
 ## Gotchas learned
 
