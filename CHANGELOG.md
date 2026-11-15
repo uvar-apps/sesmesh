@@ -6,6 +6,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Zenodo archive: 1.1.2 is doi:10.5281/zenodo.24238837, all versions doi:10.5281/zenodo.24238836
+  (`CITATION.cff` with ORCID and both DOIs, README badge, paper §9, release
+  step 7).
+
 ### Changed
 
 - Paper draft describes 1.1.2 (same meshes as 1.1.1; the 1.1.1

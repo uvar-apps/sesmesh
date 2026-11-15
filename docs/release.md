@@ -85,6 +85,12 @@ such a machine.
 6. crates.io: add a `CARGO_REGISTRY_TOKEN` secret to the `crates-io`
    environment (repository settings), then run the workflow by hand with
    `publish-crates` ticked — or run `cargo publish --workspace` locally.
+7. Zenodo (by hand; keep Zenodo's GitHub integration off so that every
+   version stays under the one record): on https://doi.org/10.5281/zenodo.24238836 choose **New version**,
+   upload the release's source archive (GitHub release → *Source code
+   (tar.gz)*), set the version and date, publish. Add the new version DOI to
+   `CITATION.cff` (`identifiers`) in the next commit; the all-versions DOI
+   (10.5281/zenodo.24238836) stays.
 
 Binaries use the `dist` profile (fat LTO, one codegen unit, stripped) and
 runtime SIMD dispatch, so one x86-64 binary uses AVX-512/AVX2/SSE4.2 as

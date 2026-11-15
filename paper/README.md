@@ -62,10 +62,6 @@ Numbers match the red markers in the PDF (draft of 2026-11-15, describing
 | # | Where | Item |
 |---|---|---|
 | 1 | abstract | Final abstract length/format for the target venue (Bioinformatics: 150 words, structured; J. Appl. Cryst.: unstructured) |
-| 2 | §9 Archive | Mint a Zenodo DOI for the described version (1.1.2); cite it in the paper and `CITATION.cff` |
-| 3 | Declarations | Review and finalize the AI-use statement; check the venue's policy |
-| 4 | Declarations | Acknowledgements |
-| 5 | Appendix B | Release tag or commit the paper refers to (the `v1.1.2` tree holds the code described, not this version of the paper) |
 
 Resolved by the comparison (previous items 5–8, 9, 11–18): the MSMS and
 NanoShaper statements are now checked against Goddard's notes and the
@@ -96,6 +92,14 @@ researcher, Nedlands, WA, Australia", the ORCID iD and the author's personal
 email; Declarations → Affiliations names CSIRO, Pawsey and UWA and states
 that the work was done independently of them, on the author's own time,
 equipment and expense.
+Resolved on 2026-11-15 (previous item 2): Zenodo record for 1.1.2,
+version DOI 10.5281/zenodo.24238837 (cited in §9 and the `sesmesh` bibliography entry),
+all-versions DOI 10.5281/zenodo.24238836 (`CITATION.cff`, README badge).
+Resolved on 2026-11-15 (previous items 3–5): the author finalized the
+AI-use statement and the acknowledgements; Appendix B names the release tag
+`v1.1.2`, which holds the code described and every data file the paper uses
+(nothing under `docs/validation/`, `paper/data/`, `crates/`, `xtask/` or the
+test sets changed after it); the paper sources themselves are later.
 Resolved on 2026-11-15 (previous items 4–6): competing interests (none),
 funding (none; the author bore all costs) and a single-author CRediT
 statement are written.
@@ -117,7 +121,6 @@ sections (complete, checked against Crossref). Before submission:
   hybrid-36, extended XYZ, PQR, OBJ, rayon, fearless_simd, flate2,
   rust-sasa, Rust issue 86656) have no year or access date (BibTeX warns
   "empty year"); add `urldate`/`note = {accessed …}` and versions.
-* The sesmesh entry should carry the Zenodo DOI (item 2).
 * PDB entries: the RCSB policy asks that an entry be cited by its PDB ID
   and its primary publication. The 16 entries named in the text are cited
   at first mention (primary citations from the RCSB Data API, checked

@@ -3,6 +3,7 @@
 [![crates.io](https://img.shields.io/crates/v/sesmesh.svg)](https://crates.io/crates/sesmesh)
 [![docs.rs](https://docs.rs/sesmesh/badge.svg)](https://docs.rs/sesmesh)
 [![CI](https://github.com/uvar-apps/sesmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/uvar-apps/sesmesh/actions/workflows/ci.yml)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24238836.svg)](https://doi.org/10.5281/zenodo.24238836)
 
 Fast, accurate **Solvent Excluded Surface** (SES, also called the Connolly or
 molecular surface) meshing for molecular structures, written in Rust.
@@ -156,7 +157,9 @@ goes back to Lee & Richards [7] and Richards [8].
 
 If you use sesmesh in published work, please cite the software
 ([CITATION.cff](https://github.com/uvar-apps/sesmesh/blob/main/CITATION.cff);
-GitHub: *Cite this repository*) and the methods above:
+GitHub: *Cite this repository*; archived on Zenodo,
+[doi:10.5281/zenodo.24238836](https://doi.org/10.5281/zenodo.24238836) for all versions, each release with its own
+DOI there) and the methods above:
 
 1. C. Quan, B. Stamm, "Mathematical analysis and calculation of molecular
    surfaces," *J. Comput. Phys.* 322:760–782, 2016.

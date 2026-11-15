@@ -73,7 +73,9 @@ any deviation from the plan.
 - Discoverability (2026-11-14): repo description + 13 topics set, `CITATION.cff` (bump
   `version`/`date-released` per release), crates' `homepage` + `science::bioinformatics`
   (on crates.io from the next publish). Left to the user: social preview upload, Google
-  Search Console / Bing verification, Zenodo switch, announcements.
+  Search Console / Bing verification, announcements. Zenodo: record created by hand
+  for 1.1.2 (version DOI 10.5281/zenodo.24238837, all versions 10.5281/zenodo.24238836); new releases are added
+  there with *New version* (`docs/release.md` step 7), GitHub integration off.
 - 1.0.0 contains the v1.0 development items (branch `v1-dev`): #1 decimation
   (`mesh/decimate.rs`, pure Rust), #3 `--auto-coarsen`, #15 gzip PLY/MSMS, #2
   `completions`/`man`, #12 Ctrl-C (exit 130, `ctrlc`), fuzz target `assembly` + assembly

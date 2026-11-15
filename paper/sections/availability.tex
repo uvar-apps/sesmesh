@@ -19,8 +19,8 @@
     Windows x86-64 \\
   Website & \url{https://uvar-apps.github.io/sesmesh/} (guides, tutorials,
     gallery, interactive viewer) \\
-  Archive & Zenodo, DOI \todo{mint a Zenodo DOI for v1.1.2 (or the version
-    the paper describes) and cite it here and in \code{CITATION.cff}} \\
+  Archive & Zenodo, version 1.1.2: \href{https://doi.org/10.5281/zenodo.24238837}{doi:10.5281/zenodo.24238837}\newline
+    all versions: \href{https://doi.org/10.5281/zenodo.24238836}{doi:10.5281/zenodo.24238836} \\
   Licence & MIT or Apache-2.0, at the user's option \\
   Language & Rust 1.89 or newer; no unsafe code; dependencies from
     crates.io only \\
@@ -43,15 +43,16 @@ program that produces the analytic-reference data are in \code{paper/}
 \section*{Declarations}
 
 \paragraph{Use of AI tools.}
-\todo{Author to review and finalize this statement, and check it against
-the target venue's policy.} The software, its tests and documentation,
-and a first draft of this manuscript were developed with the help of an AI
-coding assistant (Anthropic's Claude Opus 5.5, used through Claude Code).
+The software, its tests and documentation, and a first draft of this manuscript,
+except for the benchmarks, were developed with the help of an AI coding assistant 
+(Anthropic's Claude Opus 5.5, used through Claude Code).
 Commits to which the assistant contributed carry a
-\code{Co-Authored-By: Claude} trailer in the project's version history
-(30 of the 31 commits at the time of writing). The author designed and directed
-the work, reviewed the code, the measurements and the text, and takes full
-responsibility for the content.
+\code{Co-Authored-By: Claude} trailer in the project's version history.
+Most of the commits have Claude Caude as Author because Calude Code was used
+to run the CI/CD pipeline locally, then commit, release and publish.
+The author designed and directed the work, implemented draft versions of some
+of the algorithms in Python and C++, reviewed the code, the measurements and 
+the text, and takes full responsibility for the content.
 
 \paragraph{Affiliations.}
 The author is also affiliated with CSIRO, the Pawsey Supercomputing Research
@@ -72,8 +73,8 @@ validation, formal analysis, investigation, data curation, visualization,
 writing (original draft, review and editing).
 
 \paragraph{Acknowledgements.}
-\todo{Acknowledgements, if any.} The atomic coordinates used in this work
-were obtained from the Protein Data Bank~\cite{berman2000pdb} through the
+The atomic coordinates used in this work were obtained from the 
+Protein Data Bank~\cite{berman2000pdb} through the
 RCSB PDB (\url{https://www.rcsb.org}), a member of the worldwide PDB
 (wwPDB, \url{https://www.wwpdb.org})~\cite{berman2003wwpdb,wwpdb2019}.
 Entries are identified by their PDB IDs; the full lists are in
