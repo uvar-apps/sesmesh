@@ -60,23 +60,36 @@ Other targets:
 
 ## JMGM submission
 
-Requirements of the journal's Guide for Authors (as quoted by search results
-on 2026-11-18; ScienceDirect refuses automated reads, so check the page before
-submitting) and where each one is met:
+Checked against the journal's Guide for Authors (ScienceDirect, saved on
+2026-11-18; single-anonymized review, so the manuscript keeps the author's
+name):
 
-| Requirement | File |
+| Requirement | Where it is met |
 |---|---|
-| Abstract under 250 words, able to stand alone | `sections/abstract.tex` (about 240 words in the PDF) |
-| Highlights: 3–5 bullets, at most 85 characters each with spaces, separate editable file | `generated/highlights.txt` (written by `make_data.py` from the same values as the text; it asserts both limits) |
-| Graphical abstract, required at submission | `jmgm/graphical-abstract.pdf` / `.png` (`make jmgm`; 13 × 5.2 cm, Elsevier minimum 1328 × 531 px) |
-| Keywords | Six, after the abstract (Elsevier journals usually allow up to 6–7; not confirmed for JMGM) |
-| Declaration of generative AI and AI-assisted technologies in the writing process | Paragraph before the references (§9), Elsevier's template wording |
-| Competing interests, funding, CRediT, data availability | §9 |
+| Abstract at most 250 words, stands alone, references only as author and year | `sections/abstract.tex` (244 words in the PDF; "Quan and Stamm (2016)") |
+| Keywords: 1 to 7 | Six, after the abstract |
+| Highlights, required: 3–5 bullets, at most 85 characters each with spaces, separate editable file with "highlights" in its name | `generated/highlights.txt` (written by `make_data.py` from the same values as the text; it asserts both limits) |
+| Graphical abstract, required: at least 1328 px wide, longest side horizontal, readable at 13 cm; TIFF, EPS, PDF or MS Office | `jmgm/graphical-abstract.pdf` (`make jmgm`; the PNG is for previews) |
+| Title page: affiliation with postal address and country, corresponding author and email | `main.tex` (Independent researcher, Nedlands, WA 6009, Australia; corresponding author with email) |
+| Declaration of generative AI and AI-assisted technologies in the manuscript preparation process: a new section before the references, Elsevier's statement | §9, after Author contributions |
+| Funding: the standard sentence when there is none | §9 |
+| CRediT roles; acknowledgements directly before the references | §9 |
+| Tables as text, no vertical rules or shading | All tables (booktabs) |
+| References in any consistent style, numbered in square brackets, DOIs where available | natbib numbers (54 of 79 entries have a DOI) |
+| Research data, option C: deposit the data and give the link at submission | Zenodo, version DOI 10.5281/zenodo.24238837 (the 1.1.2 source holds `docs/validation/` and `paper/data/`) |
 
-Not prepared here: the cover letter, suggested reviewers and the journal's
-declarations form, which are filled in on the submission system. "Your Paper
-Your Way" (any layout at first submission, `elsarticle` only at revision) is
-usual for Elsevier but not confirmed for JMGM.
+To do on the submission system, not in this directory:
+
+- Upload the LaTeX sources, not only a PDF ("A PDF is not an acceptable
+  source file"): the contents of the `make arxiv` bundle. The `elsarticle`
+  template is encouraged, not required.
+- Figures as separate files (`figures/*.jpg` are; the pgfplots plots and TikZ
+  diagrams are drawn in the source and may have to be exported as PDF files
+  if production asks).
+- The competing-interests declarations tool (a Word file uploaded with the
+  submission), the cover letter and suggested reviewers.
+- Publishing-agreement and open-access eligibility depend only on the
+  corresponding author's affiliation as given in the submission.
 
 ## Open items (`\todo`)
 

@@ -11,7 +11,7 @@ analytic patch methods are exact but fragile in singular configurations,
 while grid methods are robust but approximate the surface by the voxel size.
 We present \sesmesh{}, a Rust library and command-line tool that meshes the
 \emph{exact} SES on a uniform grid. It samples the implicit SES distance
-function of Quan and Stamm only in a sparse narrow band of bricks selected by
+function of Quan and Stamm (2016) only in a sparse narrow band of bricks selected by
 provably conservative bounds. Marching Cubes with a uniform face-ambiguity
 rule yields closed, consistently oriented, edge-manifold meshes; every vertex
 is refined onto the exact surface and carries the analytic normal, patch type
