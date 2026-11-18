@@ -40,6 +40,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   and §8 ("Measurement scope") updated.
 - Paper §8 "Future work" names the planned GPU back ends (HIP, CUDA,
   Metal).
+- JMGM submission package: `make jmgm` (`paper/scripts/make_jmgm.py`) writes
+  `paper/jmgm/submission/`: flat LaTeX sources with figure files named
+  `Figure_<n>` (photographs per panel, TikZ and pgfplots figures as vector
+  PDFs), the manuscript built from them as a check, `highlights.docx`, the
+  graphical abstract as PDF and TIFF, a one-page cover letter
+  (`paper/jmgm/cover-letter.tex`) and the form text (title, abstract,
+  keywords, statements). `paper/jmgm/README.md` maps each file to its upload
+  item and lists what is left (declarations tool, suggested reviewers). The
+  abstract was trimmed to 249 words counted by spaces (it was 257; the 244
+  reported before came from the PDF text, where thin spaces join numbers and
+  units).
 - Paper prepared for the Journal of Molecular Graphics and Modelling:
   abstract under 250 words, six keywords, highlights
   (`paper/generated/highlights.txt`, generated and checked against the

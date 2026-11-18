@@ -5,7 +5,7 @@
 # make          tables/plots from the CSV data, then the PDF (latexmk)
 # make data     re-run the analytic reference program (builds the library)
 # make arxiv    source tarball for arXiv (main.bbl included)
-# make jmgm     graphical abstract for JMGM (PDF, and PNG via Ghostscript)
+# make jmgm     JMGM submission files in jmgm/submission/ (see jmgm/README.md)
 # make clean    remove LaTeX build files
 
 PYTHON  ?= python3
@@ -35,15 +35,11 @@ arxiv: pdf
 	tar -czf arxiv.tar.gz -C arxiv .
 	@echo "wrote arxiv.tar.gz"
 
-jmgm: tables
-	cd jmgm && pdflatex -interaction=nonstopmode -halt-on-error graphical-abstract.tex
-	cd jmgm && gs -q -dSAFER -dBATCH -dNOPAUSE -sDEVICE=png16m -r520 \
-	  -dTextAlphaBits=4 -dGraphicsAlphaBits=4 \
-	  -sOutputFile=graphical-abstract.png graphical-abstract.pdf
-	@echo "wrote jmgm/graphical-abstract.pdf and .png; highlights: generated/highlights.txt"
+jmgm: pdf
+	$(PYTHON) -I scripts/make_jmgm.py
 
 clean:
 	$(LATEXMK) -C main.tex
 	rm -f main.bbl main.tdo
 	rm -rf arxiv arxiv.tar.gz
-	rm -f jmgm/graphical-abstract.pdf jmgm/graphical-abstract.png
+	rm -rf jmgm/submission

@@ -1,0 +1,109 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+%
+% Cover letter for the Journal of Molecular Graphics and Modelling. Numbers
+% come from ../generated/macros.tex, as in the paper. Built into
+% jmgm/submission/cover-letter.pdf by `make jmgm` in paper/.
+
+\documentclass[11pt,a4paper]{article}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[hmargin=2.5cm,vmargin=1.8cm]{geometry}
+\usepackage{microtype}
+\usepackage{amsmath}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.4em}
+\pagestyle{empty}
+
+\makeatletter
+\input{../generated/macros}
+\makeatother
+\DeclareRobustCommand{\val}[1]{%
+  \ifcsname smval@#1\endcsname\csname smval@#1\endcsname
+  \else\textbf{??#1??}\PackageWarning{letter}{Undefined value #1}\fi}
+\newcommand{\Ang}{\,\text{\AA}}
+\newcommand{\sesmesh}{\textsf{sesmesh}}
+
+\begin{document}
+
+\begin{flushright}
+Ugo Varetto\\
+Independent researcher\\
+Nedlands, WA 6009, Australia\\
+\href{mailto:ugovaretto@gmail.com}{ugovaretto@gmail.com}\\
+ORCID 0000-0002-7696-0345\\[0.4em]
+\today
+\end{flushright}
+
+The Editors\\
+Journal of Molecular Graphics and Modelling
+
+Dear Editors,
+
+I submit the manuscript ``\sesmesh: watertight, deterministic meshes of the
+exact solvent-excluded surface, from peptides to virus capsids'' for
+consideration as a research article in the Journal of Molecular Graphics and
+Modelling.
+
+The solvent-excluded surface (SES) is the standard model of molecular shape:
+it is used to visualize macromolecules, to measure their area, volume and
+internal cavities, and as the dielectric boundary in continuum
+electrostatics, which needs a closed, manifold triangulation. Programs that
+triangulate it trade accuracy, robustness and scale:
+analytic methods are exact but fragile in singular configurations, and grid
+methods are robust but only approximate the surface. The manuscript presents
+a method, and its open-source implementation, that keeps the robustness of a
+grid without giving up the exact surface:
+
+\begin{itemize}[leftmargin=1.5em,itemsep=1pt,topsep=2pt]
+\item the exact SES distance function is sampled only in a sparse narrow band
+  of a uniform grid, selected by provably conservative bounds;
+\item Marching Cubes with a uniform face-ambiguity rule yields closed,
+  consistently oriented, edge-manifold meshes, and every vertex is refined
+  onto the exact surface with its analytic normal, patch type and nearest
+  atom;
+\item internal cavities are classified exactly by signed volume, and the
+  output is byte-identical for any number of threads.
+\end{itemize}
+
+The validation covers \val{corpus-n} structures (\val{corpus-atoms-min} to
+\val{corpus-atoms-max} atoms), whose mesh area and volume differ from their
+$h \to 0$ extrapolation by \val{area-mean-0.25}\,\% and
+\val{vol-mean-0.25}\,\% on average at $h = 0.25$\Ang{}, with $O(h^2)$
+convergence; \val{sweepk-ok} of \val{sweepk-n} randomly drawn Protein Data
+Bank entries; a fuzzing campaign of the input readers; and a comparison with
+six programs (MSMS, NanoShaper, ESES, ChimeraX, EDTSurf and sesa), using the
+same atoms and radii wherever a program accepts them. A 2.44-million-atom
+virus capsid is meshed at 1\Ang{} in \val{large-3J3Q-seconds}\,s on a
+10-core laptop. The discussion draws conclusions on what exact vertex
+placement changes in the error budget of a grid method, and on the limits
+that remain.
+
+The work falls within the journal's scope of the study of molecular shape
+and properties, and it addresses the journal's emphasis on reproducibility:
+\sesmesh{} is free software (MIT or Apache-2.0), and version 1.1.2, the
+version the manuscript describes, is archived on Zenodo together with the
+validation data the manuscript uses
+(\href{https://doi.org/10.5281/zenodo.24238837}{doi:10.5281/zenodo.24238837}).
+The manuscript sources and the script that turns these data into its tables
+and plots are in the public repository.
+
+The manuscript is original, has not been published, and is not under
+consideration by another journal. I am its sole author. There are no
+competing interests and no funding to declare. My affiliations with CSIRO,
+the Pawsey Supercomputing Research Centre and The University of Western
+Australia are disclosed in the manuscript; the work was carried out
+independently of them. The use of an AI assistant in developing the
+software and drafting the manuscript is declared in the manuscript, as
+Elsevier's policy requires.
+
+Thank you for considering this manuscript.
+
+Yours sincerely,\\[1em]
+Ugo Varetto
+
+\end{document}

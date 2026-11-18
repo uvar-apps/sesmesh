@@ -40,7 +40,7 @@ Other targets:
 | `make data` | Rebuilds `data/analytic.csv` by running `scripts/analytic` (a stand-alone Cargo package that links `crates/sesmesh` and `crates/sesmesh-testkit`; release build, about a minute) |
 | `make tables` | Only regenerates `generated/` |
 | `make arxiv` | Builds the PDF, then packs `main.tex`, `main.bbl`, `references.bib`, `sections/`, `generated/`, `figures/` into `arxiv.tar.gz` (arXiv wants the `.bbl`) |
-| `make jmgm` | Builds the graphical abstract `jmgm/graphical-abstract.pdf` and a 2661 × 1065 px PNG (needs Ghostscript) |
+| `make jmgm` | Builds the PDF, then `scripts/make_jmgm.py` writes the JMGM submission files to `jmgm/submission/`: flat LaTeX sources with figure files, highlights, graphical abstract, cover letter, form text (needs Ghostscript; see `jmgm/README.md`) |
 | `make clean` | Removes LaTeX build files |
 
 ## Layout
@@ -54,9 +54,10 @@ Other targets:
 | `data/analytic.csv` | One/two-sphere references meshed at h = 1, 0.5, 0.25, 0.125 Å (from `make data`) |
 | `data/scaling.csv` | Thread-scaling numbers transcribed from Design §11.1 |
 | `scripts/make_data.py` | CSV → LaTeX tables, macros, pgfplots data (validation, comparison, x86 SIMD and scaling) |
+| `scripts/make_jmgm.py` | Assembles and checks the JMGM submission files (`make jmgm`) |
 | `scripts/analytic/` | Program that produced `data/analytic.csv` |
 | `generated/` | Output of `make_data.py` (committed, so the paper builds without Python), including the journal highlights `highlights.txt` |
-| `jmgm/` | Graphical abstract source (`graphical-abstract.tex`); its PDF and PNG are built by `make jmgm` and not committed |
+| `jmgm/` | JMGM submission: `README.md` (what to upload, what is left), graphical abstract and cover letter sources; `make jmgm` writes `jmgm/submission/` (not committed) |
 
 ## JMGM submission
 
@@ -66,10 +67,10 @@ name):
 
 | Requirement | Where it is met |
 |---|---|
-| Abstract at most 250 words, stands alone, references only as author and year | `sections/abstract.tex` (244 words in the PDF; "Quan and Stamm (2016)") |
+| Abstract at most 250 words, stands alone, references only as author and year | `sections/abstract.tex` (249 words, counting every space-separated token of the plain text, symbols and units included; `make jmgm` checks the limit; "Quan and Stamm (2016)") |
 | Keywords: 1 to 7 | Six, after the abstract |
-| Highlights, required: 3–5 bullets, at most 85 characters each with spaces, separate editable file with "highlights" in its name | `generated/highlights.txt` (written by `make_data.py` from the same values as the text; it asserts both limits) |
-| Graphical abstract, required: at least 1328 px wide, longest side horizontal, readable at 13 cm; TIFF, EPS, PDF or MS Office | `jmgm/graphical-abstract.pdf` (`make jmgm`; the PNG is for previews) |
+| Highlights, required: 3–5 bullets, at most 85 characters each with spaces, separate editable file with "highlights" in its name | `generated/highlights.txt` (written by `make_data.py` from the same values as the text; it asserts both limits), as a Word file `jmgm/submission/highlights.docx` |
+| Graphical abstract, required: at least 1328 px wide, longest side horizontal, readable at 13 cm; TIFF, EPS, PDF or MS Office | `jmgm/submission/graphical-abstract.tiff` (2661 × 1065 px) and `.pdf`, from `jmgm/graphical-abstract.tex` |
 | Title page: affiliation with postal address and country, corresponding author and email | `main.tex` (Independent researcher, Nedlands, WA 6009, Australia; corresponding author with email) |
 | Declaration of generative AI and AI-assisted technologies in the manuscript preparation process: a new section before the references, Elsevier's statement | §9, after Author contributions |
 | Funding: the standard sentence when there is none | §9 |
@@ -77,19 +78,16 @@ name):
 | Tables as text, no vertical rules or shading | All tables (booktabs) |
 | References in any consistent style, numbered in square brackets, DOIs where available | natbib numbers (54 of 79 entries have a DOI) |
 | Research data, option C: deposit the data and give the link at submission | Zenodo, version DOI 10.5281/zenodo.24238837 (the 1.1.2 source holds `docs/validation/` and `paper/data/`) |
+| LaTeX sources, not only a PDF ("A PDF is not an acceptable source file"); `elsarticle` encouraged, not required | `jmgm/submission/latex/` (flat, built and checked by `make jmgm`) |
+| Figures as separate files, named `Figure_1`, `Figure_2`, … | `jmgm/submission/latex/Figure_*` (photographs per panel; TikZ and pgfplots figures as vector PDFs) |
+| Cover letter | `jmgm/cover-letter.tex` → `jmgm/submission/cover-letter.pdf` |
 
-To do on the submission system, not in this directory:
-
-- Upload the LaTeX sources, not only a PDF ("A PDF is not an acceptable
-  source file"): the contents of the `make arxiv` bundle. The `elsarticle`
-  template is encouraged, not required.
-- Figures as separate files (`figures/*.jpg` are; the pgfplots plots and TikZ
-  diagrams are drawn in the source and may have to be exported as PDF files
-  if production asks).
-- The competing-interests declarations tool (a Word file uploaded with the
-  submission), the cover letter and suggested reviewers.
-- Publishing-agreement and open-access eligibility depend only on the
-  corresponding author's affiliation as given in the submission.
+`jmgm/README.md` maps every file to its item type in the submission system
+and lists what is left: the declarations tool (its Word file is uploaded
+with the submission), the suggested reviewers, and the form choices
+(preprint on SSRN, open access). Publishing-agreement and open-access
+eligibility depend only on the corresponding author's affiliation as given
+in the submission.
 
 ## Open items (`\todo`)
 

@@ -12,8 +12,8 @@
 *.lot
 *.synctex.gz
 main.pdf
-/jmgm/graphical-abstract.pdf
-/jmgm/graphical-abstract.png
+# JMGM submission files (make jmgm)
+/jmgm/submission/
 # arXiv bundle
 /arxiv/
 /arxiv.tar.gz
