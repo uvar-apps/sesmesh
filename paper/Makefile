@@ -4,7 +4,7 @@
 #
 # make          tables/plots from the CSV data, then the PDF (latexmk)
 # make data     re-run the analytic reference program (builds the library)
-# make arxiv    source tarball for arXiv (main.bbl included)
+# make arxiv    arXiv bundle (arxiv/, arxiv.tar.gz) and form text (arxiv-metadata.txt)
 # make jmgm     JMGM submission files in jmgm/submission/ (see jmgm/README.md)
 # make clean    remove LaTeX build files
 
@@ -26,14 +26,7 @@ data:
 	cd scripts/analytic && CARGO_TARGET_DIR=$(TARGET_DIR) cargo run --release --quiet > ../../data/analytic.csv
 
 arxiv: pdf
-	rm -rf arxiv arxiv.tar.gz
-	mkdir -p arxiv/sections arxiv/generated arxiv/figures
-	cp main.tex main.bbl references.bib arxiv/
-	cp sections/*.tex arxiv/sections/
-	cp generated/* arxiv/generated/
-	cp figures/*.jpg arxiv/figures/
-	tar -czf arxiv.tar.gz -C arxiv .
-	@echo "wrote arxiv.tar.gz"
+	$(PYTHON) -I scripts/make_arxiv.py
 
 jmgm: pdf
 	$(PYTHON) -I scripts/make_jmgm.py
@@ -41,5 +34,5 @@ jmgm: pdf
 clean:
 	$(LATEXMK) -C main.tex
 	rm -f main.bbl main.tdo
-	rm -rf arxiv arxiv.tar.gz
+	rm -rf arxiv arxiv.tar.gz arxiv-metadata.txt
 	rm -rf jmgm/submission

@@ -240,22 +240,38 @@ def latex_sources() -> tuple[str, list[str]]:
     return main, tikz
 
 
+def main_pages() -> int:
+    """Pages of main.pdf, from the log of the last `make pdf`."""
+    return pages((PAPER / "main.log").read_text(encoding="latin-1"))
+
+
+def compile_check(build: Path, tex: str) -> int:
+    """Build `tex` in `build` until references settle; check it; return its pages.
+
+    The PDF must have as many pages as main.pdf and no undefined references,
+    citations or values (an editor running VS Code may rebuild main.pdf at
+    the same time: if the page counts differ, run the target again).
+    """
+    log = ""
+    for _ in range(4):
+        log = pdflatex(tex, build)
+        if not re.search(r"Rerun to get|Label\(s\) may have changed", log):
+            break
+    bad = re.findall(r"^(?:LaTeX|Package \w+) Warning: .*(?:undefined|Undefined).*$", log, re.M)
+    assert not bad, bad
+    n, expected = pages(log), main_pages()
+    assert n == expected, f"{tex}: {n} pages, main.pdf {expected}"
+    return n
+
+
 def check_build(tikz: list[str]) -> None:
     """Build latex/ in a scratch copy: the manuscript, then the TikZ figures."""
-    main_pages = pages((PAPER / "main.log").read_text(encoding="latin-1"))
     with tempfile.TemporaryDirectory() as tmp:
         build = Path(tmp) / "latex"
         shutil.copytree(LATEX, build)
-        log = ""
-        for _ in range(4):
-            log = pdflatex("manuscript.tex", build)
-            if not re.search(r"Rerun to get|Label\(s\) may have changed", log):
-                break
-        bad = re.findall(r"^(?:LaTeX|Package \w+) Warning: .*(?:undefined|Undefined).*$", log, re.M)
-        assert not bad, bad
-        assert pages(log) == main_pages, (pages(log), main_pages)
+        n = compile_check(build, "manuscript.tex")
         shutil.copy(build / "manuscript.pdf", OUT / "manuscript-preview.pdf")
-        print(f"  manuscript-preview.pdf ({main_pages} pages, as main.pdf)")
+        print(f"  manuscript-preview.pdf ({n} pages, as main.pdf)")
 
         # Each tikzpicture on its own tightly cropped page (preview package);
         # \orcidlink draws its icon with TikZ too, so it is switched off here.

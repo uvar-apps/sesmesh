@@ -17,6 +17,7 @@ main.pdf
 # arXiv bundle
 /arxiv/
 /arxiv.tar.gz
+/arxiv-metadata.txt
 # analytic reference program
 /scripts/analytic/target/
 /scripts/analytic/Cargo.lock

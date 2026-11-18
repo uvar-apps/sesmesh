@@ -40,6 +40,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   and §8 ("Measurement scope") updated.
 - Paper §8 "Future work" names the planned GPU back ends (HIP, CUDA,
   Metal).
+- arXiv bundle: `make arxiv` (`paper/scripts/make_arxiv.py`, replacing the
+  old `tar` recipe) packs only the files the paper uses, puts
+  `\pdfoutput=1` within the first five lines and replaces `\today` with the
+  build date, as arXiv asks. It checks that the bundle builds to the pages
+  of `main.pdf`, and writes `paper/arxiv-metadata.txt`: title, ASCII
+  abstract with TeX math (at most 1920 characters), comments and
+  categories. `paper/README.md` has an "arXiv submission" section.
 - JMGM submission package: `make jmgm` (`paper/scripts/make_jmgm.py`) writes
   `paper/jmgm/submission/`: flat LaTeX sources with figure files named
   `Figure_<n>` (photographs per panel, TikZ and pgfplots figures as vector

@@ -3,8 +3,8 @@
 LaTeX sources of a full-length research/software paper on sesmesh 1.1.2,
 meant for an arXiv preprint (primary **q-bio.BM**, cross-lists **cs.CG** and
 **physics.comp-ph**) and the *Journal of Molecular Graphics and Modelling*
-(Elsevier; see "JMGM submission" below). Nothing has been submitted
-anywhere.
+(Elsevier; see "arXiv submission" and "JMGM submission" below). Nothing
+has been submitted anywhere.
 
 Every number in the text comes from the repository: the validation CSVs
 (`docs/validation/*.csv`), the cross-tool comparison
@@ -39,7 +39,7 @@ Other targets:
 |---|---|
 | `make data` | Rebuilds `data/analytic.csv` by running `scripts/analytic` (a stand-alone Cargo package that links `crates/sesmesh` and `crates/sesmesh-testkit`; release build, about a minute) |
 | `make tables` | Only regenerates `generated/` |
-| `make arxiv` | Builds the PDF, then packs `main.tex`, `main.bbl`, `references.bib`, `sections/`, `generated/`, `figures/` into `arxiv.tar.gz` (arXiv wants the `.bbl`) |
+| `make arxiv` | Builds the PDF, then `scripts/make_arxiv.py` writes `arxiv/` and `arxiv.tar.gz` (`main.tex` with `\pdfoutput=1` and a fixed date, `main.bbl`, the sections, and only the generated files and figures the paper uses), checks that the bundle builds, and writes the form text `arxiv-metadata.txt` |
 | `make jmgm` | Builds the PDF, then `scripts/make_jmgm.py` writes the JMGM submission files to `jmgm/submission/`: flat LaTeX sources with figure files, highlights, graphical abstract, cover letter, form text (needs Ghostscript; see `jmgm/README.md`) |
 | `make clean` | Removes LaTeX build files |
 
@@ -55,9 +55,43 @@ Other targets:
 | `data/scaling.csv` | Thread-scaling numbers transcribed from Design §11.1 |
 | `scripts/make_data.py` | CSV → LaTeX tables, macros, pgfplots data (validation, comparison, x86 SIMD and scaling) |
 | `scripts/make_jmgm.py` | Assembles and checks the JMGM submission files (`make jmgm`) |
+| `scripts/make_arxiv.py` | Builds and checks the arXiv bundle and form text (`make arxiv`) |
 | `scripts/analytic/` | Program that produced `data/analytic.csv` |
 | `generated/` | Output of `make_data.py` (committed, so the paper builds without Python), including the journal highlights `highlights.txt` |
 | `jmgm/` | JMGM submission: `README.md` (what to upload, what is left), graphical abstract and cover letter sources; `make jmgm` writes `jmgm/submission/` (not committed) |
+
+## arXiv submission
+
+Checked against arXiv's help pages on 2026-11-18. `make arxiv` writes:
+
+- `arxiv.tar.gz`, the file to upload. arXiv compiles `main.tex` with
+  pdfLaTeX and uses `main.bbl` (natbib, `unsrtnat`). It holds no `.bib`,
+  no unused figures and no output files, as arXiv asks. `\pdfoutput=1` is
+  within the first five lines. The date is fixed when the bundle is built,
+  because arXiv advises against `\today` (it rebuilds PDFs later).
+- `arxiv-metadata.txt`, the text for the form: title, authors, abstract,
+  comments and categories. arXiv's metadata fields accept ASCII only, so
+  the abstract writes −, Å, → and ² as `-`, `$\mathring{\mathrm{A}}$`,
+  `$h \to 0$` and `$O(h^2)$`. TeX math is rendered with MathJax, and the
+  script checks the 1920-character limit.
+
+On the submission form:
+
+| Field | Value |
+|---|---|
+| Primary category | q-bio.BM (the endorsement must cover q-bio) |
+| Cross-lists | cs.CG, physics.comp-ph (arXiv: "rarely" more than one or two) |
+| Comments | From `arxiv-metadata.txt` (pages, figures, tables, code and Zenodo DOI). Add "Submitted to the Journal of Molecular Graphics and Modelling" once that is true. |
+| Licence | Cannot be changed later. The arXiv perpetual non-exclusive licence keeps every route open for the journal; CC BY 4.0 allows the widest reuse. Elsevier does not count a preprint as prior publication. |
+
+Then check the PDF that arXiv builds before announcing. arXiv compiles
+with TeX Live 2025 by default (2023 is still offered), and its help page
+warns that `cleveref` "has not been updated" for 2025. The local build uses
+TeX Live 2026 and has no `cleveref` problems. If cross-references come out
+wrong on arXiv, select TeX Live 2023. If the preprint is posted before the
+journal submission, add its arXiv ID to `jmgm/cover-letter.tex` and answer
+the preprint question on the journal's form. After acceptance, add the
+journal reference and DOI to the arXiv record.
 
 ## JMGM submission
 
@@ -202,7 +236,7 @@ sections (complete, checked against Crossref). Before submission:
 
 ## Journal adaptation notes
 
-* arXiv: the `article` class here is fine; upload `arxiv.tar.gz`.
+* arXiv: the `article` class here is fine; see "arXiv submission" above.
 * J. Appl. Cryst. (IUCr "computer programs"): IUCr template; the program
   summary block maps to §9.
 * Bioinformatics / JCIM application note: 2–4 pages; keep §1 (short), a
