@@ -1,0 +1,67 @@
+% sesmesh — Solvent Excluded Surface meshes for molecules
+% Copyright (c) 2026 Ugo Varetto
+% SPDX-License-Identifier: MIT OR Apache-2.0
+%
+% Graphical abstract for the Journal of Molecular Graphics and Modelling:
+% 13 x 5.2 cm (Elsevier: readable at 5 x 13 cm on screen; at least
+% 531 x 1328 pixels). Build with `make jmgm` in paper/ (PDF and PNG).
+
+\documentclass[tikz,border=0pt]{standalone}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[dvipsnames]{xcolor}
+\usetikzlibrary{arrows.meta}
+\graphicspath{{../figures/}}
+
+\makeatletter
+\input{../generated/macros}
+\makeatother
+\DeclareRobustCommand{\val}[1]{%
+  \ifcsname smval@#1\endcsname\csname smval@#1\endcsname
+  \else\textbf{??#1??}\PackageWarning{paper}{Undefined value #1}\fi}
+\newcommand{\Ang}{\,\text{\AA}}
+
+% Patch colours of the crambin rendering (Fig. 1b of the paper).
+\definecolor{convex}{HTML}{8DB3F0}
+\definecolor{saddle}{HTML}{5FCF6F}
+\definecolor{concave}{HTML}{F5A04A}
+
+\begin{document}
+\begin{tikzpicture}[x=1cm,y=1cm,font=\footnotesize]
+  \useasboundingbox[fill=white] (0,0) rectangle (13,5.2);
+
+  % Left: crambin SES by patch type.
+  \node[anchor=south west,inner sep=0] at (0.2,0.75)
+    {\includegraphics[height=4.2cm]{1crn-patch}};
+  \node[anchor=north,align=center] at (2.17,0.72)
+    {crambin, 327 atoms\\[-1pt]
+     \textcolor{convex!80!black}{convex}\,\textperiodcentered\,%
+     \textcolor{saddle!75!black}{saddle}\,\textperiodcentered\,%
+     \textcolor{concave!85!black}{concave}};
+
+  % Right: dengue virus capsid.
+  \node[anchor=south east,inner sep=0] at (12.85,0.85)
+    {\includegraphics[height=3.9cm]{1k4r-capsid}};
+  \node[anchor=north,align=center] at (10.32,0.72)
+    {dengue capsid 1K4R, 545\,040 atoms\\[-1pt]
+     \textit{h}\,=\,1\Ang, \val{large-1K4R-seconds}\,s on a laptop};
+
+  % Middle: what the program guarantees.
+  \node[anchor=north,align=center] at (5.95,5.0)
+    {{\Large\bfseries sesmesh}\\[3pt]
+     \small exact SES on a sparse grid\\[1pt]
+     \small closed, oriented,\\[-1pt]
+     \small edge-manifold meshes\\[1pt]
+     \small vertices on the\\[-1pt]
+     \small exact surface\\[1pt]
+     \small same mesh for any\\[-1pt]
+     \small thread count};
+  \draw[-{Latex[length=2.2mm]},line width=0.9pt,black!60]
+    (4.45,1.05) -- (7.55,1.05)
+    node[midway,below=1pt,font=\scriptsize,black!75] {peptides to capsids};
+\end{tikzpicture}
+\end{document}

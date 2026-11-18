@@ -2,9 +2,9 @@
 
 LaTeX sources of a full-length research/software paper on sesmesh 1.1.2,
 meant for an arXiv preprint (primary **q-bio.BM**, cross-lists **cs.CG** and
-**physics.comp-ph**) and later a journal (J. Appl. Cryst. "computer
-programs", Bioinformatics or JCIM application note, or Computer Physics
-Communications). Nothing has been submitted anywhere.
+**physics.comp-ph**) and the *Journal of Molecular Graphics and Modelling*
+(Elsevier; see "JMGM submission" below). Nothing has been submitted
+anywhere.
 
 Every number in the text comes from the repository: the validation CSVs
 (`docs/validation/*.csv`), the cross-tool comparison
@@ -13,8 +13,9 @@ Every number in the text comes from the repository: the validation CSVs
 CHANGELOG, or the analytic-reference program in `scripts/analytic`. Claims
 that need a source or a measurement the repository does not have are marked
 `\todo{…}`; they print in red where they stand. `\todoquiet{…}` marks an
-item in the source only and prints nothing (used in the abstract). All open
-items are listed below.
+item in the source only and prints nothing. None is left: `main.tex` sets
+`\showtodosfalse`, so a build with one fails (switch to `\showtodostrue`
+while drafting).
 
 ## Build
 
@@ -39,6 +40,7 @@ Other targets:
 | `make data` | Rebuilds `data/analytic.csv` by running `scripts/analytic` (a stand-alone Cargo package that links `crates/sesmesh` and `crates/sesmesh-testkit`; release build, about a minute) |
 | `make tables` | Only regenerates `generated/` |
 | `make arxiv` | Builds the PDF, then packs `main.tex`, `main.bbl`, `references.bib`, `sections/`, `generated/`, `figures/` into `arxiv.tar.gz` (arXiv wants the `.bbl`) |
+| `make jmgm` | Builds the graphical abstract `jmgm/graphical-abstract.pdf` and a 2661 × 1065 px PNG (needs Ghostscript) |
 | `make clean` | Removes LaTeX build files |
 
 ## Layout
@@ -53,16 +55,33 @@ Other targets:
 | `data/scaling.csv` | Thread-scaling numbers transcribed from Design §11.1 |
 | `scripts/make_data.py` | CSV → LaTeX tables, macros, pgfplots data (validation, comparison, x86 SIMD and scaling) |
 | `scripts/analytic/` | Program that produced `data/analytic.csv` |
-| `generated/` | Output of `make_data.py` (committed, so the paper builds without Python) |
+| `generated/` | Output of `make_data.py` (committed, so the paper builds without Python), including the journal highlights `highlights.txt` |
+| `jmgm/` | Graphical abstract source (`graphical-abstract.tex`); its PDF and PNG are built by `make jmgm` and not committed |
+
+## JMGM submission
+
+Requirements of the journal's Guide for Authors (as quoted by search results
+on 2026-11-18; ScienceDirect refuses automated reads, so check the page before
+submitting) and where each one is met:
+
+| Requirement | File |
+|---|---|
+| Abstract under 250 words, able to stand alone | `sections/abstract.tex` (about 240 words in the PDF) |
+| Highlights: 3–5 bullets, at most 85 characters each with spaces, separate editable file | `generated/highlights.txt` (written by `make_data.py` from the same values as the text; it asserts both limits) |
+| Graphical abstract, required at submission | `jmgm/graphical-abstract.pdf` / `.png` (`make jmgm`; 13 × 5.2 cm, Elsevier minimum 1328 × 531 px) |
+| Keywords | Six, after the abstract (Elsevier journals usually allow up to 6–7; not confirmed for JMGM) |
+| Declaration of generative AI and AI-assisted technologies in the writing process | Paragraph before the references (§9), Elsevier's template wording |
+| Competing interests, funding, CRediT, data availability | §9 |
+
+Not prepared here: the cover letter, suggested reviewers and the journal's
+declarations form, which are filled in on the submission system. "Your Paper
+Your Way" (any layout at first submission, `elsarticle` only at revision) is
+usual for Elsevier but not confirmed for JMGM.
 
 ## Open items (`\todo`)
 
-Draft of 2026-11-18, describing 1.1.2. The PDF has no list of open items;
-this table is the only one.
-
-| # | Where | Item |
-|---|---|---|
-| 1 | abstract | Final abstract length/format for the target venue (Bioinformatics: 150 words, structured; J. Appl. Cryst.: unstructured) |
+None (2026-11-18). The previous abstract item (length/format for the target
+venue) is resolved: the abstract meets the JMGM limit.
 
 Resolved by the comparison (previous items 5–8, 9, 11–18): the MSMS and
 NanoShaper statements are now checked against Goddard's notes and the

@@ -40,6 +40,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   and §8 ("Measurement scope") updated.
 - Paper §8 "Future work" names the planned GPU back ends (HIP, CUDA,
   Metal).
+- Paper prepared for the Journal of Molecular Graphics and Modelling:
+  abstract under 250 words, six keywords, highlights
+  (`paper/generated/highlights.txt`, generated and checked against the
+  limits by `make_data.py`), graphical abstract (`make jmgm`), Elsevier's
+  generative-AI declaration; no open items are left and the "Open items"
+  page is gone.
 
 ## [1.1.2] - 2026-11-15
 

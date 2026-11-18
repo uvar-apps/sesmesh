@@ -12,7 +12,8 @@ Inputs (read only):
   paper/data/analytic.csv        one/two-sphere references (paper/scripts/analytic)
   paper/data/scaling.csv         thread scaling (Design §11.1, transcribed)
 
-Outputs: paper/generated/*.tex and *.dat. Standard library only, so the
+Outputs: paper/generated/*.tex and *.dat, and the journal highlights
+paper/generated/highlights.txt. Standard library only, so the
 paper builds without a Python environment beyond python3 itself.
 
 Usage: python3 paper/scripts/make_data.py   (from any directory)
@@ -675,6 +676,31 @@ def comparison() -> None:
                 val(f"tri-{t}-1AON-0.25", f"{int(m[0]['triangles']) / 1e6:.1f}")
 
 
+def plain(key: str) -> str:
+    """A macro's value as plain text (for files outside LaTeX)."""
+    return macros[key].replace("$-$", "\u2212").replace("$+$", "+").replace("\\,", " ")
+
+
+def highlights() -> None:
+    """Journal highlights (Elsevier: 3-5 bullets, at most 85 characters each,
+    spaces included), from the same values as the text. Plain UTF-8, no
+    header: the file is uploaded as it is."""
+    items = [
+        "Meshes the exact solvent-excluded surface in a sparse narrow band of a grid",
+        "Closed, oriented, edge-manifold meshes with every vertex on the exact surface",
+        f"Mean area and volume errors {plain('area-mean-0.25')} % and "
+        f"{plain('vol-mean-0.25')} % at 0.25 \u00c5 (vs h \u2192 0)",
+        f"{plain('sweepk-ok')} of {plain('sweepk-n')} random PDB entries meshed; "
+        "byte-identical for any thread count",
+        f"A 2.44-million-atom capsid meshed at 1 \u00c5 in "
+        f"{plain('large-3J3Q-seconds')} s on a 10-core laptop",
+    ]
+    assert 3 <= len(items) <= 5
+    for item in items:
+        assert len(item) <= 85, (len(item), item)
+    (OUT / "highlights.txt").write_text("".join(f"\u2022 {i}\n" for i in items))
+
+
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     accuracy()
@@ -685,6 +711,7 @@ def main() -> None:
     analytic()
     scaling()
     comparison()
+    highlights()
     body = ["\\makeatletter"]
     for k in sorted(macros):
         body.append(f"\\@namedef{{smval@{k}}}{{{macros[k]}}}")

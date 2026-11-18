@@ -2,10 +2,10 @@
 % Copyright (c) 2026 Ugo Varetto
 % SPDX-License-Identifier: MIT OR Apache-2.0
 %
-% Paper draft: arXiv preprint (primary q-bio.BM; cross-lists cs.CG,
-% physics.comp-ph), later a journal (J. Appl. Cryst. "computer programs",
-% Bioinformatics / JCIM application note, or Computer Physics
-% Communications). Build: see paper/README.md (`make` or `latexmk -pdf`).
+% Paper: arXiv preprint (primary q-bio.BM; cross-lists cs.CG,
+% physics.comp-ph) and the Journal of Molecular Graphics and Modelling
+% (highlights and graphical abstract: `make jmgm`). Build: see
+% paper/README.md (`make` or `latexmk -pdf`).
 
 \documentclass[11pt,a4paper]{article}
 
@@ -40,10 +40,10 @@
 % \todo{...} marks a claim that needs a source, a measurement or a decision
 % by the author; it prints in red where it stands. \todoquiet{...} marks an
 % item in the source only and prints nothing. Every one is listed in
-% paper/README.md. Set \showtodosfalse only for a final build once none is
-% left (the build then fails on purpose if one remains).
+% paper/README.md. \showtodosfalse (none is left) makes the build fail on
+% purpose if one is added; switch to \showtodostrue while drafting.
 \newif\ifshowtodos
-\showtodostrue
+\showtodosfalse
 \newcounter{todo}
 \DeclareRobustCommand{\todo}[1]{%
   \ifshowtodos

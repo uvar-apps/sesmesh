@@ -1,0 +1,5 @@
+• Meshes the exact solvent-excluded surface in a sparse narrow band of a grid
+• Closed, oriented, edge-manifold meshes with every vertex on the exact surface
+• Mean area and volume errors −0.20 % and −0.02 % at 0.25 Å (vs h → 0)
+• 1 000 of 1 000 random PDB entries meshed; byte-identical for any thread count
+• A 2.44-million-atom capsid meshed at 1 Å in 70.1 s on a 10-core laptop
