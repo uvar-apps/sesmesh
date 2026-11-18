@@ -12,9 +12,9 @@ Every number in the text comes from the repository: the validation CSVs
 `tools/compare/`), the design document, the validation report, the
 CHANGELOG, or the analytic-reference program in `scripts/analytic`. Claims
 that need a source or a measurement the repository does not have are marked
-`\todo{…}`; they print in red and are collected on the last page of the PDF
-("Open items"). `\todoquiet{…}` lists an item on that page only (used in the
-abstract).
+`\todo{…}`; they print in red where they stand. `\todoquiet{…}` marks an
+item in the source only and prints nothing (used in the abstract). All open
+items are listed below.
 
 ## Build
 
@@ -57,8 +57,8 @@ Other targets:
 
 ## Open items (`\todo`)
 
-Numbers match the red markers in the PDF (draft of 2026-11-15, describing
-1.1.2).
+Draft of 2026-11-18, describing 1.1.2. The PDF has no list of open items;
+this table is the only one.
 
 | # | Where | Item |
 |---|---|---|
