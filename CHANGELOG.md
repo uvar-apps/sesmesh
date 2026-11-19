@@ -23,6 +23,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Paper, JMGM files and website: every statement of a time on the 10-core
+  Apple M4 now also gives the time on the 16-core AMD Zen 5 machine of the
+  comparison (sesmesh 1.1.0). The abstract, the highlight, the cover letter
+  and the graphical abstract give both times for the capsids. Tables 6 and 8
+  have a Zen 5 column. The 200-entry sweep in §5.4 gives both totals, and
+  Fig. 6b plots the Zen 5 sweep. To keep the abstract within 250 words, its
+  wording is tighter and the licence is left to §9. The capsid claims on the
+  website's home, gallery and tutorials pages give both times too.
 - Citation: the README ("Citing sesmesh"), the website's library page
   (`#cite`) and `CITATION.cff` now ask to cite sesmesh itself, with a
   reference and BibTeX for the version DOI (1.1.2: 10.5281/zenodo.24238837;

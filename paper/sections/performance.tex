@@ -26,23 +26,27 @@ memory is the maximum resident set size reported by \code{/usr/bin/time
 
 \begin{table}[t]
   \centering
-  \caption{Wall time of complete command-line runs (10 cores, loaded
-    machine; ranges over repeated runs) from the validation report, with
-    the provisional targets of the specification, which were set before
-    any measurement and remain goals.}
+  \caption{Wall time of complete command-line runs on the 10-core Apple
+    M4 (loaded machine; ranges over repeated runs, from the validation
+    report) and on the 16-core AMD Zen~5 of \cref{sec:x86} (idle; version
+    1.1.0, 16 threads, median of three runs, from \cref{tab:cmp-perf}),
+    with the provisional targets of the specification, which were set
+    before any measurement and remain goals.}
   \label{tab:perf}
   \small
-  \begin{tabular}{@{}llrrrrr@{}}
+  \begin{tabular}{@{}llrrrrrr@{}}
     \toprule
-    Entry & Description & Atoms & $h$ (\AA) & Triangles & Measured & Target \\
+    & & & & & \multicolumn{2}{c}{Measured} & \\
+    \cmidrule(lr){6-7}
+    Entry & Description & Atoms & $h$ (\AA) & Triangles & M4 & Zen~5 & Target \\
     \midrule
-    1CRN & crambin              & 327        & 0.25 & 111\,k  & 41--61\,ms  & $<60$\,ms \\
-    4HHB & haemoglobin          & 4\,558     & 0.5  & 319\,k  & 0.19--0.22\,s & $<0.1$\,s \\
-    4HHB & haemoglobin          & 4\,558     & 0.25 & 1.28\,M & 0.45--0.54\,s & $<0.35$\,s \\
-    1AON & GroEL--GroES         & 58\,870    & 0.5  & 4.34\,M & 2.7--3.1\,s & $<1.5$\,s \\
-    1JJ2~\cite{pdb1jj2} & ribosomal subunit & 90\,650   & 0.5  & 5.98\,M & 4.4\,s      & $<2.5$\,s \\
-    4V6X & human 80S ribosome   & 237\,685   & 0.5  & 18.0\,M & 13.3--14.0\,s & $<6$\,s \\
-    3J3Q & HIV-1 capsid         & 2\,440\,800 & 1.0 & 48.7\,M & 70\,s       & $<60$\,s \\
+    1CRN & crambin              & 327        & 0.25 & 111\,k  & 41--61\,ms & \val{x86-1CRN-0.25}\,s & $<60$\,ms \\
+    4HHB & haemoglobin          & 4\,558     & 0.5  & 319\,k  & 0.19--0.22\,s & \val{x86-4HHB-0.5}\,s & $<0.1$\,s \\
+    4HHB & haemoglobin          & 4\,558     & 0.25 & 1.28\,M & 0.45--0.54\,s & \val{x86-4HHB-0.25}\,s & $<0.35$\,s \\
+    1AON & GroEL--GroES         & 58\,870    & 0.5  & 4.34\,M & 2.7--3.1\,s & \val{x86-1AON-0.5}\,s & $<1.5$\,s \\
+    1JJ2~\cite{pdb1jj2} & ribosomal subunit & 90\,650   & 0.5  & 5.98\,M & 4.4\,s & \val{x86-1JJ2-0.5}\,s & $<2.5$\,s \\
+    4V6X & human 80S ribosome   & 237\,685   & 0.5  & 18.0\,M & 13.3--14.0\,s & \val{x86-4V6X-0.5}\,s & $<6$\,s \\
+    3J3Q & HIV-1 capsid         & 2\,440\,800 & 1.0 & 48.7\,M & 70\,s & \val{x86-3J3Q-1}\,s & $<60$\,s \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -53,13 +57,9 @@ memory is the maximum resident set size reported by \code{/usr/bin/time
 1.2--2.2 times slower than the targets that were set before the
 implementation, on a machine with only four performance cores. For
 version~1.0 the targets were revised to these measurements, rounded up,
-and the original values remain goals. On the idle 16-core x86-64 machine
-of \cref{sec:x86} the same complete runs take \val{x86-1CRN-0.25}\,s
-(1CRN, 0.25\Ang), \val{x86-4HHB-0.5} and \val{x86-4HHB-0.25}\,s (4HHB),
-\val{x86-1AON-0.5}\,s (1AON), \val{x86-1JJ2-0.5}\,s (1JJ2),
-\val{x86-4V6X-0.5}\,s (4V6X) and \val{x86-3J3Q-1}\,s (3J3Q): all the
-original provisional targets are met there except 4HHB at 0.5\Ang{}
-(target $<0.1$\,s). The validity tests
+and the original values remain goals. On the idle 16-core Zen~5
+machine of \cref{sec:x86} all the original provisional targets are met
+except 4HHB at 0.5\Ang{} (\val{x86-4HHB-0.5}\,s against $<0.1$\,s). The validity tests
 of the sampling kernel take about 38\,\% of the time and are the next
 optimization target; one evaluated sample costs about
 0.5--0.65\,\textmu s per core.
@@ -82,7 +82,9 @@ the validation runs). Time grows roughly linearly with the number of atoms
 (least-squares exponents \val{sweep-time-slope} and
 \val{corpus-time-slope} in log--log space), as does the triangle count at
 0.25\Ang{} (exponent \val{corpus-tri-slope}). Part of the scatter comes
-from the loaded machine.
+from the loaded machine. On the 16-core Zen~5 machine, where version 1.1.0
+ran each sweep entry with \val{zen-sweep-threads} threads, the exponent is
+\val{zen-sweep-time-slope}.
 
 \begin{figure}[t]
   \centering
@@ -119,13 +121,19 @@ from the loaded machine.
       \addplot[only marks, mark=square*, mark size=1.1pt, orange!80!black, opacity=0.8]
         table[x=atoms, y=seconds] {generated/time-corpus.dat};
       \addlegendentry{corpus, 0.25\Ang, mesh}
+      \addplot[only marks, mark=triangle, mark size=1.2pt, green!45!black, opacity=0.6]
+        table[x=atoms, y=seconds] {generated/sweep-zen5.dat};
+      \addlegendentry{sweep, Zen~5, \val{zen-sweep-threads} threads}
     \end{groupplot}
   \end{tikzpicture}
-  \caption{(a)~Speed-up on the 10-core machine (4 performance and 6
+  \caption{(a)~Speed-up on the 10-core M4 (4 performance and 6
     efficiency cores) relative to one thread; data from the design document
-    (\code{data/scaling.csv}). (b)~Wall time against atom count for the
-    robustness sweep and the validation corpus
-    (\code{docs/validation/*.csv}); loaded machine, all cores.}
+    (\code{data/scaling.csv}); the 16-core Zen~5 is in
+    \cref{fig:x86-scaling}. (b)~Wall time against atom count for the
+    robustness sweep and the validation corpus on the M4
+    (\code{docs/validation/*.csv}; loaded machine, all cores), and for the
+    sweep on the Zen~5 (version 1.1.0, \val{zen-sweep-threads} threads per
+    entry, \code{docs/validation/compare/runs.csv}).}
   \label{fig:scaling}
 \end{figure}
 
@@ -207,7 +215,8 @@ included.
 dengue virus capsid built from its 60 symmetry operators
 (\cref{fig:gallery-large}) and the 2.44-million-atom HIV-1 capsid 3J3Q,
 which yields \val{large-3J3Q-tri}\,M triangles at 1\Ang{} in
-\val{large-3J3Q-seconds}\,s. At its peak, memory amounts to 110--150 bytes
+\val{large-3J3Q-seconds}\,s on the 10-core M4 and \val{x86-3J3Q-1}\,s on
+the 16-core Zen~5 machine. At its peak, memory amounts to 110--150 bytes
 per triangle. The per-atom part---about 560 bytes of field data and about
 150 bytes of input structure and spheres---dominates only for inputs with
 few triangles per atom, such as the capsids at 1\Ang{} (about 18--20
@@ -223,7 +232,9 @@ capsid's peak at 1\Ang{} from 1.68 to 1.54\,GB and, when decimating it to
 \begin{table}[t]
   \centering
   \caption{Large inputs (full command-line runs, output to
-    \code{/dev/null}). Peak resident set size in GB for the Phase~9
+    \code{/dev/null}). Time on the 10-core M4 (Phase~9 measurement) and on
+    the 16-core Zen~5 (version 1.1.0, from \cref{tab:cmp-perf}). Peak
+    resident set size on the M4 in GB for the Phase~9
     measurement, the 1.0 development code and version 1.1.0 (from
     \code{docs/validation/large.csv} and the validation report;
     \mbox{--}~not re-measured); values from different sessions are not
@@ -231,12 +242,12 @@ capsid's peak at 1\Ang{} from 1.68 to 1.54\,GB and, when decimating it to
   \label{tab:large}
   \footnotesize
   \setlength{\tabcolsep}{3.5pt}
-  \begin{tabular}{@{}llrrrrrrrr@{}}
+  \begin{tabular}{@{}llrrrrrrrrr@{}}
     \toprule
-    & & & & & & & \multicolumn{3}{c}{Peak RSS (GB)} \\
-    \cmidrule(l){8-10}
+    & & & & & & \multicolumn{2}{c}{Time (s)} & \multicolumn{3}{c}{Peak RSS (GB)} \\
+    \cmidrule(lr){7-8}\cmidrule(l){9-11}
     Entry & Description & Atoms & $h$ (\AA) & Triangles & Tri./atom &
-      Time (s) & Ph.~9 & 1.0-dev & 1.1.0 \\
+      M4 & Zen~5 & Ph.~9 & 1.0-dev & 1.1.0 \\
     \midrule
     \tablerows{generated/tab-large.tex}
     \bottomrule

@@ -129,7 +129,7 @@ for (chain, name, seq), a in sorted(area.items(), key=lambda kv: -kv[1])[:10]:
 <pre><code><span class="p">$ </span>curl -LO https://files.rcsb.org/download/1K4R.cif.gz
 <span class="p">$ </span>sesmesh info 1K4R.cif.gz
 <span class="c">chains: 3 (A:3028 B:3028 C:3028)</span>
-<span class="c">assemblies: 1 (60 copies), 2 (1 copy), 3 (5 copies), 4 (6 copies), 5 (1 copy)</span></code></pre></div></li><li><h3>Mesh 545 040 atoms</h3><p>The full dengue virus capsid at 1 Å: about 10 s and 9.9 million triangles on a 10-core laptop, in under 2 GB of memory.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<span class="c">assemblies: 1 (60 copies), 2 (1 copy), 3 (5 copies), 4 (6 copies), 5 (1 copy)</span></code></pre></div></li><li><h3>Mesh 545 040 atoms</h3><p>The full dengue virus capsid at 1 Å: about 10 s and 9.9 million triangles on a 10-core laptop (about 6 s on an AMD Zen 5 16-core system), in under 2 GB of memory.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
 <pre><code><span class="p">$ </span>sesmesh 1K4R.cif.gz --assembly 1 -q draft --progress --timings -o capsid.ply
 <span class="c">sesmesh: 4937664 vertices, 9883296 triangles, 1123 component(s) (1098 cavities), ...</span></code></pre></div></li><li><h3>Make it viewer-friendly</h3><p>Cap the triangle count and colour by chain; decimation keeps the surface exact where it keeps vertices.</p><div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
 <pre><code><span class="p">$ </span>sesmesh 1K4R.cif.gz --assembly 1 -q draft --max-triangles 1500000 \

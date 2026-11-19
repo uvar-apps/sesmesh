@@ -226,8 +226,11 @@ duplicate triangles), with no input errors. The entries range from
 cavities, and one entry has \val{sweep-components-max} components. The
 whole sweep took \val{sweep-seconds-total}\,s of wall time; the slowest
 entry, \pdb{\val{sweep-slowest-id}}~\cite{pdb5tax} (\val{sweep-slowest-atoms} atoms,
-\val{sweep-slowest-tri}\,M triangles), took \val{sweep-seconds-max}\,s. The
-component counts include the sub-grid fragments of \cref{sec:fragments}
+\val{sweep-slowest-tri}\,M triangles), took \val{sweep-seconds-max}\,s on the 10-core M4. On the
+16-core Zen~5 machine, version 1.1.0 meshed the same entries with
+\val{zen-sweep-threads} threads each in \val{zen-sweep-seconds-total}\,s,
+and \pdb{\val{zen-sweep-slowest-id}} took \val{zen-sweep-seconds-max}\,s
+(\cref{sec:comparison}). The component counts include the sub-grid fragments of \cref{sec:fragments}
 (1\,026 in 119 entries, at most 2.7\AA$^2$ each).
 
 With version 1.1.1, \val{sweepk-n} further entries were drawn (seed 2027,

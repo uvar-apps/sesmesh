@@ -306,6 +306,7 @@ def large() -> None:
         lines.append(
             f"{name} & {what} & {thousands(atoms)} & {float(spacing):.2f} & "
             f"{tri / 1e6:.1f}\\,M & {tri / atoms:.0f} & {round1(r['seconds'])} & "
+            f"\\val{{x86-{key.split('-')[0]}-{fmt_h(float(spacing))}}} & "
             f"{int(r['peak_rss_mb']) / 1000:.2f} & {int(r['peak_rss_mb_v1dev']) / 1000:.2f} & "
             f"{rss_110[key]} \\\\"
         )
@@ -417,6 +418,22 @@ def comparison() -> None:
     rows = read(CMP / "runs.csv")
     for r in rows:
         r["h"] = fnum(r["spacing"])
+
+    # The 200-entry sweep on the Zen 5 machine (1.1.0, the sw110 campaign).
+    zen = [r for r in rows if r["campaign"] == "sw110" and r["tool"] == "sesmesh" and r["status"] == "ok"]
+    if zen:
+        threads = {r["threads"] for r in zen}
+        assert len(threads) == 1, threads
+        val("zen-sweep-threads", threads.pop())
+        val("zen-sweep-seconds-total", f"{sum(fnum(r['wall_s']) for r in zen):.0f}")
+        slow = max(zen, key=lambda r: fnum(r["wall_s"]))
+        val("zen-sweep-slowest-id", slow["entry"])
+        val("zen-sweep-seconds-max", f"{fnum(slow['wall_s']):.1f}")
+        val("zen-sweep-time-slope",
+            f"{loglog_slope([int(r['atoms']) for r in zen], [fnum(r['wall_s']) for r in zen]):.2f}")
+        write("sweep-zen5.dat",
+              "atoms seconds\n" + "".join(f"{r['atoms']} {r['wall_s']}\n" for r in zen), DAT_HEADER)
+
     acc = [r for r in rows if r["campaign"] == "acc"]
     by = {}
     for r in acc:
@@ -692,8 +709,8 @@ def highlights() -> None:
         f"{plain('vol-mean-0.25')} % at 0.25 \u00c5 (vs h \u2192 0)",
         f"{plain('sweepk-ok')} of {plain('sweepk-n')} random PDB entries meshed; "
         "byte-identical for any thread count",
-        f"A 2.44-million-atom capsid meshed at 1 \u00c5 in "
-        f"{plain('large-3J3Q-seconds')} s on a 10-core laptop",
+        f"2.44-million-atom capsid at 1 \u00c5: {plain('large-3J3Q-seconds')} s on a 10-core "
+        f"laptop, {plain('x86-3J3Q-1')} s on 16-core Zen 5",
     ]
     assert 3 <= len(items) <= 5
     for item in items:

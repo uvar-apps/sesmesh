@@ -101,7 +101,7 @@ name):
 
 | Requirement | Where it is met |
 |---|---|
-| Abstract at most 250 words, stands alone, references only as author and year | `sections/abstract.tex` (249 words, counting every space-separated token of the plain text, symbols and units included; `make jmgm` checks the limit; "Quan and Stamm (2016)") |
+| Abstract at most 250 words, stands alone, references only as author and year | `sections/abstract.tex` (250 words, counting every space-separated token of the plain text, symbols and units included; `make jmgm` checks the limit; "Quan and Stamm (2016)") |
 | Keywords: 1 to 7 | Six, after the abstract |
 | Highlights, required: 3–5 bullets, at most 85 characters each with spaces, separate editable file with "highlights" in its name | `generated/highlights.txt` (written by `make_data.py` from the same values as the text; it asserts both limits), as a Word file `jmgm/submission/highlights.docx` |
 | Graphical abstract, required: at least 1328 px wide, longest side horizontal, readable at 13 cm; TIFF, EPS, PDF or MS Office | `jmgm/submission/graphical-abstract.tiff` (2661 × 1065 px) and `.pdf`, from `jmgm/graphical-abstract.tex` |
