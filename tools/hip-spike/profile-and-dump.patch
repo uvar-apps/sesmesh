@@ -1,0 +1,175 @@
+diff --git a/crates/sesmesh-cli/src/main.rs b/crates/sesmesh-cli/src/main.rs
+index db7241f..e87efb8 100644
+--- a/crates/sesmesh-cli/src/main.rs
++++ b/crates/sesmesh-cli/src/main.rs
+@@ -506,7 +506,7 @@ fn with_default_subcommand(mut args: Vec<OsString>) -> Vec<OsString> {
+ fn main() -> ExitCode {
+     let cli = Cli::parse_from(with_default_subcommand(std::env::args_os().collect()));
+     let result = match cli.command {
+-        Command::Surface(a) => surface(&a),
++        Command::Surface(a) => { let r = surface(&a); sesmesh::prof::report(); r }
+         Command::Info(a) => info(&a),
+         Command::Radii(a) => radii(&a),
+         Command::Completions { shell } => {
+diff --git a/crates/sesmesh/src/field/kernel.rs b/crates/sesmesh/src/field/kernel.rs
+index e8bef32..c6a8251 100644
+--- a/crates/sesmesh/src/field/kernel.rs
++++ b/crates/sesmesh/src/field/kernel.rs
+@@ -402,6 +402,8 @@ impl Engine {
+         let origin = self.lattice.brick_origin(key);
+         let band = self.band as f32;
+ 
++        let t_sub = std::time::Instant::now();
++        crate::prof::add(7,1);
+         // Sub-block classification.
+         let sub = if b % 2 == 0 && b >= 4 { b / 2 } else { b };
+         let nsub = b / sub;
+@@ -468,6 +470,7 @@ impl Engine {
+                 }
+             }
+         }
++        crate::prof::add(0, t_sub.elapsed().as_nanos() as u64);
+         if !self.f32_ok {
+             return;
+         }
+@@ -481,6 +484,8 @@ impl Engine {
+             if m == 0 {
+                 continue;
+             }
++            crate::prof::add(8,1); crate::prof::add(9,m as u64);
++            let t_c = std::time::Instant::now();
+             // Gather candidates for this sub-block only (tighter reach).
+             let (center, rho) = if nsub == 2 {
+                 let off = |bit: usize| ((sb >> bit) & 1) as f64 * sub as f64 + half;
+@@ -504,9 +509,15 @@ impl Engine {
+             for k in m..padded {
+                 (s.xs[k], s.ys[k], s.zs[k]) = (s.xs[m - 1], s.ys[m - 1], s.zs[m - 1]);
+             }
++            crate::prof::add(10, padded as u64);
++            crate::prof::add(3, t_c.elapsed().as_nanos() as u64);
+             match self.field.kind {
+                 SurfaceKind::Ses => {
++                    let t_g = std::time::Instant::now();
+                     self.gather_ses(center, rho, s);
++                    crate::prof::add(1, t_g.elapsed().as_nanos() as u64);
++                    { let g=&s.g; crate::prof::add(11,g.n_inside as u64); crate::prof::add(12,g.nx.len() as u64); crate::prof::add(13,g.sx.len() as u64); crate::prof::add(14,g.s_blk.len() as u64); crate::prof::add(15,g.cx.len() as u64); crate::prof::add(16,g.c_blk.len() as u64); crate::prof::add(17,g.vx.len() as u64); }
++                    let t_k = std::time::Instant::now();
+                     let BrickScratch {
+                         g, xs, ys, zs, out, ..
+                     } = s;
+@@ -517,6 +528,8 @@ impl Engine {
+                         &mut out[..padded],
+                     );
+                     dispatch!(self.level, simd => ses_kernel(simd, g, xs, ys, zs, probe, cutoff * cutoff, out));
++                    crate::prof::add(2, t_k.elapsed().as_nanos() as u64);
++                    dump_subblock(g, m, xs, ys, zs, out, probe, cutoff * cutoff);
+                 }
+                 SurfaceKind::Sas | SurfaceKind::Vdw => {
+                     self.gather_spheres(center, rho, self.band, s);
+@@ -920,3 +933,28 @@ fn sphere_kernel<S: Simd>(
+         best.store_slice(&mut out[off..off + w]);
+     }
+ }
++
++/// TEMPORARY: appends one sub-block (candidates, samples, CPU values) to
++/// `$SESMESH_DUMP` for the HIP spike.
++#[allow(clippy::too_many_arguments)]
++fn dump_subblock(g: &Gathered, m: usize, xs: &[f32], ys: &[f32], zs: &[f32], out: &[f32], probe: f32, cutoff2: f32) {
++    use std::io::Write;
++    static FILE: std::sync::OnceLock<Option<std::sync::Mutex<std::fs::File>>> = std::sync::OnceLock::new();
++    let f = FILE.get_or_init(|| std::env::var_os("SESMESH_DUMP").map(|p| std::sync::Mutex::new(std::fs::File::create(p).unwrap())));
++    let Some(f) = f else { return };
++    let mut b: Vec<u8> = Vec::new();
++    let u = |b: &mut Vec<u8>, v: u32| b.extend_from_slice(&v.to_le_bytes());
++    let fl = |b: &mut Vec<u8>, v: &[f32]| for x in v { b.extend_from_slice(&x.to_le_bytes()); };
++    let us = |b: &mut Vec<u8>, v: &[u32]| for x in v { b.extend_from_slice(&x.to_le_bytes()); };
++    for v in [m, g.n_inside, g.nx.len(), g.sx.len(), g.s_blk.len(), g.cx.len(), g.c_blk.len(), g.vx.len()] { u(&mut b, v as u32); }
++    fl(&mut b, &[probe, cutoff2]);
++    fl(&mut b, &xs[..m]); fl(&mut b, &ys[..m]); fl(&mut b, &zs[..m]);
++    for v in [&g.nx, &g.ny, &g.nz, &g.nr2, &g.nr2tol] { fl(&mut b, v); }
++    for v in [&g.sx, &g.sy, &g.sz, &g.sr] { fl(&mut b, v); }
++    us(&mut b, &g.s_off); us(&mut b, &g.s_blk);
++    for v in [&g.cx, &g.cy, &g.cz, &g.ux, &g.uy, &g.uz, &g.ex, &g.ey, &g.ez, &g.rho] { fl(&mut b, v); }
++    us(&mut b, &g.c_off); us(&mut b, &g.c_blk);
++    for v in [&g.vx, &g.vy, &g.vz] { fl(&mut b, v); }
++    fl(&mut b, &out[..m]);
++    f.lock().unwrap().write_all(&b).unwrap();
++}
+diff --git a/crates/sesmesh/src/lib.rs b/crates/sesmesh/src/lib.rs
+index 36fc6ea..b1995e9 100644
+--- a/crates/sesmesh/src/lib.rs
++++ b/crates/sesmesh/src/lib.rs
+@@ -125,6 +125,8 @@ mod par;
+ pub mod radii;
+ pub mod structure;
+ mod surface;
++#[doc(hidden)]
++pub mod prof;
+ 
+ pub use control::{Control, Progress, Stage};
+ pub use diag::{Diagnostics, Warning, WarningKind};
+diff --git a/crates/sesmesh/src/mesh/extract.rs b/crates/sesmesh/src/mesh/extract.rs
+index b211f59..970255f 100644
+--- a/crates/sesmesh/src/mesh/extract.rs
++++ b/crates/sesmesh/src/mesh/extract.rs
+@@ -145,6 +145,8 @@ fn mesh_brick(
+     let rho = 0.5 * 3f64.sqrt() * sub as f64 * h * (1.0 + 1e-9) + 1e-9;
+     let mut locals: [Option<LocalCandidates>; 8] = Default::default();
+     let t_min = edge_clamp(engine);
++    let t_loop = std::time::Instant::now();
++    let mut lg_ns = 0u64; let mut vx_ns = 0u64;
+ 
+     for z in 0..b {
+         for y in 0..b {
+@@ -173,7 +175,9 @@ fn mesh_brick(
+                                 (sb[2] * sub) as f64 + 0.5 * sub as f64,
+                             ) * h;
+                         let mut l = LocalCandidates::default();
++                        let t = std::time::Instant::now();
+                         engine.field.gather_local(center, rho, engine.band, &mut l);
++                        lg_ns += t.elapsed().as_nanos() as u64; crate::prof::add(21,1);
+                         l
+                     });
+                     let (fa, fb) = (f64::from(va), f64::from(vb));
+@@ -184,12 +188,17 @@ fn mesh_brick(
+                         fb,
+                         t_min,
+                     };
++                    let t = std::time::Instant::now();
+                     vertex(engine, &edge, refine, local, out);
++                    vx_ns += t.elapsed().as_nanos() as u64; crate::prof::add(18,1);
+                     out.edges.push((((z * b + y) * b + x) * 3 + axis) as u32);
+                 }
+             }
+         }
+     }
++    crate::prof::add(22, t_loop.elapsed().as_nanos() as u64);
++    crate::prof::add(4, lg_ns); crate::prof::add(5, vx_ns);
++    let t_cells = std::time::Instant::now();
+     // Cells can cross only on edges owned by "+" neighbours, so the cell
+     // pass runs even when this brick owns no vertex.
+     let corner_step: [usize; 8] = std::array::from_fn(|c| {
+@@ -229,6 +238,7 @@ fn mesh_brick(
+             }
+         }
+     }
++    crate::prof::add(6, t_cells.elapsed().as_nanos() as u64);
+ }
+ 
+ /// Number of triangles [`mesh_brick`] emits for a brick of `b`³ cells with
+diff --git a/crates/sesmesh/src/prof.rs b/crates/sesmesh/src/prof.rs
+new file mode 100644
+index 0000000..01ac124
+--- /dev/null
++++ b/crates/sesmesh/src/prof.rs
+@@ -0,0 +1,10 @@
++// sesmesh — Solvent Excluded Surface meshes for molecules
++// Copyright (c) 2026 Ugo Varetto
++// SPDX-License-Identifier: MIT OR Apache-2.0
++#![allow(missing_docs, clippy::all, clippy::pedantic)]
++//! TEMPORARY profiling counters (not for commit).
++use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
++pub static C: [AtomicU64; 24] = [const { AtomicU64::new(0) }; 24];
++pub const NAMES: [&str; 24] = ["subclass_ns","gather_ns","kernel_ns","coords_ns","lgather_ns","vertex_ns","cells_ns","bricks","subblocks","samples_active","samples_padded","n_inside","n_near","n_s","n_sblk","n_c","n_cblk","n_v","vertices","evals_unused","signonly","lsub","edges_loop_ns","x"];
++#[inline] pub fn add(i: usize, v: u64) { C[i].fetch_add(v, Relaxed); }
++pub fn report() { for (i,n) in NAMES.iter().enumerate() { let v=C[i].swap(0,Relaxed); if v>0 { std::eprintln!("PROF {n} {v}"); } } }

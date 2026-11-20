@@ -435,6 +435,25 @@ Exit (v1.0): Spec §6.2 release criteria.
 >   measurements, the 24 h fuzzing campaign, cross-tool references
 >   (`docs/release.md`, #19).
 
+### Phase 11 — GPU back end, HIP (after 1.1; #24) — `docs/05-gpu-hip.md`
+
+Analysis, design and task list (T11.0–T11.9) in `docs/05-gpu-hip.md` §10.
+Shared design for the CUDA (#25) and Metal (#26) back ends in §9.
+
+> Status (2026-11-20, branch `phase-11-gpu-hip`):
+> * T11.0 done: profiles on M4 and Zen 5 (refinement and its gathering are
+>   55–74 % of mesh-stage thread time, the kernel 14–20 %); spike on gfx1151
+>   (`tools/hip-spike/`): f32/f64 arithmetic and the ported sampling kernel
+>   bit-identical to the CPU; kernel ≈ 3× the 16 Zen 5 cores; device f64
+>   1/25 of f32.
+> * Decided 2026-11-20 (design §11):
+>   * exact refinement is the default (output byte-identical to the CPU back
+>     end); fast f32 refinement is opt-in;
+>   * no data-centre GPUs (MI250X/MI300) in this phase;
+>   * one implementation crate `sesmesh-gpu` with vendor features; back ends
+>     are features of `sesmesh`/`sesmesh-cli`;
+>   * HIP code objects are built at build time for ROCm's generic targets.
+
 ---
 
 ## 4. Test data plan

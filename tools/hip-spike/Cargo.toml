@@ -1,0 +1,14 @@
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+# Feasibility spike for the HIP back end (#24): not part of the workspace.
+[package]
+name = "hip-spike"
+version = "0.0.0"
+edition = "2024"
+publish = false
+authors = ["Ugo Varetto"]
+license = "MIT OR Apache-2.0"
+
+[workspace]
