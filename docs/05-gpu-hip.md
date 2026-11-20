@@ -521,7 +521,8 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
 
 > **Status (2026-11-21).** Done: T11.0, T11.1, T11.2 (committed); spike S1
 > (`docs/gpu-prior-art.md` §5.2); T11.3′, exact device classification,
-> gathering and sampling (`docs/gpu-prior-art.md` §5.3). Deviations: the
+> gathering and sampling (`docs/gpu-prior-art.md` §5.3); spike S2, f32
+> refinement on the device (`docs/gpu-prior-art.md` §5.4). Deviations: the
 > first T11.3 (CPU-gathered jobs staged for the device) was measured
 > 2–27 % slower than the CPU and replaced by T11.3′; T11.4–T11.7 (device
 > f64) are dropped; the tasks that follow are those of

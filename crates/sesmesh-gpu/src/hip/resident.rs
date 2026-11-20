@@ -533,6 +533,97 @@ impl<'d> Resident<'d> {
         }
     }
 
+    /// Refines the crossing edges `edges` of the last run in `batch` in f32
+    /// (spike S2), into `refiner`'s outputs. `groups` holds, per group of
+    /// edges of one sub-block: brick index in the batch, sub-block, first
+    /// edge, edge count; an edge is `x | y << 4 | z << 8 | axis << 12`
+    /// (its lower sample in the brick).
+    ///
+    /// # Errors
+    ///
+    /// [`crate::Error::Call`] if an allocation or launch fails.
+    ///
+    /// # Panics
+    ///
+    /// If a count exceeds `u32`, or `batch` or `refiner` belongs to another
+    /// device.
+    #[allow(clippy::too_many_arguments)]
+    pub fn refine(
+        &self,
+        p: &BatchParams,
+        batch: &mut Batch<'_>,
+        refiner: &mut Refiner<'_>,
+        groups: &[[u32; 4]],
+        edges: &[u32],
+        tol: f32,
+        max_iter: u32,
+        max_bisect: u32,
+    ) -> Result<()> {
+        assert!(
+            std::ptr::eq(self.device, batch.device) && std::ptr::eq(self.device, refiner.device),
+            "buffers of another device"
+        );
+        let len32 = |n: usize| u32::try_from(n).expect("fewer than 2^32 elements");
+        let r = refiner;
+        if r.groups.len() < 4 * groups.len() {
+            r.groups = self.device.alloc_host(4 * groups.len())?;
+        }
+        for (d, s) in r.groups.as_chunks_mut::<4>().0.iter_mut().zip(groups) {
+            d.copy_from_slice(s);
+        }
+        let n = edges.len();
+        if r.edges.len() < n {
+            r.edges = self.device.alloc_host(n)?;
+            r.t = self.device.alloc_host(n)?;
+            r.feat = self.device.alloc_host(n)?;
+            r.q = self.device.alloc_host(3 * n)?;
+            r.evals = self.device.alloc_host(n)?;
+        }
+        r.edges[..n].copy_from_slice(edges);
+        r.n_edges = n;
+        if groups.is_empty() {
+            return Ok(());
+        }
+        let grid = len32(groups.len());
+        let mut params = self.params(p, len32(batch.n_bricks * 8), batch);
+        let ptr = |b: &DeviceBuffer<f32>| b.as_device_ptr().cast_const();
+        let mut rp = RefineParams {
+            sphere_lo: std::array::from_fn(|i| ptr(&r.sphere_lo[i])),
+            circle_lo: std::array::from_fn(|i| ptr(&r.circle_lo[i])),
+            vertex_lo: std::array::from_fn(|i| ptr(&r.vertex_lo[i])),
+            groups: r.groups.as_device_ptr().cast_const(),
+            edges: r.edges.as_device_ptr().cast_const(),
+            t_out: r.t.as_device_ptr(),
+            feat_out: r.feat.as_device_ptr(),
+            q_out: r.q.as_device_ptr(),
+            evals_out: r.evals.as_device_ptr(),
+            n_groups: grid,
+            n_edges: len32(n),
+            max_iter,
+            max_bisect,
+            h_hi: r.h_hi,
+            h_lo: r.h_lo,
+            tol,
+            pad: 0.0,
+        };
+        let mut args: [*mut c_void; 2] = [
+            std::ptr::from_mut(&mut params).cast(),
+            std::ptr::from_mut(&mut rp).cast(),
+        ];
+        // SAFETY: `Params` and `RefineParams` by value, laid out as
+        // `ResidentParams` and `RefineParams`. Every pointer is a live buffer
+        // of this device or pinned host memory. The residual arrays have the
+        // resident arrays' lengths (`Refiner::new`), and the kernel bounds
+        // every element index by those counts; groups and edges are bounded
+        // by `n_groups` and `n_edges`, outputs have `n_edges` entries, list
+        // and value reads are bounded as in `run`. The host touches no
+        // buffer until the synchronous launch returns.
+        unsafe {
+            self.device
+                .launch_sync(self.device.kernels.resident_refine, grid, BLOCK, &mut args)
+        }
+    }
+
     fn launch(&self, function: super::ffi::Handle, grid: u32, params: &mut Params) -> Result<()> {
         let mut args: [*mut c_void; 1] = [std::ptr::from_mut(params).cast()];
         // SAFETY: `Params` by value, laid out as `ResidentParams`. Every
@@ -544,5 +635,139 @@ impl<'d> Resident<'d> {
         // synchronous launch returns (`&mut Batch` in `run`; the resident
         // buffers are only read).
         unsafe { self.device.launch_sync(function, grid, BLOCK, &mut args) }
+    }
+}
+
+/// Residuals of the frame-local `f32` positions (`f64` minus `f32`, as
+/// `f32`) and the lattice spacing as an `f32` pair, for [`Resident::refine`].
+#[derive(Debug, Clone, Copy)]
+pub struct RefineRef<'a> {
+    /// Sphere centres: x, y, z residuals.
+    pub sphere_lo: [&'a [f32]; 3],
+    /// Circle centres: x, y, z residuals.
+    pub circle_lo: [&'a [f32]; 3],
+    /// SAS vertices: x, y, z residuals.
+    pub vertex_lo: [&'a [f32]; 3],
+    /// Lattice spacing, high part.
+    pub h_hi: f32,
+    /// Lattice spacing, low part (`h − h_hi`).
+    pub h_lo: f32,
+}
+
+/// `RefineParams` in `kernels/hip/sesmesh.hip`.
+#[repr(C)]
+struct RefineParams {
+    sphere_lo: [*const c_void; 3],
+    circle_lo: [*const c_void; 3],
+    vertex_lo: [*const c_void; 3],
+    groups: *const c_void,
+    edges: *const c_void,
+    t_out: *mut c_void,
+    feat_out: *mut c_void,
+    q_out: *mut c_void,
+    evals_out: *mut c_void,
+    n_groups: u32,
+    n_edges: u32,
+    max_iter: u32,
+    max_bisect: u32,
+    h_hi: f32,
+    h_lo: f32,
+    tol: f32,
+    pad: f32,
+}
+
+/// Residual arrays on the device and the per-edge buffers of
+/// [`Resident::refine`] (spike S2).
+pub struct Refiner<'d> {
+    device: &'d Device,
+    sphere_lo: Vec<DeviceBuffer<f32>>,
+    circle_lo: Vec<DeviceBuffer<f32>>,
+    vertex_lo: Vec<DeviceBuffer<f32>>,
+    h_hi: f32,
+    h_lo: f32,
+    groups: HostBuffer<u32>,
+    edges: HostBuffer<u32>,
+    t: HostBuffer<f32>,
+    feat: HostBuffer<u32>,
+    q: HostBuffer<f32>,
+    evals: HostBuffer<u32>,
+    n_edges: usize,
+}
+
+impl std::fmt::Debug for Refiner<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Refiner")
+            .field("edges", &self.n_edges)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<'d> Refiner<'d> {
+    /// Uploads the residuals for `resident`.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::Error::Call`] if an allocation or copy fails.
+    ///
+    /// # Panics
+    ///
+    /// If the residual arrays do not have `resident`'s element counts.
+    pub fn new(resident: &Resident<'d>, r: &RefineRef<'_>) -> Result<Self> {
+        let device = resident.device;
+        let (ns, nc, nv) = (
+            resident.sphere[0].len(),
+            resident.circle[0].len(),
+            resident.vertex[0].len(),
+        );
+        assert!(r.sphere_lo.iter().all(|v| v.len() == ns));
+        assert!(r.circle_lo.iter().all(|v| v.len() == nc));
+        assert!(r.vertex_lo.iter().all(|v| v.len() == nv));
+        let up = |v: &[&[f32]; 3]| {
+            v.iter()
+                .map(|x| device.upload(x))
+                .collect::<Result<Vec<_>>>()
+        };
+        Ok(Self {
+            device,
+            sphere_lo: up(&r.sphere_lo)?,
+            circle_lo: up(&r.circle_lo)?,
+            vertex_lo: up(&r.vertex_lo)?,
+            h_hi: r.h_hi,
+            h_lo: r.h_lo,
+            groups: device.alloc_host(0)?,
+            edges: device.alloc_host(0)?,
+            t: device.alloc_host(0)?,
+            feat: device.alloc_host(0)?,
+            q: device.alloc_host(0)?,
+            evals: device.alloc_host(0)?,
+            n_edges: 0,
+        })
+    }
+
+    /// Edge parameters of the last run (the last evaluated point).
+    #[must_use]
+    pub fn t(&self) -> &[f32] {
+        &self.t[..self.n_edges]
+    }
+
+    /// Features of the last evaluation per edge: `kind << 29 | id`, kinds
+    /// 0 solvent, 1 beyond, 2 sphere, 3 circle, 4 vertex.
+    #[must_use]
+    pub fn features(&self) -> &[u32] {
+        &self.feat[..self.n_edges]
+    }
+
+    /// Closest points of the last evaluation per edge, local to the brick
+    /// origin (3 per edge).
+    #[must_use]
+    pub fn closest(&self) -> &[f32] {
+        &self.q[..3 * self.n_edges]
+    }
+
+    /// Field evaluations per edge; bit 31 set where Newton / Illinois
+    /// converged.
+    #[must_use]
+    pub fn evals(&self) -> &[u32] {
+        &self.evals[..self.n_edges]
     }
 }

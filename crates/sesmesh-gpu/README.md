@@ -53,6 +53,7 @@ bit. Device code is f32 and integer only: no f64 runs on the GPU. Tested on gfx1
 | Kernel | API | Replaces (sesmesh) |
 |---|---|---|
 | Classification, gathering and field sampling, SES and union of spheres (SAS, vdW) | `hip::Resident`, `hip::Batch` | `uniform_sign`, `gather_ses`, `gather_spheres`, `ses_kernel`, `sphere_kernel` |
+| Crossing-edge refinement in f32 (spike S2, not used by sesmesh yet) | `hip::Resident::refine`, `hip::Refiner` | `vertex()` in `mesh/extract.rs` (f64) |
 
 `Resident` holds the arrangement on the device: the frame-local f32 copies
 the CPU kernels use, the blocker tables and the CPU's cell grids, uploaded
@@ -68,6 +69,14 @@ kernels bound every index by the uploaded lengths and the validated tables,
 so bad input gives wrong values, not memory errors. sesmesh's tests compare
 values and meshes with the CPU back end
 (`SESMESH_GPU_REQUIRE=1 cargo test -p sesmesh --features hip gpu`).
+
+`Resident::refine` runs the CPU's safeguarded Newton / Illinois / bisection
+on crossing edges in f32, against the lists of the edge's sub-block from the
+last `run`, in brick-local coordinates: each position is the f32 frame-local
+copy plus its f32 residual (`RefineRef`), so the frame-local rounding does
+not enter. It returns the last parameter, feature and closest point per edge;
+the CPU places the vertex. Its vertices are as close to the surface as the
+CPU's f64 ones, but not bit-identical (`docs/gpu-prior-art.md` §5.4).
 
 ## Licence
 

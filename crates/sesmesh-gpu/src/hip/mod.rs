@@ -38,8 +38,8 @@ use std::sync::Arc;
 
 pub use memory::{DeviceBuffer, DeviceCopy, HostBuffer};
 pub use resident::{
-    ArrangementRef, Batch, BatchParams, BatchTimes, GridRef, REC_WORDS, Resident, STATE_IN,
-    STATE_OUT, STATE_SAMPLE,
+    ArrangementRef, Batch, BatchParams, BatchTimes, GridRef, REC_WORDS, RefineRef, Refiner,
+    Resident, STATE_IN, STATE_OUT, STATE_SAMPLE,
 };
 pub use selftest::SelfTestReport;
 pub use stream::{Event, Stream};
@@ -315,6 +315,7 @@ struct Kernels {
     resident_count: Handle,
     resident_fill: Handle,
     resident_sample: Handle,
+    resident_refine: Handle,
 }
 
 impl Kernels {
@@ -333,6 +334,7 @@ impl Kernels {
             resident_count: func("sesmesh_resident_count")?,
             resident_fill: func("sesmesh_resident_fill")?,
             resident_sample: func("sesmesh_resident_sample")?,
+            resident_refine: func("sesmesh_resident_refine")?,
         })
     }
 }

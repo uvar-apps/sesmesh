@@ -69,8 +69,10 @@ Zen 5 cores (Ryzen AI Max+ 395), sesmesh 1.1.2.
     1.23–1.43× end to end. Moving the refinement gather too (§3.3) adds
     at most 0.05×.
   * **Faster than that** needs f32 refinement on the device. Positions
-    would differ in the last bits (§3.4). This is opt-in only, with a
-    ceiling of about 2.5–3.7×.
+    differ in the last bits (§3.4). This is opt-in only. Spike S2 (§5.4)
+    measured it: the vertices are as close to the surface as the CPU's
+    (the same largest \|F\| on every input), and the projected gain is
+    3.2–3.7× for the SES mesh stage, ≈ 2.2–2.6× end to end.
   * **Earlier claim withdrawn.** The "exact ≈ 1.6×" of `docs/05-gpu-hip.md`
     assumed f64 refinement on the device.
 
@@ -310,6 +312,11 @@ on the device removes it. This changes:
 **Ceiling,** with device time zero and only the cell pass left
 (05 §2.3, third row): 2.5–3.7×.
 
+**Measured (S2, §5.4):** in brick-local double-float coordinates the f32
+error does not show above TOL: the largest \|F\| at the device's vertices
+equals the CPU's on every input (the edge clamp sets it). Newton stalls are
+0.001–0.03 % of the edges.
+
 ### 3.5 What is not adopted
 
 * **Grid distance fields** (Hermosilla, QuickSES): approximate by about a
@@ -459,7 +466,7 @@ run S2 (the f32 refinement that the remaining time is mostly spent in).
 |---|---|---|
 | T11.3′ | Exact device sampling. Arrangement uploaded once (f32 copies the CPU computes). Device element grid, classification, gathering, K2, per batch of bricks. CPU refinement overlapped. Allocation from counts and the device's reported memory, no fixed budgets. | Byte-identical output on the existing gate (1 536 SES, 424 SAS/vdW, 210 option-set runs, test suite); identical under thread counts and batch sizes; cancel < 100 ms; times for 4HHB, 1AON and 3J3Q on 16 cores vs device. |
 | T11.4′ | Refinement-gather lists from the device. S1: exact, but ≤ 0.05× for 31–43 % more list memory; not planned. | Byte-identical as in T11.3′. |
-| T11.5′ | Opt-in fast mode: f32 refinement on the device, f64 CPU fallback for flagged edges. | Same connectivity; vertex bound from S2; the Phase 9 accuracy study repeated; area and volume against the exact output; repeat runs identical. |
+| T11.5′ | Opt-in fast mode: f32 refinement on the device, f64 CPU fallback for flagged edges. S2 (§5.4): vertices as close to the surface as the CPU's; SES mesh stage ≈ 3.2–3.7× faster than T11.3′ (projected). | Same connectivity; vertex bound from S2; the Phase 9 accuracy study repeated; area and volume against the exact output; repeat runs identical. |
 | T11.6′ | Benchmarks, docs, release (old T11.8–T11.9). | Local validation list plus GPU tests. |
 
 **T11.3′ status (2026-11-21): done.** `sesmesh::field::gpu` with
@@ -504,6 +511,100 @@ Not in Phase 11, on the CPU:
 * **SIMD f64 refinement** (lanes = edges, AVX-512/NEON). It is
   byte-identical, and it attacks the same 41–59 % without a GPU.
 * **An f32 arrangement** (§3.5).
+
+### 5.4 S2 results (2026-11-21)
+
+Code: `crates/sesmesh/src/field/gpu_s2.rs` (ignored test `s2`, feature
+`hip`), the kernel `sesmesh_resident_refine` and `Resident::refine`. Same
+host as §5.2.
+
+The kernel:
+
+* runs one workgroup per group of crossing edges of one (brick,
+  sub-block), one lane per edge;
+* uses the lists of the edge's sub-block from the sampling batch. §5.2
+  showed that the CPU's exact tests over these lists give its own
+  refinement lists, order included;
+* is `vertex()` of `extract.rs` in f32: safeguarded Newton, Illinois, then
+  bisection, with the same TOL (10⁻⁵ Å), MAX_ITER and MAX_BISECT;
+* works in brick-local coordinates. Each candidate's offset from the brick
+  origin is formed from double-float pairs: its frame-local f32 position
+  plus the f32 residual of that rounding (computed on the CPU), minus the
+  origin O·h as an exact f32 product plus its error (`fmaf`) plus O·h_lo.
+  The rounding of the frame-local copies (up to 1.5·10⁻⁵ Å at 500 Å)
+  therefore does not enter. All device arithmetic is f32;
+* writes per edge: the last evaluated parameter, its feature and closest
+  point (brick-local), the evaluation count and a converged flag.
+
+The CPU then places each vertex (edge clamp) and takes its normal, patch
+and atom from that feature and closest point (`attributes()`), and runs the
+cell pass. In the spike the host lists the crossing edges and groups them
+by sub-block.
+
+**Vertices against the CPU's exact refinement** (same samples, so the same
+triangles in every brick):
+
+| Input | Vertices | \|Δpos\| mean / max (Å) | Device \|F\| mean / max (Å) | CPU \|F\| mean / max (Å) | Patch / atom differs | Not converged |
+|---|---|---|---|---|---|---|
+| 4HHB 0.25 Å | 641 500 | 1.6·10⁻⁷ / 2.9·10⁻⁴ | 1.30·10⁻⁶ / 2.83·10⁻⁵ | 1.30·10⁻⁶ / 2.83·10⁻⁵ | 106 / 4 | 11 (0.002 %) |
+| 1AON 0.5 Å | 2 168 558 | 2.0·10⁻⁷ / 2.9·10⁻³ | 1.70·10⁻⁶ / 5.97·10⁻⁵ | 1.70·10⁻⁶ / 5.97·10⁻⁵ | 422 / 15 | 164 (0.008 %) |
+| 1AON 0.25 Å | 8 735 182 | 1.6·10⁻⁷ / 5.8·10⁻³ | 1.66·10⁻⁶ / 6.02·10⁻⁵ | 1.66·10⁻⁶ / 6.02·10⁻⁵ | 1 423 / 73 | 109 (0.001 %) |
+| 3J3Q 1 Å | 24 285 582 | 3.0·10⁻⁷ / 1.5·10⁻³ | 8.04·10⁻⁶ / 4.97·10⁻⁴ | 8.04·10⁻⁶ / 4.97·10⁻⁴ | 6 828 / 217 | 7 855 (0.032 %) |
+| 1AON SAS 0.25 Å | 7 661 292 | 3.0·10⁻⁷ / 0.14 | 1.45·10⁻⁶ / 6.07·10⁻⁵ | — / 6.07·10⁻⁵ | 0 / 4 | 278 (0.004 %) |
+| 1AON vdW 0.25 Å | 17 054 694 | 1.5·10⁻⁷ / 0.096 | 1.73·10⁻⁶ / 6.26·10⁻⁵ | — / 6.26·10⁻⁵ | 0 / 2 | 817 (0.005 %) |
+
+* **The largest \|F\| is the CPU's in every run,** and on SES so are the
+  mean and the count above 10⁻⁴ Å (0, except 15 369 on both sides for
+  3J3Q at 1 Å). These come from the edge clamp (vertices pushed off a
+  sample, ≥ 4 f32 ulps of the coordinates), not from refinement. So the f32
+  refinement keeps the exact path's bound; the f32 error of §3.4 does not
+  show above TOL.
+* 99.2–99.97 % of the vertices are within 10⁻⁵ Å of the CPU's. Larger
+  differences are on edges the surface nearly touches, where both roots
+  meet TOL, and on a few SAS/vdW edges that cross the surface three times:
+  each side found another root (0.14 Å, the normal of another sphere,
+  119–149°).
+* SES normals differ by at most 0.05–0.6°, except at 3 of 24 M vertices
+  of 3J3Q (76°): ties between features at a crease, where either normal
+  is valid.
+* The device spends as many evaluations per edge as the CPU (2.17–2.87):
+  the f32 iteration follows the f64 one.
+* 0.001–0.03 % of the edges do not converge in the Newton/Illinois phase
+  and are bisected. T11.5′ refines them on the CPU in f64.
+
+**Times** (best of 3, 16 threads, batches of 8 192 bricks; device and CPU
+measured apart). The projection assumes the pipeline of T11.3′: its mesh
+stage is max(device sampling, CPU exact meshing); in fast mode it is
+max(device sampling + refinement, host edge lists + CPU placement and cell
+pass).
+
+| Input | Device sample / refine | Host edge lists | CPU exact | CPU from device | Mesh stage T11.3′ → fast | Gain |
+|---|---|---|---|---|---|---|
+| 4HHB 0.25 Å | 0.016 / 0.013 s | 0.005 s | 0.091 s | 0.007 s | 0.091 → 0.029 s | 3.16× |
+| 1AON 0.5 Å | 0.079 / 0.097 s | 0.013 s | 0.609 s | 0.018 s | 0.609 → 0.176 s | 3.46× |
+| 1AON 0.25 Å | 0.219 / 0.184 s | 0.064 s | 1.369 s | 0.086 s | 1.369 → 0.403 s | 3.40× |
+| 3J3Q 1 Å | 1.385 / 2.716 s | 0.144 s | 15.14 s | 0.204 s | 15.14 → 4.10 s | 3.69× |
+| 1AON SAS 0.25 Å | 0.020 / 0.006 s | 0.059 s | 0.135 s | 0.085 s | 0.135 → 0.144 s | 0.94× |
+| 1AON vdW 0.25 Å | 0.019 / 0.012 s | 0.099 s | 0.253 s | 0.120 s | 0.253 → 0.219 s | 1.15× |
+
+End to end, replacing the measured T11.3′ mesh stage (§5.3) with the
+projected one:
+
+| Input | CPU | T11.3′ | Fast mode (projected) | Gain over CPU |
+|---|---|---|---|---|
+| 4HHB 0.25 Å | 240 ms | 196 ms | ≈ 110 ms | ≈ 2.2× |
+| 1AON 0.5 Å | 1 393 ms | 1 030 ms | ≈ 540 ms | ≈ 2.6× |
+| 1AON 0.25 Å | 3 407 ms | 2 355 ms | ≈ 1 300 ms | ≈ 2.6× |
+| 3J3Q 1 Å | 29.0 s | 23.6 s | ≈ 11.8 s | ≈ 2.5× |
+
+* For SES the device becomes the bound of the mesh stage; the cores are
+  left with 0.5–1.5 % of their exact-path work.
+* For SAS and vdW the CPU refinement is cheap (small sphere lists), so
+  listing edges on the host costs as much as the device saves. T11.5′
+  lists them on the device.
+
+**Decision.** Build T11.5′ (§5.3), following the plan: fast mode is opt-in,
+never the default.
 
 ## 6. Sources
 

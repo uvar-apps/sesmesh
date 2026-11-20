@@ -30,6 +30,9 @@ pub(crate) mod gpu;
 #[cfg(all(test, feature = "hip"))]
 #[path = "gpu_s1.rs"]
 mod gpu_s1;
+#[cfg(all(test, feature = "hip"))]
+#[path = "gpu_s2.rs"]
+mod gpu_s2;
 
 /// Largest vector width (f32 lanes, AVX-512); sample buffers are padded to a
 /// multiple of it so no scalar tail path exists (bitwise consistency, P7).

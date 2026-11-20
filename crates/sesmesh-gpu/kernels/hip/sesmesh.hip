@@ -399,3 +399,322 @@ extern "C" __global__ void sesmesh_resident_sample(ResidentParams p) {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Vertex refinement in f32 (spike S2, docs/gpu-prior-art.md §3.4): the
+// safeguarded Newton / Illinois iteration and bisection of `vertex()`
+// (crates/sesmesh/src/mesh/extract.rs) on crossing edges, against the lists
+// of the edge's sub-block. One workgroup per group of edges of one
+// (brick, sub-block), one lane per edge.
+//
+// Coordinates are local to the brick origin O. A candidate's offset c − O is
+// formed from double-float pairs: its frame-local f32 position plus the f32
+// residual of that rounding, and O·h as an exact f32 product plus its error
+// (fmaf) plus O·h_lo. So the f32 rounding of frame-local coordinates (up to
+// 1.5e-5 Å at 500 Å) does not enter; local values stay below ~10 Å.
+//
+// Outputs per edge: t (the last evaluated parameter, unclamped), the feature
+// of that evaluation (kind << 29 | id), its closest point (local), and the
+// evaluation count with bit 31 set when Newton / Illinois converged.
+
+#define FEAT_SOLVENT 0u
+#define FEAT_BEYOND 1u
+#define FEAT_SPHERE 2u
+#define FEAT_CIRCLE 3u
+#define FEAT_VERTEX 4u
+#define FEAT_SHIFT 29
+
+struct RefineParams {
+    const float *plx, *ply, *plz;  // sphere centre residuals
+    const float *clx, *cly, *clz;  // circle centre residuals
+    const float *vlx, *vly, *vlz;  // vertex residuals
+    const unsigned* groups;        // 4 per group: brick, sub-block, first edge, edges
+    const unsigned* edges;         // x | y << 4 | z << 8 | axis << 12 (lower sample)
+    float* t_out;
+    unsigned* feat_out;
+    float* q_out;                  // 3 per edge
+    unsigned* evals_out;
+    unsigned n_groups, n_edges, max_iter, max_bisect;
+    float h_hi, h_lo, tol, pad;
+};
+
+// O·h as a double-float pair (hi, lo).
+__device__ static void origin_df(int o, float h_hi, float h_lo, float& hi, float& lo) {
+    const float of = (float)o;
+    hi = of * h_hi;
+    lo = fmaf(of, h_hi, -hi) + of * h_lo;
+}
+
+struct Local {
+    float ohx, olx, ohy, oly, ohz, olz;  // origin pairs (hi, lo) per axis
+};
+
+__device__ static float loc(float hi, float lo, float ohi, float olo) {
+    return (hi - ohi) + (lo - olo);
+}
+
+struct PointEval {
+    float value;
+    unsigned feat;
+    float qx, qy, qz;
+};
+
+__device__ static bool unblocked_local(const ResidentParams& p, const RefineParams& r,
+                                       const Local& o, const unsigned* items, unsigned b0,
+                                       unsigned b1, float qx, float qy, float qz) {
+    for (unsigned b = b0; b < b1; b++) {
+        const unsigned k = items[b];
+        if (k >= p.n_spheres) return false;  // invalid input only
+        if (p.status[k] == STATUS_CONTAINED) continue;
+        const float ex = qx - loc(p.px[k], r.plx[k], o.ohx, o.olx);
+        const float ey = qy - loc(p.py[k], r.ply[k], o.ohy, o.oly);
+        const float ez = qz - loc(p.pz[k], r.plz[k], o.ohz, o.olz);
+        if (!(ex * ex + ey * ey + ez * ez >= p.pr2tol[k])) return false;
+    }
+    return true;
+}
+
+// eval_local in f32, local coordinates: value, feature and closest point.
+__device__ static PointEval eval_point(const ResidentParams& p, const RefineParams& r,
+                                       const Local& o, const unsigned* l, const unsigned* n,
+                                       float x, float y, float z) {
+    PointEval e;
+    if (p.kind != KIND_SES) {
+        e.value = p.band;
+        e.feat = FEAT_BEYOND << FEAT_SHIFT;
+        for (unsigned q = 0; q < n[0]; q++) {
+            const unsigned k = l[q];
+            if (k >= p.n_spheres) continue;
+            const float dx = x - loc(p.px[k], r.plx[k], o.ohx, o.olx);
+            const float dy = y - loc(p.py[k], r.ply[k], o.ohy, o.oly);
+            const float dz = z - loc(p.pz[k], r.plz[k], o.ohz, o.olz);
+            const float v = sqrtf(dx * dx + dy * dy + dz * dz) - p.pr[k];
+            if (v < e.value) {
+                e.value = v;
+                e.feat = (FEAT_SPHERE << FEAT_SHIFT) | k;
+            }
+        }
+        e.qx = x;
+        e.qy = y;
+        e.qz = z;
+        return e;
+    }
+    bool inside = false;
+    for (unsigned q = 0; q < n[0] && !inside; q++) {
+        const unsigned k = l[q];
+        if (k >= p.n_spheres) continue;
+        const float dx = x - loc(p.px[k], r.plx[k], o.ohx, o.olx);
+        const float dy = y - loc(p.py[k], r.ply[k], o.ohy, o.oly);
+        const float dz = z - loc(p.pz[k], r.plz[k], o.ohz, o.olz);
+        inside = sqrtf(dx * dx + dy * dy + dz * dz) < p.pr[k];
+    }
+    e.qx = x;
+    e.qy = y;
+    e.qz = z;
+    if (!inside) {
+        e.value = p.probe;
+        e.feat = FEAT_SOLVENT << FEAT_SHIFT;
+        return e;
+    }
+    float best = p.probe + p.band;
+    e.feat = FEAT_BEYOND << FEAT_SHIFT;
+    const unsigned *s = l + n[0], *c = s + n[1], *v = c + n[2];
+    for (unsigned i = 0; i < n[1]; i++) {
+        const unsigned k = s[i];
+        if (k >= p.n_spheres) continue;
+        const float cx = loc(p.px[k], r.plx[k], o.ohx, o.olx);
+        const float cy = loc(p.py[k], r.ply[k], o.ohy, o.oly);
+        const float cz = loc(p.pz[k], r.plz[k], o.ohz, o.olz);
+        const float dx = x - cx, dy = y - cy, dz = z - cz;
+        const float len = sqrtf(dx * dx + dy * dy + dz * dz);
+        const float lb = fabsf(len - p.pr[k]);
+        if (lb >= best || len < 1e-12f) continue;
+        const float sc = p.pr[k] / len;
+        const float qx = cx + dx * sc, qy = cy + dy * sc, qz = cz + dz * sc;
+        if (unblocked_local(p, r, o, p.nb_items, p.nb_off[k], p.nb_off[k + 1], qx, qy, qz)) {
+            best = lb;
+            e.feat = (FEAT_SPHERE << FEAT_SHIFT) | k;
+            e.qx = qx;
+            e.qy = qy;
+            e.qz = qz;
+        }
+    }
+    for (unsigned i = 0; i < n[2]; i++) {
+        const unsigned ci = c[i];
+        if (ci >= p.n_circles) continue;
+        const float mx = loc(p.cx[ci], r.clx[ci], o.ohx, o.olx);
+        const float my = loc(p.cy[ci], r.cly[ci], o.ohy, o.oly);
+        const float mz = loc(p.cz[ci], r.clz[ci], o.ohz, o.olz);
+        const float ux = p.ux[ci], uy = p.uy[ci], uz = p.uz[ci], rho = p.crho[ci];
+        const float yx = x - mx, yy = y - my, yz = z - mz;
+        const float along = yx * ux + yy * uy + yz * uz;
+        const float wx = yx - ux * along, wy = yy - uy * along, wz = yz - uz * along;
+        const float wl = sqrtf(wx * wx + wy * wy + wz * wz);
+        const float tt = wl - rho;
+        const float dist = sqrtf(along * along + tt * tt);
+        if (dist >= best) continue;
+        float qx, qy, qz;
+        if (wl > 1e-12f) {
+            qx = mx + (wx / wl) * rho;
+            qy = my + (wy / wl) * rho;
+            qz = mz + (wz / wl) * rho;
+        } else {
+            qx = mx + p.ex[ci] * rho;
+            qy = my + p.ey[ci] * rho;
+            qz = mz + p.ez[ci] * rho;
+        }
+        if (unblocked_local(p, r, o, p.cb_items, p.cb_off[ci], p.cb_off[ci + 1], qx, qy, qz)) {
+            best = dist;
+            e.feat = (FEAT_CIRCLE << FEAT_SHIFT) | ci;
+            e.qx = qx;
+            e.qy = qy;
+            e.qz = qz;
+        }
+    }
+    for (unsigned i = 0; i < n[3]; i++) {
+        const unsigned k = v[i];
+        if (k >= p.n_vertices) continue;
+        const float px = loc(p.vx[k], r.vlx[k], o.ohx, o.olx);
+        const float py = loc(p.vy[k], r.vly[k], o.ohy, o.oly);
+        const float pz = loc(p.vz[k], r.vlz[k], o.ohz, o.olz);
+        const float dx = x - px, dy = y - py, dz = z - pz;
+        const float d = sqrtf(dx * dx + dy * dy + dz * dz);
+        if (d < best) {
+            best = d;
+            e.feat = (FEAT_VERTEX << FEAT_SHIFT) | k;
+            e.qx = px;
+            e.qy = py;
+            e.qz = pz;
+        }
+    }
+    e.value = p.probe - best;
+    return e;
+}
+
+// Derivative of the field along the edge (direction `axis`, length h), from
+// the evaluation's exact gradient (`gradient()` in extract.rs); 0 without one.
+__device__ static float slope_of(const ResidentParams& p, const RefineParams& r, const Local& o,
+                                 const PointEval& e, float x, float y, float z, unsigned axis) {
+    const unsigned kind = e.feat >> FEAT_SHIFT;
+    if (kind == FEAT_SOLVENT || kind == FEAT_BEYOND) return 0.0f;
+    float wx, wy, wz;
+    if (p.kind == KIND_SES) {
+        wx = e.qx - x;
+        wy = e.qy - y;
+        wz = e.qz - z;
+    } else {
+        const unsigned k = e.feat & ((1u << FEAT_SHIFT) - 1);
+        wx = x - loc(p.px[k], r.plx[k], o.ohx, o.olx);
+        wy = y - loc(p.py[k], r.ply[k], o.ohy, o.oly);
+        wz = z - loc(p.pz[k], r.plz[k], o.ohz, o.olz);
+    }
+    const float len = sqrtf(wx * wx + wy * wy + wz * wz);
+    if (!(len > 1e-12f)) return 0.0f;
+    const float w = axis == 0 ? wx : (axis == 1 ? wy : wz);
+    return (w / len) * p.h;
+}
+
+extern "C" __global__ void sesmesh_resident_refine(ResidentParams p, RefineParams r) {
+    const unsigned g = blockIdx.x;
+    if (g >= r.n_groups) return;
+    const unsigned brick = r.groups[4 * g], sb = r.groups[4 * g + 1];
+    const unsigned first = r.groups[4 * g + 2], count = r.groups[4 * g + 3];
+    if (sb >= 8 || (unsigned long long)first + count > r.n_edges) return;  // invalid input only
+    const unsigned j = 8 * brick + sb;
+    if (j >= p.n_sub) return;
+    const unsigned* rec = p.rec + REC_WORDS * j;
+    if (rec[0] != ST_SAMPLE) return;
+    const unsigned base = rec[1];
+    const unsigned n[5] = {rec[2], rec[3], rec[4], rec[5], rec[6]};
+    const unsigned long long total = (unsigned long long)n[0] + n[1] + n[2] + n[3] + n[4];
+    if ((unsigned long long)base + total > p.ids_len) return;
+    const unsigned* l = p.ids + base;
+    const unsigned side = p.b + 1;
+    const unsigned long long spb = (unsigned long long)side * side * side;
+    if ((unsigned long long)(brick + 1) * spb > p.values_len) return;
+    const float* val = p.values + brick * spb;
+    Local o;
+    origin_df(p.bricks[3 * brick], r.h_hi, r.h_lo, o.ohx, o.olx);
+    origin_df(p.bricks[3 * brick + 1], r.h_hi, r.h_lo, o.ohy, o.oly);
+    origin_df(p.bricks[3 * brick + 2], r.h_hi, r.h_lo, o.ohz, o.olz);
+    const float h = r.h_hi;
+    for (unsigned q = threadIdx.x; q < count; q += blockDim.x) {
+        const unsigned id = first + q;
+        const unsigned code = r.edges[id];
+        const unsigned ex = code & 15u, ey = (code >> 4) & 15u, ez = (code >> 8) & 15u,
+                       axis = (code >> 12) & 3u;
+        if (ex >= p.b || ey >= p.b || ez >= p.b || axis > 2) continue;
+        const unsigned i0 = ex + side * (ey + side * ez);
+        const unsigned st = axis == 0 ? 1u : (axis == 1 ? side : side * side);
+        const float fa = val[i0], fb = val[i0 + st];
+        // Lower end, local: integer offsets times h (double-float h).
+        const float ax = (float)ex * h + (float)ex * r.h_lo;
+        const float ay = (float)ey * h + (float)ey * r.h_lo;
+        const float az = (float)ez * h + (float)ez * r.h_lo;
+        const float hd = h + r.h_lo;  // edge length
+        auto at = [&](float t, float& x, float& y, float& z) {
+            x = ax + (axis == 0 ? hd * t : 0.0f);
+            y = ay + (axis == 1 ? hd * t : 0.0f);
+            z = az + (axis == 2 ? hd * t : 0.0f);
+        };
+        float t = fminf(fmaxf(fa / (fa - fb), 0.0f), 1.0f);
+        float t0 = 0.0f, g0 = fa, t1 = 1.0f, g1 = fb;
+        int side_ = 0;
+        bool converged = false;
+        unsigned evals = 0;
+        PointEval last;
+        last.feat = FEAT_BEYOND << FEAT_SHIFT;
+        last.qx = last.qy = last.qz = 0.0f;
+        last.value = 0.0f;
+        float x, y, z;
+        for (unsigned it = 0; it < r.max_iter; it++) {
+            at(t, x, y, z);
+            const PointEval e = eval_point(p, r, o, l, n, x, y, z);
+            evals++;
+            last = e;
+            const float gv = e.value;
+            if (fabsf(gv) <= r.tol) {
+                converged = true;
+                break;
+            }
+            if ((gv < 0.0f) == (g0 < 0.0f)) {
+                t0 = t;
+                g0 = gv;
+                if (side_ == -1) g1 *= 0.5f;
+                side_ = -1;
+            } else {
+                t1 = t;
+                g1 = gv;
+                if (side_ == 1) g0 *= 0.5f;
+                side_ = 1;
+            }
+            const float slope = slope_of(p, r, o, e, x, y, z, axis);
+            const float newton = t - gv / slope;
+            if (fabsf(slope) > 1e-3f * hd && newton > t0 && newton < t1) {
+                t = newton;
+            } else {
+                const float s = (t0 * g1 - t1 * g0) / (g1 - g0);
+                t = (isfinite(s) && s > t0 && s < t1) ? s : 0.5f * (t0 + t1);
+            }
+        }
+        if (!converged) {
+            const bool neg0 = g0 < 0.0f;
+            for (unsigned it = 0; it < r.max_bisect; it++) {
+                t = 0.5f * (t0 + t1);
+                at(t, x, y, z);
+                const PointEval e = eval_point(p, r, o, l, n, x, y, z);
+                evals++;
+                last = e;
+                if (fabsf(e.value) <= r.tol || (t1 - t0) * hd <= 2.0f * r.tol) break;
+                if ((e.value < 0.0f) == neg0) t0 = t;
+                else t1 = t;
+            }
+        }
+        r.t_out[id] = t;
+        r.feat_out[id] = last.feat;
+        r.q_out[3 * id] = last.qx;
+        r.q_out[3 * id + 1] = last.qy;
+        r.q_out[3 * id + 2] = last.qz;
+        r.evals_out[id] = evals | (converged ? 0x80000000u : 0u);
+    }
+}

@@ -116,7 +116,7 @@ impl ChunkMesh {
 /// references are local to the brick). Only signs are used for case
 /// selection; crossing edges have exact sample values at both ends (Engine
 /// docs), refined further with the exact `f64` field.
-fn mesh_brick(
+pub(crate) fn mesh_brick(
     engine: &Engine,
     key: [i32; 3],
     values: &[f32],
@@ -192,6 +192,12 @@ fn mesh_brick(
     }
     // Cells can cross only on edges owned by "+" neighbours, so the cell
     // pass runs even when this brick owns no vertex.
+    cells(b, values, out);
+}
+
+/// The cell pass of [`mesh_brick`]: triangles as edge references.
+fn cells(b: usize, values: &[f32], out: &mut BrickMesh) {
+    let s = b + 1;
     let corner_step: [usize; 8] = std::array::from_fn(|c| {
         let o = corner_offset(c);
         o[0] + o[1] * s + o[2] * s * s
@@ -228,6 +234,92 @@ fn mesh_brick(
                 }
             }
         }
+    }
+}
+
+/// A crossing edge refined elsewhere (spike S2, `field/gpu_s2.rs`): the
+/// last evaluated edge parameter, its feature and closest point.
+#[cfg(all(test, feature = "hip"))]
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Refined {
+    pub(crate) t: f64,
+    pub(crate) feature: Feature,
+    pub(crate) closest: Vec3,
+}
+
+/// [`mesh_brick`] with the vertices of the crossing edges, in its edge
+/// order, placed from `refined` instead of refined here.
+#[cfg(all(test, feature = "hip"))]
+pub(crate) fn mesh_brick_refined(
+    engine: &Engine,
+    key: [i32; 3],
+    values: &[f32],
+    refined: &[Refined],
+    out: &mut BrickMesh,
+) {
+    let lat = &engine.lattice;
+    let b = lat.b as usize;
+    let s = b + 1;
+    let stride = [1, s, s * s];
+    let origin = lat.brick_origin(key);
+    let t_min = edge_clamp(engine);
+    let mut next = refined.iter();
+    for z in 0..b {
+        for y in 0..b {
+            for x in 0..b {
+                let i = (z * s + y) * s + x;
+                let va = values[i];
+                for (axis, &st) in stride.iter().enumerate() {
+                    let vb = values[i + st];
+                    if (va < 0.0) == (vb < 0.0) {
+                        continue;
+                    }
+                    let ia = [
+                        origin[0] + x as i64,
+                        origin[1] + y as i64,
+                        origin[2] + z as i64,
+                    ];
+                    let mut ib = ia;
+                    ib[axis] += 1;
+                    let (pa, pb) = (lat.point(ia), lat.point(ib));
+                    let d = pb - pa;
+                    let r = next.next().expect("one result per crossing edge");
+                    let v = pa + d * r.t.clamp(t_min, 1.0 - t_min);
+                    let e = NearEval {
+                        value: 0.0,
+                        feature: r.feature,
+                        closest: r.closest,
+                    };
+                    let outward = if va < 0.0 { d } else { -d }.normalized();
+                    let (normal, patch, atom) = attributes(engine, v, &e, outward);
+                    out.positions.push(v.to_array().map(|c| c as f32));
+                    out.normals.push(normal.to_array().map(|c| c as f32));
+                    out.atoms.push(atom);
+                    out.patches.push(patch);
+                    out.edges.push((((z * b + y) * b + x) * 3 + axis) as u32);
+                }
+            }
+        }
+    }
+    assert!(next.next().is_none(), "one result per crossing edge");
+    cells(b, values, out);
+}
+
+#[cfg(all(test, feature = "hip"))]
+impl BrickMesh {
+    /// Vertices: positions, normals, atoms, patches.
+    #[allow(clippy::type_complexity, reason = "test only")]
+    pub(crate) fn vertices(&self) -> (&[[f32; 3]], &[[f32; 3]], &[u32], &[PatchKind]) {
+        (&self.positions, &self.normals, &self.atoms, &self.patches)
+    }
+
+    /// Triangles (packed references).
+    pub(crate) fn triangles(&self) -> &[[u32; 3]] {
+        &self.tris
+    }
+
+    pub(crate) fn clear(&mut self) {
+        *self = Self::default();
     }
 }
 
