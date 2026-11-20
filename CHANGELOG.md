@@ -22,6 +22,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   takes 2.36 s instead of 3.41 s, 3J3Q at 1 Å 23.6 s instead of 29.0 s.
   The first device sampling design (CPU-gathered jobs staged for the
   device) was slower than the CPU and was replaced before release.
+- Fast mode for previews (Phase 11, T11.5′): `RefineMode::Fast` and
+  `--refine fast`. On a GPU back end the device also refines the crossing
+  edges, in f32 in brick-local double-float coordinates (no f64 on the
+  device), and lists them itself; the CPU places the vertices and refines
+  in f64 the edges the device did not converge on (counted in
+  `SurfaceStats::refine_cpu_edges`, and in the statistics JSON as
+  `engine.refine_cpu_edges` in fast mode only). Same triangles as exact
+  mode; vertices as close to the surface (the same largest |F| on every
+  input of spike S2, `docs/gpu-prior-art.md` §5.4), but not bit-identical:
+  positions differ in the last bits, and at ties the normal, patch kind or
+  nearest atom. On the CPU back end `fast` is `exact`. Opt-in; the default
+  output is unchanged. On the Ryzen AI Max+ 395 1AON at 0.25 Å takes 1.46 s
+  (2.32 s exact on the GPU, 3.35 s on the CPU), 3J3Q at 1 Å 12.7 s (23.5 s,
+  28.9 s).
 - Ambient occlusion by post-processing with aomesh (#27):
   `tools/ao/ses_ao.py` runs sesmesh to OBJ and then aomesh 0.4.0 or later,
   which writes per-vertex AO as texture coordinates over a grey ramp

@@ -100,7 +100,7 @@ Fe = 2.0
 | `--decimate R` | | Decimate to the fraction R (0–1] of the triangles |
 | `--max-triangles N` | | Decimate to at most N triangles (with `--decimate`: the smaller target wins) |
 | `--decimate-error E` | no bound | Never collapse an edge whose quadric error exceeds E Å; wins over the targets |
-| `--refine exact\|linear` | `exact` | Vertex placement: exact root on each grid edge, or linear interpolation (faster) |
+| `--refine exact\|linear\|fast` | `exact` | Vertex placement: exact root on each grid edge, linear interpolation (faster), or `fast`: the root found in f32 on the GPU back end (previews; same triangles as `exact`, positions differ in the last bits; on the CPU back end the same as `exact`) |
 | `--brick-size N` | 10 | Brick edge in cells (expert) |
 
 Errors decrease as h²: on proteins about −0.2 % area and −0.02 % volume at
@@ -207,6 +207,17 @@ byte. On a Ryzen AI Max+ 395 (16 Zen 5 cores, Radeon 8060S) runs take
 Inputs that need the f64 sampling path (lattice points more than 2 000 Å
 from the structure's centre) and brick sizes that are odd or below 4 are
 sampled on the CPU.
+
+`--refine fast` with `--backend hip` (or `auto` on a GPU) also refines the
+vertices on the device, in f32 (fast mode, for previews). The triangles are
+those of `--refine exact` and the vertices as close to the surface (the same
+largest |F| on every input measured), but the files are not the exact
+mode's: positions differ in the last bits, and where two patches tie the
+normal, patch kind or nearest atom can differ. Edges the device does not
+converge on (≈ 0.001–0.03 %) are refined on the CPU in f64; the statistics
+JSON counts them (`engine.refine_cpu_edges`, fast mode only). Repeated runs
+on the same device give the same files. Where the CPU samples the field,
+`fast` is `exact`.
 
 Ctrl-C (SIGINT) cancels the computation within about 100 ms and exits with
 code 130; in batch mode no further input is started. A closed standard

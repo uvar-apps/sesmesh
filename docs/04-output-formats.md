@@ -155,6 +155,9 @@ column sums to the total area of the written mesh.
 * With decimation, `parameters.decimation` is
   `{"ratio": 0.25, "max_triangles": null, "max_error": null}` and
   `mesh.triangles_before_decimation` the triangle count before it.
+* With `--refine fast`, `engine.refine_cpu_edges` counts the crossing edges
+  refined on the CPU because the GPU did not converge on them (0 on the
+  CPU back end); the key is absent in the other modes.
 * With `--max-memory`, `engine.estimated_triangles` and
   `engine.estimated_memory` (bytes) are the memory guard's estimate at the
   grid spacing used (`null` without a limit).

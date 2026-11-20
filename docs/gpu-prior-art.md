@@ -72,7 +72,9 @@ Zen 5 cores (Ryzen AI Max+ 395), sesmesh 1.1.2.
     differ in the last bits (§3.4). This is opt-in only. Spike S2 (§5.4)
     measured it: the vertices are as close to the surface as the CPU's
     (the same largest \|F\| on every input), and the projected gain is
-    3.2–3.7× for the SES mesh stage, ≈ 2.2–2.6× end to end.
+    3.2–3.7× for the SES mesh stage, ≈ 2.2–2.6× end to end. Built as
+    `RefineMode::Fast` (T11.5′, §5.5): SES runs take 1.64–2.29× less time
+    than on the CPU, with the exact mode's faces.
   * **Earlier claim withdrawn.** The "exact ≈ 1.6×" of `docs/05-gpu-hip.md`
     assumed f64 refinement on the device.
 
@@ -466,7 +468,7 @@ run S2 (the f32 refinement that the remaining time is mostly spent in).
 |---|---|---|
 | T11.3′ | Exact device sampling. Arrangement uploaded once (f32 copies the CPU computes). Device element grid, classification, gathering, K2, per batch of bricks. CPU refinement overlapped. Allocation from counts and the device's reported memory, no fixed budgets. | Byte-identical output on the existing gate (1 536 SES, 424 SAS/vdW, 210 option-set runs, test suite); identical under thread counts and batch sizes; cancel < 100 ms; times for 4HHB, 1AON and 3J3Q on 16 cores vs device. |
 | T11.4′ | Refinement-gather lists from the device. S1: exact, but ≤ 0.05× for 31–43 % more list memory; not planned. | Byte-identical as in T11.3′. |
-| T11.5′ | Opt-in fast mode: f32 refinement on the device, f64 CPU fallback for flagged edges. S2 (§5.4): vertices as close to the surface as the CPU's; SES mesh stage ≈ 3.2–3.7× faster than T11.3′ (projected). | Same connectivity; vertex bound from S2; the Phase 9 accuracy study repeated; area and volume against the exact output; repeat runs identical. |
+| T11.5′ | Opt-in fast mode: f32 refinement on the device, f64 CPU fallback for flagged edges. S2 (§5.4): vertices as close to the surface as the CPU's; SES mesh stage ≈ 3.2–3.7× faster than T11.3′ (projected). Done (§5.5). | Same connectivity; vertex bound from S2; the Phase 9 accuracy study repeated; area and volume against the exact output; repeat runs identical. |
 | T11.6′ | Benchmarks, docs, release (old T11.8–T11.9). | Local validation list plus GPU tests. |
 
 **T11.3′ status (2026-11-21): done.** `sesmesh::field::gpu` with
@@ -605,6 +607,82 @@ projected one:
 
 **Decision.** Build T11.5′ (§5.3), following the plan: fast mode is opt-in,
 never the default.
+
+### 5.5 T11.5′ status (2026-11-21): done
+
+`RefineMode::Fast` (`--refine fast`). With a HIP device and the device path
+(`Engine::device_ok`), each batch runs, after classification, gathering and
+sampling:
+
+* **an edge count pass:** one workgroup per sub-block counts its crossing
+  edges; the host scans the counts into result offsets (sized from need);
+* **the refinement pass:** one workgroup per sub-block lists its crossing
+  edges in the CPU's z, y, x, axis order (an inclusive scan in LDS per
+  round of 64 candidates, into a buffer of up to 127 codes) and refines 64
+  at a time, as in S2.
+
+The meshing threads then take each brick's results (`DeviceEdges`):
+`extract::mesh_brick_device` walks the edges in `mesh_brick`'s order,
+places converged vertices from the device's parameter, feature and closest
+point (edge clamp and attributes as in exact mode), refines the others in
+f64 against `gather_local` lists, and runs the cell pass. On the CPU back
+end, or where the CPU samples, `Fast` is `Exact` (test
+`fast_refinement_on_the_cpu_is_exact`).
+
+S2 rerun with the device listing the edges (same host):
+
+| Input | Device sample / edges + refine | CPU exact | CPU from device | Mesh stage T11.3′ → fast (projected) |
+|---|---|---|---|---|
+| 4HHB 0.25 Å | 0.015 / 0.015 s | 0.099 s | 0.007 s | 0.099 → 0.030 s (3.31×) |
+| 1AON 0.5 Å | 0.083 / 0.102 s | 0.606 s | 0.021 s | 0.606 → 0.186 s (3.27×) |
+| 1AON 0.25 Å | 0.220 / 0.213 s | 1.383 s | 0.102 s | 1.383 → 0.433 s (3.19×) |
+| 3J3Q 1 Å | 1.427 / 3.028 s | 15.10 s | 0.304 s | 15.10 → 4.46 s (3.39×) |
+| 1AON SAS 0.25 Å | 0.019 / 0.017 s | 0.133 s | 0.095 s | 0.133 → 0.095 s (1.39×) |
+| 1AON vdW 0.25 Å | 0.019 / 0.025 s | 0.246 s | 0.132 s | 0.246 → 0.132 s (1.87×) |
+
+The vertex statistics are those of §5.4, except that the unconverged edges
+(11 to 7 855 per input) now get the CPU's f64 vertices.
+
+Times, best of 5 with the CLI writing OBJ to `/dev/null` (device open,
+≈ 45 ms per process, excluded); total, with the mesh stage in brackets:
+
+| Input | CPU exact | HIP exact (T11.3′) | HIP fast | Fast vs CPU | Fast vs HIP exact |
+|---|---|---|---|---|---|
+| 4HHB 0.25 Å | 231 (161) ms | 188 (111) ms | 141 (63) ms | 1.64× | 1.33× |
+| 1AON 0.5 Å | 1 367 (1 035) ms | 1 031 (674) ms | 596 (255) ms | 2.29× | 1.73× |
+| 1AON 0.25 Å | 3 349 (2 473) ms | 2 318 (1 446) ms | 1 464 (598) ms | 2.29× | 1.58× |
+| 3J3Q 1 Å | 28.9 (21.4) s | 23.5 (15.9) s | 12.7 (5.2) s | 2.28× | 1.85× |
+| 1AON SAS 0.25 Å | 922 (254) ms | 838 (161) ms | 822 (133) ms | 1.12× | 1.02× |
+| 1AON vdW 0.25 Å | 1 753 (355) ms | 1 681 (268) ms | 1 587 (180) ms | 1.10× | 1.06× |
+
+* The SES mesh stage is 2.4–3.1× shorter than T11.3′'s. That is short of
+  S2's projection (3.2–3.4×), because the first batch is not overlapped and
+  the batches are small (one 64-brick chunk per pool thread).
+* With the mesh stage at 0.6 s of 1.46 s (1AON 0.25 Å) and 5.2 of 12.7 s
+  (3J3Q), the rest of the run dominates: arrangement, assembly, measure,
+  write. SAS and vdW runs were already mostly outside the mesh stage.
+* In fast mode the device bounds the mesh stage; the cores mostly wait.
+
+Gate, on the same host: each input meshed with `--backend cpu` (exact) and
+twice with `--backend hip --refine fast`. The inputs were SES at 1, 0.5
+and 0.25 Å on the 256 gate inputs (768 runs), and SAS and vdW at 1 and
+0.5 Å on the 53 validation inputs (212 runs):
+
+* every exit code agrees, every OBJ face line is the exact mode's, and both
+  fast runs write the same bytes;
+* area and volume differ from exact mode by at most 3.5·10⁻⁷ (relative;
+  mean 7·10⁻⁹). So the accuracy study of Phase 9 (−0.20 % area, −0.02 %
+  volume at 0.25 Å against the h → 0 extrapolation) holds for fast mode
+  unchanged;
+* 0–729 edges per SES run (17 972 in all) and 0–2 458 per SAS/vdW run
+  were refined on the CPU.
+
+The device tests add: fast meshes are the same for batches of 1, 2 and all
+chunks, with the exact triangles and no vertex farther from the surface
+than the exact mode's worst plus 10⁻⁵ Å (`fast_meshes_match_exact_meshes`);
+with no converged edge, fast meshing gives the exact bricks
+(`unconverged_edges_are_refined_exactly`); cancellation stays below 100 ms
+in fast mode (`cancellation_is_prompt`).
 
 ## 6. Sources
 

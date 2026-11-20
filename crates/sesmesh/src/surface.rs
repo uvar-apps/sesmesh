@@ -111,6 +111,15 @@ pub enum RefineMode {
     /// Linear interpolation of the sampled values (faster, vertices within
     /// about `h²/8r` of the surface).
     Linear,
+    /// The root found in `f32` on a GPU back end (fast mode, for previews):
+    /// the device refines the crossing edges as well as sampling the field.
+    /// The triangles are those of [`RefineMode::Exact`] and the vertices as
+    /// close to the surface, but positions differ in the last bits, and at
+    /// ties the normal, patch kind or nearest atom can differ. Edges the
+    /// device does not converge on are refined on the CPU. Where the CPU
+    /// samples the field (the CPU back end, or a grid the device path does
+    /// not take), the same as [`RefineMode::Exact`].
+    Fast,
 }
 
 impl RefineMode {
@@ -119,6 +128,7 @@ impl RefineMode {
         match self {
             Self::Exact => "exact",
             Self::Linear => "linear",
+            Self::Fast => "fast",
         }
     }
 }
@@ -525,8 +535,12 @@ pub struct SurfaceStats {
     pub decimation: Option<mesh::DecimationStats>,
     /// Euler characteristic of the whole mesh.
     pub euler: i64,
-    /// Exact field evaluations spent on vertex placement.
+    /// Exact field evaluations spent on vertex placement (with
+    /// [`RefineMode::Fast`] on a GPU, the device's `f32` evaluations too).
     pub refine_evaluations: u64,
+    /// [`RefineMode::Fast`] on a GPU: crossing edges refined on the CPU
+    /// because the device did not converge on them (0 otherwise).
+    pub refine_cpu_edges: u64,
     /// Kernel instruction set used (CPU).
     pub simd: &'static str,
     /// Back end used: `cpu` or `hip` (see [`SurfaceParams::backend`]).
@@ -955,12 +969,16 @@ fn mesh_stage(
         let parts = engine.fold_brick_chunks_hip(
             device,
             crate::field::Batching::default(),
+            refine == RefineMode::Fast,
             bricks,
             chunk,
             control,
             Stage::Mesh,
             extract::ChunkMesh::default,
-            push,
+            |part, key, values, edges| match edges {
+                Some(edges) => part.push_device(engine, key, values, edges),
+                None => push(part, key, values),
+            },
         )?;
         return Ok((parts, chunk));
     }
@@ -1057,6 +1075,7 @@ fn run(
 
     control.report(Stage::Assemble, 0, 1);
     let refine_evaluations = parts.iter().map(extract::ChunkMesh::evals).sum();
+    let refine_cpu_edges = parts.iter().map(extract::ChunkMesh::cpu_refined).sum();
     let mesh = extract::assemble(&bricks, chunk, parts)?;
     control.check()?;
     control.report(Stage::Assemble, 1, 1);
@@ -1150,6 +1169,7 @@ fn run(
         decimation,
         euler: components.iter().map(|c| c.euler).sum(),
         refine_evaluations,
+        refine_cpu_edges,
         simd,
         backend: backend.name(),
         device: backend.device(),
@@ -1322,16 +1342,18 @@ mod tests {
     fn cancellation_is_prompt() {
         let c = random_chain(&mut Rng::new(21), 400);
         let s = spheres(&c);
-        let mut backends = vec![Backend::Cpu];
+        let mut backends = vec![(Backend::Cpu, RefineMode::Exact)];
         if Resolved::new(&Backend::hip(0)).is_ok() {
-            backends.push(Backend::hip(0));
+            backends.push((Backend::hip(0), RefineMode::Exact));
+            backends.push((Backend::hip(0), RefineMode::Fast));
         }
-        for (backend, (stage, after)) in backends.into_iter().flat_map(|b| {
+        for ((backend, refine), (stage, after)) in backends.into_iter().flat_map(|b| {
             [(Stage::Geometry, 0), (Stage::Classify, 0), (Stage::Mesh, 1)].map(|s| (b, s))
         }) {
             let params = SurfaceParams::ses(c.probe)
                 .with_spacing(0.25)
-                .with_backend(backend);
+                .with_backend(backend)
+                .with_refine(refine);
             let flag = AtomicBool::new(false);
             let set_at = Mutex::new(None::<Instant>);
             let cb = |p: Progress| {
@@ -1345,13 +1367,13 @@ mod tests {
             let latency = set_at.lock().unwrap().expect("flag set").elapsed();
             assert!(
                 matches!(r, Err(Error::Cancelled)),
-                "{backend:?} {stage:?}: {:?}",
+                "{backend:?} {refine:?} {stage:?}: {:?}",
                 r.map(|o| o.stats)
             );
             let bound = if cfg!(debug_assertions) { 2.0 } else { 0.1 };
             assert!(
                 latency.as_secs_f64() < bound,
-                "{backend:?} {stage:?}: {latency:?}"
+                "{backend:?} {refine:?} {stage:?}: {latency:?}"
             );
         }
     }

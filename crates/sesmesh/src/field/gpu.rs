@@ -21,17 +21,27 @@
 //! in sub-blocks that only the device evaluates get their value instead of
 //! `±band`, with the same sign. Meshing reads the signs and the values at
 //! crossing-edge ends, so the mesh equals the CPU back end's.
+//!
+//! Fast mode ([`crate::RefineMode::Fast`], Plan T11.5′, docs/gpu-prior-art.md
+//! §5.4) also refines the crossing edges on the device, in `f32`
+//! ([`DeviceEdges`]); the CPU places the vertices from the results and
+//! refines in `f64` only the edges the device did not converge on. The
+//! connectivity is the exact path's; positions differ in the last bits.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use sesmesh_gpu::hip::{ArrangementRef, Batch, BatchParams, Device, GridRef, Resident};
+use sesmesh_gpu::hip::{
+    ArrangementRef, Batch, BatchParams, Device, EDGE_CONVERGED, FEATURE_BEYOND, FEATURE_CIRCLE,
+    FEATURE_SHIFT, FEATURE_SOLVENT, FEATURE_SPHERE, FEATURE_VERTEX, GridRef, RefineRef, Resident,
+};
 
 use super::{Engine, INSIDE_TOL};
 use crate::control::{Control, Stage};
 use crate::error::{Error, Result};
-use crate::field::SurfaceKind;
 use crate::field::lattice::CLASSIFY_EPS;
+use crate::field::{Feature, SurfaceKind};
 use crate::geom::{CellGrid, Status, Vec3};
+use crate::mesh::extract::{MAX_BISECT, MAX_ITER, TOL};
 use crate::par;
 
 /// Bricks per mesh chunk on the device path (at most).
@@ -67,6 +77,106 @@ impl Default for Batching {
 
 fn device_error(e: &sesmesh_gpu::Error) -> Error {
     Error::Backend(format!("hip: {e}"))
+}
+
+/// The device's refinement of one brick's crossing edges (fast mode): views
+/// into its refined [`Batch`].
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DeviceEdges<'a> {
+    /// First result of each of the brick's sub-blocks, then the end (9
+    /// entries, indices into the batch's results). A sub-block's edges are
+    /// those whose lower sample lies in it (`(v / sub).min(1)` per axis), in
+    /// `mesh_brick`'s order.
+    pub(crate) offsets: &'a [u32],
+    t: &'a [f32],
+    features: &'a [u32],
+    closest: &'a [f32],
+    evals: &'a [u32],
+}
+
+impl<'a> DeviceEdges<'a> {
+    /// Brick `i` of `batch`, if it was refined.
+    pub(super) fn of(batch: &'a Batch<'_>, i: usize) -> Option<Self> {
+        batch.refined().then(|| Self {
+            offsets: &batch.edge_offsets()[8 * i..8 * i + 9],
+            t: batch.edge_params(),
+            features: batch.edge_features(),
+            closest: batch.edge_closest(),
+            evals: batch.edge_evals(),
+        })
+    }
+
+    /// Result `k`: the edge parameter of the last evaluation, its feature and
+    /// closest point (relative to the brick origin), and the evaluations.
+    /// `None` where Newton / Illinois did not converge or a value is out of
+    /// range (invalid input only): the CPU refines those edges.
+    pub(crate) fn get(&self, engine: &Engine, k: usize) -> Option<(f64, Feature, Vec3, u32)> {
+        let evals = *self.evals.get(k)?;
+        if evals & EDGE_CONVERGED == 0 {
+            return None;
+        }
+        let t = f64::from(*self.t.get(k)?);
+        if !(0.0..=1.0).contains(&t) {
+            return None;
+        }
+        let f = self.features[k];
+        let id = f & ((1 << FEATURE_SHIFT) - 1);
+        let a = &engine.field.arr;
+        let below = |n: usize| (id as usize) < n;
+        let feature = match f >> FEATURE_SHIFT {
+            FEATURE_SOLVENT => Feature::Solvent,
+            FEATURE_BEYOND => Feature::Beyond,
+            FEATURE_SPHERE if below(a.centers.len()) => Feature::Sphere(id),
+            FEATURE_CIRCLE if below(a.circles.len()) => Feature::Circle(id),
+            FEATURE_VERTEX if below(a.vertices.len()) => Feature::Vertex(id),
+            _ => return None,
+        };
+        let q = &self.closest[3 * k..3 * k + 3];
+        let q = Vec3::new(f64::from(q[0]), f64::from(q[1]), f64::from(q[2]));
+        Some((t, feature, q, evals & !EDGE_CONVERGED))
+    }
+}
+
+/// Residuals of the frame-local `f32` copies (`f64` minus `f32`) of the
+/// sphere centres, circle centres and SAS vertices, x, y, z each.
+struct Residuals([[Vec<f32>; 3]; 3]);
+
+impl Residuals {
+    fn new(e: &Engine) -> Self {
+        let frame = e.lattice.frame_origin();
+        let lo = |points: &mut dyn Iterator<Item = Vec3>| {
+            let mut out: [Vec<f32>; 3] = Default::default();
+            for c in points {
+                let d = c - frame;
+                for (v, x) in out.iter_mut().zip([d.x, d.y, d.z]) {
+                    v.push((x - f64::from(x as f32)) as f32);
+                }
+            }
+            out
+        };
+        let a = &e.field.arr;
+        Self([
+            lo(&mut a.centers.iter().copied()),
+            lo(&mut a.circles.iter().map(|c| c.center)),
+            lo(&mut a.vertices.iter().map(|v| v.position)),
+        ])
+    }
+
+    fn as_ref(&self, e: &Engine) -> RefineRef<'_> {
+        let h = e.lattice.h;
+        let h_hi = h as f32;
+        let r = |k: usize| std::array::from_fn(|i| self.0[k][i].as_slice());
+        RefineRef {
+            sphere_lo: r(0),
+            circle_lo: r(1),
+            vertex_lo: r(2),
+            h_hi,
+            h_lo: (h - f64::from(h_hi)) as f32,
+            tol: TOL as f32,
+            max_iter: MAX_ITER as u32,
+            max_bisect: MAX_BISECT as u32,
+        }
+    }
 }
 
 /// The arrangement as the CPU kernels see it: frame-local `f32` copies,
@@ -163,6 +273,25 @@ impl Engine {
             circle,
             vertex,
         }
+    }
+
+    /// Uploads the arrangement to `device`, with what fast-mode refinement
+    /// needs if `refine`.
+    ///
+    /// # Errors
+    /// [`Error::Backend`] if an allocation or copy fails.
+    pub(super) fn resident_for<'d>(
+        &self,
+        device: &'d Device,
+        refine: bool,
+    ) -> Result<Resident<'d>> {
+        let mut r = self.resident(device)?;
+        if refine {
+            let lo = Residuals::new(self);
+            r.set_refinement(&lo.as_ref(self))
+                .map_err(|e| device_error(&e))?;
+        }
+        Ok(r)
     }
 
     /// Uploads the arrangement to `device`.
@@ -297,10 +426,12 @@ impl Engine {
     /// signs and crossing-edge values, hence the same meshes.
     ///
     /// A device thread classifies, gathers and samples batches of
-    /// `batching.chunks` chunks into a ring of [`RING`] buffers, in order.
-    /// The pool's threads take chunks in order and mesh each as soon as its
-    /// batch is ready; a buffer is reused once all its chunks are meshed. No
-    /// thread waits for a whole batch to be meshed.
+    /// `batching.chunks` chunks into a ring of [`RING`] buffers, in order,
+    /// and with `refine` also refines their crossing edges in `f32` (`f`
+    /// then gets each brick's [`DeviceEdges`]). The pool's threads take
+    /// chunks in order and mesh each as soon as its batch is ready; a buffer
+    /// is reused once all its chunks are meshed. No thread waits for a whole
+    /// batch to be meshed.
     ///
     /// # Errors
     /// [`Error::Cancelled`]; [`Error::Backend`] if a device operation fails.
@@ -309,6 +440,7 @@ impl Engine {
         &self,
         device: &Device,
         batching: Batching,
+        refine: bool,
         bricks: &[[i32; 3]],
         chunk: usize,
         control: &Control<'_>,
@@ -319,7 +451,7 @@ impl Engine {
     where
         A: Send,
         I: Fn() -> A + Sync + Send,
-        F: Fn(&mut A, [i32; 3], &[f32]) + Sync + Send,
+        F: Fn(&mut A, [i32; 3], &[f32], Option<&DeviceEdges<'_>>) + Sync + Send,
     {
         use std::sync::atomic::AtomicUsize;
         use std::sync::{Condvar, Mutex, RwLock};
@@ -340,7 +472,7 @@ impl Engine {
             control.report(stage, total, total);
             return Ok(Vec::new());
         }
-        let resident = self.resident(device)?;
+        let resident = self.resident_for(device, refine)?;
         let p = self.batch_params();
         control.check()?;
         let per_batch = batching.chunks.clamp(1, chunks);
@@ -381,7 +513,12 @@ impl Engine {
                 let mut slot = ring[k % RING]
                     .write()
                     .unwrap_or_else(std::sync::PoisonError::into_inner);
-                let ran = resident.run(&p, &origins, &mut slot);
+                let ran = resident.run(&p, &origins, &mut slot).and_then(|_| {
+                    if refine {
+                        resident.refine(&p, &mut slot)?;
+                    }
+                    Ok(())
+                });
                 drop(slot);
                 let mut g = lock(&state);
                 match ran {
@@ -428,7 +565,13 @@ impl Engine {
                     if control.is_cancelled() {
                         break 'chunks;
                     }
-                    f(&mut acc, bricks[i], &slot.brick_values(i - first)[..n]);
+                    let edges = DeviceEdges::of(&slot, i - first);
+                    f(
+                        &mut acc,
+                        bricks[i],
+                        &slot.brick_values(i - first)[..n],
+                        edges.as_ref(),
+                    );
                     progress.brick();
                 }
                 drop(slot);
@@ -479,7 +622,7 @@ mod tests {
     use super::*;
     use crate::field::{ScratchPool, SesField, SimdLevel};
     use crate::geom::Sphere;
-    use crate::mesh::extract::{ChunkMesh, assemble};
+    use crate::mesh::extract::{BrickMesh, ChunkMesh, assemble, mesh_brick, mesh_brick_device};
     use crate::surface::RefineMode;
 
     /// Device 0, or `None` (skip) without one unless `SESMESH_GPU_REQUIRE=1`.
@@ -541,6 +684,10 @@ mod tests {
         acc.push(v.to_vec());
     }
 
+    fn collect_dev(acc: &mut Vec<Vec<f32>>, k: [i32; 3], v: &[f32], _: Option<&DeviceEdges<'_>>) {
+        collect(acc, k, v);
+    }
+
     /// Every sample has the CPU's sign, and the CPU's value bit for bit
     /// unless the CPU gave it `±band` (a sub-block only the device samples).
     #[test]
@@ -572,12 +719,13 @@ mod tests {
                             .fold_brick_chunks_hip(
                                 &device,
                                 batching,
+                                false,
                                 &bricks,
                                 chunk,
                                 &control,
                                 Stage::Mesh,
                                 Vec::new,
-                                collect,
+                                collect_dev,
                             )
                             .unwrap();
                         assert_eq!(gpu.len(), cpu.len());
@@ -632,12 +780,16 @@ mod tests {
                         .fold_brick_chunks_hip(
                             &device,
                             batching,
+                            false,
                             &bricks,
                             chunk,
                             &control,
                             Stage::Mesh,
                             ChunkMesh::default,
-                            push,
+                            |m, key, values, edges| {
+                                assert!(edges.is_none());
+                                push(m, key, values);
+                            },
                         )
                         .unwrap();
                     let gpu = assemble(&bricks, chunk, parts).unwrap();
@@ -664,16 +816,128 @@ mod tests {
         let (_, bricks) = e.surface_bricks().unwrap();
         let flag = std::sync::atomic::AtomicBool::new(true);
         let control = Control::new().with_cancel(&flag);
-        let r = e.fold_brick_chunks_hip(
-            &device,
-            Batching::default(),
-            &bricks,
-            4,
-            &control,
-            Stage::Mesh,
-            Vec::new,
-            collect,
-        );
-        assert!(matches!(r, Err(Error::Cancelled)));
+        for refine in [false, true] {
+            let r = e.fold_brick_chunks_hip(
+                &device,
+                Batching::default(),
+                refine,
+                &bricks,
+                4,
+                &control,
+                Stage::Mesh,
+                Vec::new,
+                collect_dev,
+            );
+            assert!(matches!(r, Err(Error::Cancelled)));
+        }
+    }
+
+    /// Fast mode: the exact path's triangles, vertices as close to the
+    /// surface, the same output for any batch size.
+    #[test]
+    fn fast_meshes_match_exact_meshes() {
+        let Some(device) = device() else { return };
+        let pool = ScratchPool::default();
+        let control = Control::new();
+        for c in &clusters() {
+            for kind in [SurfaceKind::Ses, SurfaceKind::Sas, SurfaceKind::Vdw] {
+                let e = engine(c, kind, 0.4);
+                let (_, bricks) = e.surface_bricks().unwrap();
+                let chunk = par::chunk_len(bricks.len());
+                let parts = e
+                    .fold_brick_chunks_with(
+                        &bricks,
+                        chunk,
+                        &control,
+                        Stage::Mesh,
+                        &pool,
+                        ChunkMesh::default,
+                        |m: &mut ChunkMesh, key, values: &[f32]| {
+                            m.push(&e, key, values, RefineMode::Exact);
+                        },
+                    )
+                    .unwrap();
+                let cpu = assemble(&bricks, chunk, parts).unwrap();
+                let chunk = device_chunk(bricks.len());
+                let mut first: Option<crate::mesh::Mesh> = None;
+                for batching in BATCHINGS {
+                    let parts = e
+                        .fold_brick_chunks_hip(
+                            &device,
+                            batching,
+                            true,
+                            &bricks,
+                            chunk,
+                            &control,
+                            Stage::Mesh,
+                            ChunkMesh::default,
+                            |m, key, values, edges| {
+                                m.push_device(&e, key, values, edges.expect("refined batch"));
+                            },
+                        )
+                        .unwrap();
+                    let fast = assemble(&bricks, chunk, parts).unwrap();
+                    let what = format!("{kind:?} {batching:?}");
+                    assert_eq!(fast.triangles, cpu.triangles, "{what}");
+                    let f = |p: [f32; 3]| e.field.value(p.map(f64::from)).abs();
+                    let worst = |m: &crate::mesh::Mesh| {
+                        m.positions.iter().map(|&p| f(p)).fold(0.0, f64::max)
+                    };
+                    assert!(worst(&fast) <= worst(&cpu) + 1e-5, "{what}");
+                    let far = fast
+                        .positions
+                        .iter()
+                        .zip(&cpu.positions)
+                        .filter(|(a, b)| {
+                            let d = (0..3).map(|i| f64::from(a[i] - b[i]).powi(2)).sum::<f64>();
+                            d.sqrt() > 1e-4
+                        })
+                        .count();
+                    assert!(far * 1000 <= cpu.positions.len(), "{what}: {far}");
+                    match &first {
+                        None => first = Some(fast),
+                        Some(m) => {
+                            assert_eq!(fast.positions, m.positions, "{what}");
+                            assert_eq!(fast.normals, m.normals, "{what}");
+                            assert_eq!(fast.vertex_atom, m.vertex_atom, "{what}");
+                            assert_eq!(fast.vertex_patch, m.vertex_patch, "{what}");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Edges the device did not converge on are refined on the CPU: with no
+    /// converged edge, fast meshing gives the exact path's bricks.
+    #[test]
+    fn unconverged_edges_are_refined_exactly() {
+        let e = engine(&crambin(), SurfaceKind::Ses, 0.4);
+        let (_, bricks) = e.surface_bricks().unwrap();
+        let mut s = e.scratch();
+        let n = e.samples_per_brick();
+        let (t, feat, q) = (vec![0.5f32; 3000], vec![0u32; 3000], vec![0f32; 9000]);
+        let evals = vec![3u32; 3000];
+        for &key in bricks.iter().step_by(7) {
+            e.evaluate(key, &mut s);
+            let values = &s.values[..n];
+            let mut exact = BrickMesh::default();
+            mesh_brick(&e, key, values, RefineMode::Exact, &mut exact);
+            // Every sub-block owns at most 3·5³ = 375 edges.
+            let offsets: Vec<u32> = (0..9).map(|sb| sb * 375).collect();
+            let edges = DeviceEdges {
+                offsets: &offsets,
+                t: &t,
+                features: &feat,
+                closest: &q,
+                evals: &evals,
+            };
+            let mut fast = BrickMesh::default();
+            mesh_brick_device(&e, key, values, &edges, &mut fast);
+            assert_eq!(fast.vertices(), exact.vertices());
+            assert_eq!(fast.triangles(), exact.triangles());
+            assert_eq!(fast.evals, exact.evals);
+            assert_eq!(fast.cpu_refined as usize, exact.vertices().0.len());
+        }
     }
 }

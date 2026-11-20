@@ -728,7 +728,10 @@ blocker ordering), reuse of the sampling gather for refinement (≈ 5 %).
      199 of 13 812 on 1CRN at 0.5 Å) instead of only the stalled ones, so
      the fallback stays a separate loop after the cap.
      `RefineMode::Linear` skips this (fast preview, one evaluation for the
-     normal);
+     normal); *after 1.1 (Phase 11):* `RefineMode::Fast` runs this step in
+     f32 on a GPU, in brick-local double-float coordinates, and refines the
+     edges it does not converge on here in f64 (`docs/gpu-prior-art.md`
+     §5.4);
   3. clamp $t \in [10^{-4}, 1-10^{-4}]$ so vertices from edges meeting at a
      sample with $F \approx 0$ never coincide (no zero-area triangles,
      FR-MESH-5; the induced error ≤ $10^{-4}h$); *as built (Phase 6):* the
@@ -1271,7 +1274,7 @@ sesmesh radii [--set bondi|alvarez|protor]
 | Selection | `--altloc highest\|first\|<letter>\|all` (highest), `--hydrogens` (off), `--waters` (off), `--no-hetatm`, `--chains A,B`, `--exclude-resn NAME,...`, `--chain-ids auth\|label` (auth) |
 | Radii | `--radii bondi\|alvarez\|protor\|uniform:<r>\|file:<path>` (bondi), `--file-radii` (on for PQR), `--unknown-radius <r>` (1.8), `--strict-radii` |
 | Surface | `--surface ses\|sas\|vdw` (ses), `--probe <r>` (1.4), `--cavities keep\|remove\|only` (keep), `--min-cavity-volume <A³>`, `--min-component-area <A²>`, `--drop-fragments` |
-| Resolution | `-s/--grid-spacing <Å>`, `-q/--quality draft\|low\|medium\|high\|ultra` (medium = 0.5 Å), `--density <v/Å²>`, `--refine exact\|linear` (exact), `--brick-size N` (expert) |
+| Resolution | `-s/--grid-spacing <Å>`, `-q/--quality draft\|low\|medium\|high\|ultra` (medium = 0.5 Å), `--density <v/Å²>`, `--refine exact\|linear\|fast` (exact; `fast` after 1.1), `--brick-size N` (expert) |
 | Post-process | `--smooth <iters>`, `--decimate <ratio>` / `--max-triangles N`, `--decimate-error <Å>` |
 | Output | `-o <path>` (input stem + `.obj`), `--output-format obj\|ply\|msms` (by extension), `--precision N` (4), `--no-normals`, `--face-normals`, `--group-components`, `--vertex-colors element\|chain\|patch\|component`, `--vertex-data <csv>`, `--atom-areas <csv>`, `--stats [<json>]` |
 | Performance | `-j/--threads N` (all), `--simd auto\|scalar\|sse4.2\|avx2\|avx512\|neon`, `--max-memory <bytes>` |

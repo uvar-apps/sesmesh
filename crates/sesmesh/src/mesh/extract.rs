@@ -18,19 +18,21 @@ use rustc_hash::FxHashMap;
 use super::tables::{self, corner_offset, edge_axis_lower};
 use super::{Mesh, PatchKind};
 use crate::error::{Error, Result};
+#[cfg(feature = "hip")]
+use crate::field::DeviceEdges;
 use crate::field::{Engine, Feature, LocalCandidates, NearEval, SurfaceKind, pack};
 use crate::geom::Vec3;
 use crate::par;
 use crate::surface::RefineMode;
 
 /// Field evaluations of the Newton / Illinois phase per edge (at most).
-const MAX_ITER: usize = 8;
+pub(crate) const MAX_ITER: usize = 8;
 /// Bisection steps after an unconverged Newton / Illinois phase (at most;
 /// the bracket test ends bisection within `⌈log2(|edge| / (2·TOL))⌉` steps,
 /// 15 at 0.5 Å, so this cap only guards against non-finite input).
-const MAX_BISECT: usize = 64;
+pub(crate) const MAX_BISECT: usize = 64;
 /// Stop refining when `|F| ≤ TOL` (Å).
-const TOL: f64 = 1e-5;
+pub(crate) const TOL: f64 = 1e-5;
 /// Edge parameter clamp: vertices of edges meeting at a sample never
 /// coincide, so no triangle has zero area (Spec FR-MESH-5). Raised where
 /// needed so the separation also survives `f32` storage (see
@@ -65,6 +67,8 @@ pub(crate) struct BrickMesh {
     tris: Vec<[u32; 3]>,
     /// Exact field evaluations spent on vertices.
     pub(crate) evals: u64,
+    /// Fast mode: vertices refined on the CPU (the device did not converge).
+    pub(crate) cpu_refined: u64,
 }
 
 /// The meshes of consecutive bricks in flat arrays (one allocation per
@@ -89,6 +93,24 @@ impl ChunkMesh {
         refine: RefineMode,
     ) {
         mesh_brick(engine, key, values, refine, &mut self.mesh);
+        self.close_brick();
+    }
+
+    /// Meshes brick `key` with vertices from the device's refinement (see
+    /// [`mesh_brick_device`]) and appends it.
+    #[cfg(feature = "hip")]
+    pub(crate) fn push_device(
+        &mut self,
+        engine: &Engine,
+        key: [i32; 3],
+        values: &[f32],
+        edges: &DeviceEdges<'_>,
+    ) {
+        mesh_brick_device(engine, key, values, edges, &mut self.mesh);
+        self.close_brick();
+    }
+
+    fn close_brick(&mut self) {
         let end = |n: usize| u32::try_from(n).expect("fewer than 2^32 vertices per chunk");
         self.vertex_end.push(end(self.mesh.edges.len()));
         self.tri_end.push(end(self.mesh.tris.len()));
@@ -97,6 +119,11 @@ impl ChunkMesh {
     /// Exact field evaluations spent on vertices.
     pub(crate) fn evals(&self) -> u64 {
         self.mesh.evals
+    }
+
+    /// Fast mode: vertices refined on the CPU.
+    pub(crate) fn cpu_refined(&self) -> u64 {
+        self.mesh.cpu_refined
     }
 
     /// Range of brick `l` (index in the chunk) in `ends`.
@@ -237,24 +264,18 @@ fn cells(b: usize, values: &[f32], out: &mut BrickMesh) {
     }
 }
 
-/// A crossing edge refined elsewhere (spike S2, `field/gpu_s2.rs`): the
-/// last evaluated edge parameter, its feature and closest point.
-#[cfg(all(test, feature = "hip"))]
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct Refined {
-    pub(crate) t: f64,
-    pub(crate) feature: Feature,
-    pub(crate) closest: Vec3,
-}
-
-/// [`mesh_brick`] with the vertices of the crossing edges, in its edge
-/// order, placed from `refined` instead of refined here.
-#[cfg(all(test, feature = "hip"))]
-pub(crate) fn mesh_brick_refined(
+/// [`mesh_brick`] with the crossing edges refined on the device (fast mode,
+/// [`RefineMode::Fast`]): each vertex is placed from the device's last
+/// evaluation (edge parameter, feature, closest point) with the edge clamp
+/// and attributes of the exact path. Edges the device did not converge on
+/// are refined here in `f64`, as in [`mesh_brick`]. Same edges, same order
+/// and same triangles as [`mesh_brick`].
+#[cfg(feature = "hip")]
+pub(crate) fn mesh_brick_device(
     engine: &Engine,
     key: [i32; 3],
     values: &[f32],
-    refined: &[Refined],
+    edges: &DeviceEdges<'_>,
     out: &mut BrickMesh,
 ) {
     let lat = &engine.lattice;
@@ -262,8 +283,15 @@ pub(crate) fn mesh_brick_refined(
     let s = b + 1;
     let stride = [1, s, s * s];
     let origin = lat.brick_origin(key);
+    // The device path splits bricks into 2×2×2 sub-blocks (`device_ok`).
+    let sub = b / 2;
+    let h = lat.h;
+    let base = lat.point(origin);
+    let rho = 0.5 * 3f64.sqrt() * sub as f64 * h * (1.0 + 1e-9) + 1e-9;
+    let mut locals: [Option<LocalCandidates>; 8] = Default::default();
     let t_min = edge_clamp(engine);
-    let mut next = refined.iter();
+    let mut next: [u32; 8] = std::array::from_fn(|sb| edges.offsets[sb]);
+
     for z in 0..b {
         for y in 0..b {
             for x in 0..b {
@@ -282,26 +310,57 @@ pub(crate) fn mesh_brick_refined(
                     let mut ib = ia;
                     ib[axis] += 1;
                     let (pa, pb) = (lat.point(ia), lat.point(ib));
-                    let d = pb - pa;
-                    let r = next.next().expect("one result per crossing edge");
-                    let v = pa + d * r.t.clamp(t_min, 1.0 - t_min);
-                    let e = NearEval {
-                        value: 0.0,
-                        feature: r.feature,
-                        closest: r.closest,
-                    };
-                    let outward = if va < 0.0 { d } else { -d }.normalized();
-                    let (normal, patch, atom) = attributes(engine, v, &e, outward);
-                    out.positions.push(v.to_array().map(|c| c as f32));
-                    out.normals.push(normal.to_array().map(|c| c as f32));
-                    out.atoms.push(atom);
-                    out.patches.push(patch);
+                    let sb = [x, y, z].map(|c| (c / sub).min(1));
+                    let sb = sb[0] + 2 * sb[1] + 4 * sb[2];
+                    let k = next[sb];
+                    next[sb] += 1;
+                    let refined = (k < edges.offsets[sb + 1])
+                        .then(|| edges.get(engine, k as usize))
+                        .flatten();
+                    let (fa, fb) = (f64::from(va), f64::from(vb));
+                    if let Some((t, feature, closest, evals)) = refined {
+                        let d = pb - pa;
+                        let v = pa + d * t.clamp(t_min, 1.0 - t_min);
+                        let e = NearEval {
+                            value: 0.0,
+                            feature,
+                            closest: base + closest,
+                        };
+                        let outward = if fa < 0.0 { d } else { -d }.normalized();
+                        let (normal, patch, atom) = attributes(engine, v, &e, outward);
+                        out.positions.push(v.to_array().map(|c| c as f32));
+                        out.normals.push(normal.to_array().map(|c| c as f32));
+                        out.atoms.push(atom);
+                        out.patches.push(patch);
+                        out.evals += u64::from(evals);
+                    } else {
+                        let local = locals[sb].get_or_insert_with(|| {
+                            let o = [sb & 1, (sb >> 1) & 1, sb >> 2];
+                            let center = base
+                                + Vec3::new(
+                                    (o[0] * sub) as f64 + 0.5 * sub as f64,
+                                    (o[1] * sub) as f64 + 0.5 * sub as f64,
+                                    (o[2] * sub) as f64 + 0.5 * sub as f64,
+                                ) * h;
+                            let mut l = LocalCandidates::default();
+                            engine.field.gather_local(center, rho, engine.band, &mut l);
+                            l
+                        });
+                        let edge = Edge {
+                            pa,
+                            pb,
+                            fa,
+                            fb,
+                            t_min,
+                        };
+                        vertex(engine, &edge, RefineMode::Exact, local, out);
+                        out.cpu_refined += 1;
+                    }
                     out.edges.push((((z * b + y) * b + x) * 3 + axis) as u32);
                 }
             }
         }
     }
-    assert!(next.next().is_none(), "one result per crossing edge");
     cells(b, values, out);
 }
 
@@ -380,7 +439,7 @@ fn vertex(
     let d = pb - pa;
     let mut t = (fa / (fa - fb)).clamp(0.0, 1.0);
     let mut last: Option<NearEval> = None;
-    if refine == RefineMode::Exact {
+    if refine != RefineMode::Linear {
         // Safeguarded Newton: the closest point gives the exact gradient
         // (|∇F| = 1), so one step from the linear guess usually lands within
         // TOL; steps leaving the bracket fall back to Illinois (modified

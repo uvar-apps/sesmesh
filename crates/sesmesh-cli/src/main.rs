@@ -208,7 +208,9 @@ struct SurfaceArgs {
     /// ultra (0.1).
     #[arg(short = 'q', long, value_enum, default_value_t = QualityArg::Medium, help_heading = "Resolution")]
     quality: QualityArg,
-    /// Vertex placement on grid edges.
+    /// Vertex placement on grid edges. `fast`: refined in f32 on the GPU
+    /// back end too (previews; same triangles as `exact`, positions differ in
+    /// the last bits); on the CPU the same as `exact`.
     #[arg(long, value_enum, default_value_t = RefineArg::Exact, help_heading = "Resolution")]
     refine: RefineArg,
     /// Brick edge in grid cells (expert).
@@ -396,6 +398,7 @@ enum QualityArg {
 enum RefineArg {
     Exact,
     Linear,
+    Fast,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
@@ -652,6 +655,7 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
         .with_refine(match a.refine {
             RefineArg::Exact => RefineMode::Exact,
             RefineArg::Linear => RefineMode::Linear,
+            RefineArg::Fast => RefineMode::Fast,
         })
         .with_brick_size(a.brick_size)
         .with_cavities(match a.cavities {
@@ -1567,7 +1571,7 @@ fn stats_json(
     let s = &out.stats;
     let t = &s.timings;
     let msf = |d: Duration| d.as_secs_f64() * 1e3;
-    serde_json::json!({
+    let mut v = serde_json::json!({
         "sesmesh": sesmesh::VERSION,
         "input": {
             "path": input.display().to_string(),
@@ -1646,7 +1650,12 @@ fn stats_json(
             "total": msf(total),
         },
         "warnings": diags.warnings().iter().map(ToString::to_string).collect::<Vec<_>>(),
-    })
+    });
+    // Only in fast mode, so the other modes' stats stay as they were.
+    if params.refine == RefineMode::Fast {
+        v["engine"]["refine_cpu_edges"] = s.refine_cpu_edges.into();
+    }
+    v
 }
 
 fn radii(a: &RadiiArgs) -> CliResult<()> {

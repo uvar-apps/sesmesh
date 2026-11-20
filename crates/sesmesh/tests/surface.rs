@@ -257,6 +257,28 @@ fn linear_refinement_is_close() {
     assert!(f < 0.01, "{f}");
 }
 
+/// Fast mode refines on a GPU only; on the CPU back end it is exact mode.
+#[test]
+fn fast_refinement_on_the_cpu_is_exact() {
+    let s = [
+        Sphere::new([0.0, 0.0, 0.0], 1.7),
+        Sphere::new([2.5, 0.0, 0.0], 1.5),
+        Sphere::new([1.2, 2.1, 0.4], 1.6),
+    ];
+    let exact = run(&s, &SurfaceParams::ses(1.4).with_spacing(0.3));
+    let fast = run(
+        &s,
+        &SurfaceParams::ses(1.4)
+            .with_spacing(0.3)
+            .with_refine(RefineMode::Fast),
+    );
+    assert_eq!(fast.mesh.positions, exact.mesh.positions);
+    assert_eq!(fast.mesh.normals, exact.mesh.normals);
+    assert_eq!(fast.mesh.triangles, exact.mesh.triangles);
+    assert_eq!(fast.stats.refine_cpu_edges, 0);
+    assert_eq!(RefineMode::Fast.name(), "fast");
+}
+
 #[test]
 fn empty_input_gives_empty_mesh() {
     let out = run(&[], &SurfaceParams::default());

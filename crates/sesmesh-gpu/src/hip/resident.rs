@@ -17,6 +17,11 @@
 //! 3. fill: the lists, then the Lipschitz test at the sub-block centre (SES);
 //! 4. sample: every brick sample, `±band` where no sub-block samples it.
 //!
+//! [`Resident::refine`] then refines the batch's crossing edges in f32 (fast
+//! mode, Plan T11.5′, `docs/gpu-prior-art.md` §5.4): a count pass per
+//! sub-block, a host scan, and the refinement, which lists each sub-block's
+//! edges in the CPU's order.
+//!
 //! Device code is f32 and integer only.
 
 use std::ffi::c_void;
@@ -35,6 +40,23 @@ pub const STATE_SAMPLE: u32 = 0;
 pub const STATE_OUT: u32 = 1;
 /// Record state: uniformly inside.
 pub const STATE_IN: u32 = 2;
+
+/// Bit position of the feature kind in [`Batch::edge_features`]; the low
+/// bits hold the sphere, circle or vertex index.
+pub const FEATURE_SHIFT: u32 = 29;
+/// Feature kind: the point is probe-accessible.
+pub const FEATURE_SOLVENT: u32 = 0;
+/// Feature kind: nothing within the cutoff.
+pub const FEATURE_BEYOND: u32 = 1;
+/// Feature kind: a sphere (SES: its expanded sphere).
+pub const FEATURE_SPHERE: u32 = 2;
+/// Feature kind: a circle (SES).
+pub const FEATURE_CIRCLE: u32 = 3;
+/// Feature kind: a SAS vertex (SES).
+pub const FEATURE_VERTEX: u32 = 4;
+/// Flag in [`Batch::edge_evals`]: Newton / Illinois converged (else the
+/// edge was bisected).
+pub const EDGE_CONVERGED: u32 = 1 << 31;
 
 /// Lanes per workgroup (`LANES` in the kernels).
 const BLOCK: u32 = 64;
@@ -232,6 +254,19 @@ pub struct Resident<'d> {
     max_expanded: f32,
     rho_max: f32,
     resident_bytes: usize,
+    refine: Option<RefineData>,
+}
+
+/// Residuals and settings of [`Resident::refine`] on the device.
+struct RefineData {
+    sphere_lo: Vec<DeviceBuffer<f32>>,
+    circle_lo: Vec<DeviceBuffer<f32>>,
+    vertex_lo: Vec<DeviceBuffer<f32>>,
+    h_hi: f32,
+    h_lo: f32,
+    tol: f32,
+    max_iter: u32,
+    max_bisect: u32,
 }
 
 /// The pinned host buffers of one batch (the device reads and writes them
@@ -245,6 +280,14 @@ pub struct Batch<'d> {
     n_bricks: usize,
     spb: usize,
     n_ids: usize,
+    edge_count: HostBuffer<u32>,
+    edge_off: HostBuffer<u32>,
+    t: HostBuffer<f32>,
+    feat: HostBuffer<u32>,
+    q: HostBuffer<f32>,
+    evals: HostBuffer<u32>,
+    /// Crossing edges refined after the last run (`None`: not refined).
+    n_edges: Option<usize>,
 }
 
 impl std::fmt::Debug for Batch<'_> {
@@ -272,6 +315,13 @@ impl<'d> Batch<'d> {
             n_bricks: 0,
             spb: 0,
             n_ids: 0,
+            edge_count: device.alloc_host(0)?,
+            edge_off: device.alloc_host(0)?,
+            t: device.alloc_host(0)?,
+            feat: device.alloc_host(0)?,
+            q: device.alloc_host(0)?,
+            evals: device.alloc_host(0)?,
+            n_edges: None,
         })
     }
 
@@ -316,10 +366,71 @@ impl<'d> Batch<'d> {
         &self.rec[..REC_WORDS * 8 * self.n_bricks]
     }
 
+    /// Whether [`Resident::refine`] ran on the last run.
+    #[must_use]
+    pub fn refined(&self) -> bool {
+        self.n_edges.is_some()
+    }
+
+    fn n_edges(&self) -> usize {
+        self.n_edges.unwrap_or(0)
+    }
+
+    /// First refined edge of every sub-block (`8 · brick + sb`), then the
+    /// total: `8 · bricks + 1` entries; empty unless [`Batch::refined`].
+    /// The edges of a sub-block are those whose lower sample lies in it
+    /// (sub-block `(v / sub).min(1)` per axis, `v < b`), in z, y, x, axis
+    /// order.
+    #[must_use]
+    pub fn edge_offsets(&self) -> &[u32] {
+        if self.refined() {
+            &self.edge_off[..8 * self.n_bricks + 1]
+        } else {
+            &[]
+        }
+    }
+
+    /// Per refined edge: the edge parameter of the last evaluation (from the
+    /// lower sample, not clamped).
+    #[must_use]
+    pub fn edge_params(&self) -> &[f32] {
+        &self.t[..self.n_edges()]
+    }
+
+    /// Per refined edge: the feature of the last evaluation,
+    /// `kind << FEATURE_SHIFT | index` ([`FEATURE_SOLVENT`] …).
+    #[must_use]
+    pub fn edge_features(&self) -> &[u32] {
+        &self.feat[..self.n_edges()]
+    }
+
+    /// Per refined edge: the closest point of the last evaluation (SES; the
+    /// evaluated point for spheres), relative to the brick origin, 3 each.
+    #[must_use]
+    pub fn edge_closest(&self) -> &[f32] {
+        &self.q[..3 * self.n_edges()]
+    }
+
+    /// Per refined edge: field evaluations, with [`EDGE_CONVERGED`] set where
+    /// Newton / Illinois converged.
+    #[must_use]
+    pub fn edge_evals(&self) -> &[u32] {
+        &self.evals[..self.n_edges()]
+    }
+
     /// Host bytes held.
     #[must_use]
     pub fn bytes(&self) -> usize {
-        4 * (self.bricks.len() + self.rec.len() + self.ids.len() + self.values.len())
+        4 * (self.bricks.len()
+            + self.rec.len()
+            + self.ids.len()
+            + self.values.len()
+            + self.edge_count.len()
+            + self.edge_off.len()
+            + self.t.len()
+            + self.feat.len()
+            + self.q.len()
+            + self.evals.len())
     }
 }
 
@@ -399,7 +510,47 @@ impl<'d> Resident<'d> {
             max_expanded: a.max_expanded,
             rho_max: a.rho_max,
             resident_bytes: 4 * words,
+            refine: None,
         })
+    }
+
+    /// Uploads the residuals and settings [`Resident::refine`] needs.
+    ///
+    /// # Errors
+    ///
+    /// [`crate::Error::Call`] if an allocation or copy fails.
+    ///
+    /// # Panics
+    ///
+    /// If the residual arrays do not have the arrangement's element counts.
+    pub fn set_refinement(&mut self, r: &RefineRef<'_>) -> Result<()> {
+        let (ns, nc, nv) = (
+            self.sphere[0].len(),
+            self.circle[0].len(),
+            self.vertex[0].len(),
+        );
+        assert!(r.sphere_lo.iter().all(|v| v.len() == ns));
+        assert!(r.circle_lo.iter().all(|v| v.len() == nc));
+        assert!(r.vertex_lo.iter().all(|v| v.len() == nv));
+        let device = self.device;
+        let up = |v: &[&[f32]; 3]| {
+            v.iter()
+                .map(|x| device.upload(x))
+                .collect::<Result<Vec<_>>>()
+        };
+        let data = RefineData {
+            sphere_lo: up(&r.sphere_lo)?,
+            circle_lo: up(&r.circle_lo)?,
+            vertex_lo: up(&r.vertex_lo)?,
+            h_hi: r.h_hi,
+            h_lo: r.h_lo,
+            tol: r.tol,
+            max_iter: r.max_iter,
+            max_bisect: r.max_bisect,
+        };
+        self.resident_bytes += 12 * (ns + nc + nv);
+        self.refine = Some(data);
+        Ok(())
     }
 
     /// Bytes of the resident arrangement.
@@ -451,6 +602,7 @@ impl<'d> Resident<'d> {
         }
         batch.n_bricks = bricks.len();
         batch.spb = spb;
+        batch.n_edges = None;
         if bricks.is_empty() {
             return Ok(times);
         }
@@ -533,11 +685,10 @@ impl<'d> Resident<'d> {
         }
     }
 
-    /// Refines the crossing edges `edges` of the last run in `batch` in f32
-    /// (spike S2), into `refiner`'s outputs. `groups` holds, per group of
-    /// edges of one sub-block: brick index in the batch, sub-block, first
-    /// edge, edge count; an edge is `x | y << 4 | z << 8 | axis << 12`
-    /// (its lower sample in the brick).
+    /// Refines the crossing edges of the last run in `batch` in f32, into
+    /// `batch` ([`Batch::edge_offsets`] …): the CPU's safeguarded Newton /
+    /// Illinois iteration, then bisection, against the lists of each edge's
+    /// sub-block, in brick-local coordinates. `p` must be the run's.
     ///
     /// # Errors
     ///
@@ -545,83 +696,122 @@ impl<'d> Resident<'d> {
     ///
     /// # Panics
     ///
-    /// If a count exceeds `u32`, or `batch` or `refiner` belongs to another
+    /// Without [`Resident::set_refinement`], if `p.b` exceeds 32 (edge
+    /// codes), if a count exceeds `u32`, or if `batch` belongs to another
     /// device.
-    #[allow(clippy::too_many_arguments)]
-    pub fn refine(
-        &self,
-        p: &BatchParams,
-        batch: &mut Batch<'_>,
-        refiner: &mut Refiner<'_>,
-        groups: &[[u32; 4]],
-        edges: &[u32],
-        tol: f32,
-        max_iter: u32,
-        max_bisect: u32,
-    ) -> Result<()> {
+    pub fn refine(&self, p: &BatchParams, batch: &mut Batch<'_>) -> Result<RefineTimes> {
         assert!(
-            std::ptr::eq(self.device, batch.device) && std::ptr::eq(self.device, refiner.device),
-            "buffers of another device"
+            std::ptr::eq(self.device, batch.device),
+            "batch of another device"
         );
-        let len32 = |n: usize| u32::try_from(n).expect("fewer than 2^32 elements");
-        let r = refiner;
-        if r.groups.len() < 4 * groups.len() {
-            r.groups = self.device.alloc_host(4 * groups.len())?;
+        assert!(p.b <= 32, "brick edges up to 32 cells");
+        let r = self
+            .refine
+            .as_ref()
+            .expect("Resident::set_refinement before refine");
+        let mut times = RefineTimes::default();
+        let n_sub = 8 * batch.n_bricks;
+        if batch.edge_count.len() < n_sub {
+            batch.edge_count = self.device.alloc_host(n_sub)?;
         }
-        for (d, s) in r.groups.as_chunks_mut::<4>().0.iter_mut().zip(groups) {
-            d.copy_from_slice(s);
+        if batch.edge_off.len() < n_sub + 1 {
+            batch.edge_off = self.device.alloc_host(n_sub + 1)?;
         }
-        let n = edges.len();
-        if r.edges.len() < n {
-            r.edges = self.device.alloc_host(n)?;
-            r.t = self.device.alloc_host(n)?;
-            r.feat = self.device.alloc_host(n)?;
-            r.q = self.device.alloc_host(3 * n)?;
-            r.evals = self.device.alloc_host(n)?;
+        batch.edge_off[0] = 0;
+        if n_sub == 0 {
+            batch.n_edges = Some(0);
+            return Ok(times);
         }
-        r.edges[..n].copy_from_slice(edges);
-        r.n_edges = n;
-        if groups.is_empty() {
-            return Ok(());
+        let grid = u32::try_from(n_sub).expect("fewer than 2^32 sub-blocks");
+
+        let t = Instant::now();
+        let mut params = self.params(p, grid, batch);
+        let mut rp = Self::refine_params(r, batch, 0);
+        self.launch_refine(
+            self.device.kernels.resident_edge_count,
+            grid,
+            &mut params,
+            &mut rp,
+        )?;
+        times.count = t.elapsed().as_secs_f64();
+
+        let t = Instant::now();
+        let mut total = 0u32;
+        for j in 0..n_sub {
+            total = total
+                .checked_add(batch.edge_count[j])
+                .expect("fewer than 2^32 crossing edges per batch");
+            batch.edge_off[j + 1] = total;
         }
-        let grid = len32(groups.len());
-        let mut params = self.params(p, len32(batch.n_bricks * 8), batch);
+        let n = total as usize;
+        if batch.t.len() < n {
+            batch.t = self.device.alloc_host(n)?;
+            batch.feat = self.device.alloc_host(n)?;
+            batch.q = self.device.alloc_host(3 * n)?;
+            batch.evals = self.device.alloc_host(n)?;
+        }
+        times.scan = t.elapsed().as_secs_f64();
+
+        let t = Instant::now();
+        let mut params = self.params(p, grid, batch);
+        let mut rp = Self::refine_params(r, batch, total);
+        self.launch_refine(
+            self.device.kernels.resident_refine,
+            grid,
+            &mut params,
+            &mut rp,
+        )?;
+        times.refine = t.elapsed().as_secs_f64();
+        batch.n_edges = Some(n);
+        Ok(times)
+    }
+
+    fn refine_params(r: &RefineData, batch: &mut Batch<'_>, n_edges: u32) -> RefineParams {
         let ptr = |b: &DeviceBuffer<f32>| b.as_device_ptr().cast_const();
-        let mut rp = RefineParams {
+        RefineParams {
             sphere_lo: std::array::from_fn(|i| ptr(&r.sphere_lo[i])),
             circle_lo: std::array::from_fn(|i| ptr(&r.circle_lo[i])),
             vertex_lo: std::array::from_fn(|i| ptr(&r.vertex_lo[i])),
-            groups: r.groups.as_device_ptr().cast_const(),
-            edges: r.edges.as_device_ptr().cast_const(),
-            t_out: r.t.as_device_ptr(),
-            feat_out: r.feat.as_device_ptr(),
-            q_out: r.q.as_device_ptr(),
-            evals_out: r.evals.as_device_ptr(),
-            n_groups: grid,
-            n_edges: len32(n),
-            max_iter,
-            max_bisect,
+            edge_count: batch.edge_count.as_device_ptr(),
+            edge_off: batch.edge_off.as_device_ptr().cast_const(),
+            t_out: batch.t.as_device_ptr(),
+            feat_out: batch.feat.as_device_ptr(),
+            q_out: batch.q.as_device_ptr(),
+            evals_out: batch.evals.as_device_ptr(),
+            n_edges,
+            max_iter: r.max_iter,
+            max_bisect: r.max_bisect,
+            pad0: 0,
             h_hi: r.h_hi,
             h_lo: r.h_lo,
-            tol,
+            tol: r.tol,
             pad: 0.0,
-        };
+        }
+    }
+
+    fn launch_refine(
+        &self,
+        function: super::ffi::Handle,
+        grid: u32,
+        params: &mut Params,
+        rp: &mut RefineParams,
+    ) -> Result<()> {
         let mut args: [*mut c_void; 2] = [
-            std::ptr::from_mut(&mut params).cast(),
-            std::ptr::from_mut(&mut rp).cast(),
+            std::ptr::from_mut(params).cast(),
+            std::ptr::from_mut(rp).cast(),
         ];
         // SAFETY: `Params` and `RefineParams` by value, laid out as
         // `ResidentParams` and `RefineParams`. Every pointer is a live buffer
-        // of this device or pinned host memory. The residual arrays have the
-        // resident arrays' lengths (`Refiner::new`), and the kernel bounds
-        // every element index by those counts; groups and edges are bounded
-        // by `n_groups` and `n_edges`, outputs have `n_edges` entries, list
-        // and value reads are bounded as in `run`. The host touches no
-        // buffer until the synchronous launch returns.
-        unsafe {
-            self.device
-                .launch_sync(self.device.kernels.resident_refine, grid, BLOCK, &mut args)
-        }
+        // of this device or pinned host memory: the residuals have the
+        // arrangement's lengths (`set_refinement`) and the kernels bound
+        // element indices by its counts; `edge_count` has `n_sub` entries
+        // and `edge_off` `n_sub + 1` (the count pass only writes the
+        // former, the refine pass reads the latter, written by the host
+        // scan); the outputs have `n_edges` entries (3 for `q`), and the
+        // refine pass writes slot ids only below `edge_off[j + 1] ≤
+        // n_edges`. List and value reads are bounded as in `run`. The host
+        // touches no buffer until the synchronous launch returns.
+        unsafe { self.device.launch_sync(function, grid, BLOCK, &mut args) }
     }
 
     fn launch(&self, function: super::ffi::Handle, grid: u32, params: &mut Params) -> Result<()> {
@@ -639,7 +829,8 @@ impl<'d> Resident<'d> {
 }
 
 /// Residuals of the frame-local `f32` positions (`f64` minus `f32`, as
-/// `f32`) and the lattice spacing as an `f32` pair, for [`Resident::refine`].
+/// `f32`), the lattice spacing as an `f32` pair, and the iteration settings,
+/// for [`Resident::refine`].
 #[derive(Debug, Clone, Copy)]
 pub struct RefineRef<'a> {
     /// Sphere centres: x, y, z residuals.
@@ -652,6 +843,23 @@ pub struct RefineRef<'a> {
     pub h_hi: f32,
     /// Lattice spacing, low part (`h − h_hi`).
     pub h_lo: f32,
+    /// Stop where `|F| ≤ tol`.
+    pub tol: f32,
+    /// Newton / Illinois evaluations per edge, at most.
+    pub max_iter: u32,
+    /// Bisection steps after an unconverged Newton / Illinois phase, at most.
+    pub max_bisect: u32,
+}
+
+/// Wall times of [`Resident::refine`], in seconds.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RefineTimes {
+    /// Count pass.
+    pub count: f64,
+    /// Host scan of the counts.
+    pub scan: f64,
+    /// Refinement pass.
+    pub refine: f64,
 }
 
 /// `RefineParams` in `kernels/hip/sesmesh.hip`.
@@ -660,114 +868,18 @@ struct RefineParams {
     sphere_lo: [*const c_void; 3],
     circle_lo: [*const c_void; 3],
     vertex_lo: [*const c_void; 3],
-    groups: *const c_void,
-    edges: *const c_void,
+    edge_count: *mut c_void,
+    edge_off: *const c_void,
     t_out: *mut c_void,
     feat_out: *mut c_void,
     q_out: *mut c_void,
     evals_out: *mut c_void,
-    n_groups: u32,
     n_edges: u32,
     max_iter: u32,
     max_bisect: u32,
+    pad0: u32,
     h_hi: f32,
     h_lo: f32,
     tol: f32,
     pad: f32,
-}
-
-/// Residual arrays on the device and the per-edge buffers of
-/// [`Resident::refine`] (spike S2).
-pub struct Refiner<'d> {
-    device: &'d Device,
-    sphere_lo: Vec<DeviceBuffer<f32>>,
-    circle_lo: Vec<DeviceBuffer<f32>>,
-    vertex_lo: Vec<DeviceBuffer<f32>>,
-    h_hi: f32,
-    h_lo: f32,
-    groups: HostBuffer<u32>,
-    edges: HostBuffer<u32>,
-    t: HostBuffer<f32>,
-    feat: HostBuffer<u32>,
-    q: HostBuffer<f32>,
-    evals: HostBuffer<u32>,
-    n_edges: usize,
-}
-
-impl std::fmt::Debug for Refiner<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Refiner")
-            .field("edges", &self.n_edges)
-            .finish_non_exhaustive()
-    }
-}
-
-impl<'d> Refiner<'d> {
-    /// Uploads the residuals for `resident`.
-    ///
-    /// # Errors
-    ///
-    /// [`crate::Error::Call`] if an allocation or copy fails.
-    ///
-    /// # Panics
-    ///
-    /// If the residual arrays do not have `resident`'s element counts.
-    pub fn new(resident: &Resident<'d>, r: &RefineRef<'_>) -> Result<Self> {
-        let device = resident.device;
-        let (ns, nc, nv) = (
-            resident.sphere[0].len(),
-            resident.circle[0].len(),
-            resident.vertex[0].len(),
-        );
-        assert!(r.sphere_lo.iter().all(|v| v.len() == ns));
-        assert!(r.circle_lo.iter().all(|v| v.len() == nc));
-        assert!(r.vertex_lo.iter().all(|v| v.len() == nv));
-        let up = |v: &[&[f32]; 3]| {
-            v.iter()
-                .map(|x| device.upload(x))
-                .collect::<Result<Vec<_>>>()
-        };
-        Ok(Self {
-            device,
-            sphere_lo: up(&r.sphere_lo)?,
-            circle_lo: up(&r.circle_lo)?,
-            vertex_lo: up(&r.vertex_lo)?,
-            h_hi: r.h_hi,
-            h_lo: r.h_lo,
-            groups: device.alloc_host(0)?,
-            edges: device.alloc_host(0)?,
-            t: device.alloc_host(0)?,
-            feat: device.alloc_host(0)?,
-            q: device.alloc_host(0)?,
-            evals: device.alloc_host(0)?,
-            n_edges: 0,
-        })
-    }
-
-    /// Edge parameters of the last run (the last evaluated point).
-    #[must_use]
-    pub fn t(&self) -> &[f32] {
-        &self.t[..self.n_edges]
-    }
-
-    /// Features of the last evaluation per edge: `kind << 29 | id`, kinds
-    /// 0 solvent, 1 beyond, 2 sphere, 3 circle, 4 vertex.
-    #[must_use]
-    pub fn features(&self) -> &[u32] {
-        &self.feat[..self.n_edges]
-    }
-
-    /// Closest points of the last evaluation per edge, local to the brick
-    /// origin (3 per edge).
-    #[must_use]
-    pub fn closest(&self) -> &[f32] {
-        &self.q[..3 * self.n_edges]
-    }
-
-    /// Field evaluations per edge; bit 31 set where Newton / Illinois
-    /// converged.
-    #[must_use]
-    pub fn evals(&self) -> &[u32] {
-        &self.evals[..self.n_edges]
-    }
 }

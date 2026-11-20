@@ -428,13 +428,13 @@ struct RefineParams {
     const float *plx, *ply, *plz;  // sphere centre residuals
     const float *clx, *cly, *clz;  // circle centre residuals
     const float *vlx, *vly, *vlz;  // vertex residuals
-    const unsigned* groups;        // 4 per group: brick, sub-block, first edge, edges
-    const unsigned* edges;         // x | y << 4 | z << 8 | axis << 12 (lower sample)
+    unsigned* edge_count;          // count pass: crossing edges per sub-block
+    const unsigned* edge_off;      // refine pass: first edge per sub-block (n_sub + 1)
     float* t_out;
     unsigned* feat_out;
     float* q_out;                  // 3 per edge
     unsigned* evals_out;
-    unsigned n_groups, n_edges, max_iter, max_bisect;
+    unsigned n_edges, max_iter, max_bisect, pad0;
     float h_hi, h_lo, tol, pad;
 };
 
@@ -614,107 +614,194 @@ __device__ static float slope_of(const ResidentParams& p, const RefineParams& r,
     return (w / len) * p.h;
 }
 
-extern "C" __global__ void sesmesh_resident_refine(ResidentParams p, RefineParams r) {
-    const unsigned g = blockIdx.x;
-    if (g >= r.n_groups) return;
-    const unsigned brick = r.groups[4 * g], sb = r.groups[4 * g + 1];
-    const unsigned first = r.groups[4 * g + 2], count = r.groups[4 * g + 3];
-    if (sb >= 8 || (unsigned long long)first + count > r.n_edges) return;  // invalid input only
-    const unsigned j = 8 * brick + sb;
+// Crossing-edge candidate `c` of sub-block `sb`: the edges whose lower
+// sample lies in it (`extract.rs`: sub-block `(v / sub).min(1)` per axis), in
+// the CPU's z, y, x, axis order. Writes its lower sample and axis; true if
+// the samples at its ends differ in sign.
+__device__ static bool crossing_edge(const ResidentParams& p, const float* val, unsigned sb,
+                                     unsigned c, unsigned& x, unsigned& y, unsigned& z,
+                                     unsigned& axis) {
+    const unsigned sub = p.sub, side = p.b + 1;
+    axis = c % 3u;
+    const unsigned cell = c / 3u;
+    x = (sb & 1u) * sub + cell % sub;
+    y = ((sb >> 1) & 1u) * sub + (cell / sub) % sub;
+    z = (sb >> 2) * sub + cell / (sub * sub);
+    const unsigned i0 = x + side * (y + side * z);
+    const unsigned st = axis == 0 ? 1u : (axis == 1 ? side : side * side);
+    return (val[i0] < 0.0f) != (val[i0 + st] < 0.0f);
+}
+
+// Whether sub-block j of the batch is sampled and its brick's values are in
+// bounds (invalid input only otherwise).
+__device__ static bool sampled_sub(const ResidentParams& p, unsigned j) {
+    if (j >= p.n_sub || 2u * p.sub != p.b || p.b > 32u) return false;
+    if (p.rec[REC_WORDS * j] != ST_SAMPLE) return false;
+    const unsigned long long side = p.b + 1;
+    return (unsigned long long)(j / 8 + 1) * side * side * side <= p.values_len;
+}
+
+// Count pass: crossing edges per sub-block (0 for uniform sub-blocks, which
+// have none). One workgroup per sub-block.
+extern "C" __global__ void sesmesh_resident_edge_count(ResidentParams p, RefineParams r) {
+    const unsigned j = blockIdx.x;
     if (j >= p.n_sub) return;
+    __shared__ unsigned count;
+    if (threadIdx.x == 0) count = 0;
+    __syncthreads();
+    unsigned mine = 0;
+    if (sampled_sub(p, j)) {
+        const unsigned side = p.b + 1;
+        const float* val = p.values + (unsigned long long)(j / 8) * side * side * side;
+        const unsigned nc = 3u * p.sub * p.sub * p.sub;
+        unsigned x, y, z, axis;
+        for (unsigned c = threadIdx.x; c < nc; c += blockDim.x)
+            mine += crossing_edge(p, val, j % 8, c, x, y, z, axis) ? 1u : 0u;
+    }
+    atomicAdd(&count, mine);
+    __syncthreads();
+    if (threadIdx.x == 0) r.edge_count[j] = count;
+}
+
+// Refines one crossing edge (lower sample `code`, packed x | y << 5 |
+// z << 10 | axis << 15) into output slot `id`.
+__device__ static void refine_edge(const ResidentParams& p, const RefineParams& r,
+                                   const Local& o, const unsigned* l, const unsigned* n,
+                                   const float* val, unsigned code, unsigned id) {
+    const unsigned side = p.b + 1;
+    const unsigned ex = code & 31u, ey = (code >> 5) & 31u, ez = (code >> 10) & 31u,
+                   axis = (code >> 15) & 3u;
+    const unsigned i0 = ex + side * (ey + side * ez);
+    const unsigned st = axis == 0 ? 1u : (axis == 1 ? side : side * side);
+    const float h = r.h_hi;
+    const float fa = val[i0], fb = val[i0 + st];
+    // Lower end, local: integer offsets times h (double-float h).
+    const float ax = (float)ex * h + (float)ex * r.h_lo;
+    const float ay = (float)ey * h + (float)ey * r.h_lo;
+    const float az = (float)ez * h + (float)ez * r.h_lo;
+    const float hd = h + r.h_lo;  // edge length
+    auto at = [&](float t, float& x, float& y, float& z) {
+        x = ax + (axis == 0 ? hd * t : 0.0f);
+        y = ay + (axis == 1 ? hd * t : 0.0f);
+        z = az + (axis == 2 ? hd * t : 0.0f);
+    };
+    float t = fminf(fmaxf(fa / (fa - fb), 0.0f), 1.0f);
+    float t0 = 0.0f, g0 = fa, t1 = 1.0f, g1 = fb;
+    int side_ = 0;
+    bool converged = false;
+    unsigned evals = 0;
+    PointEval last;
+    last.feat = FEAT_BEYOND << FEAT_SHIFT;
+    last.qx = last.qy = last.qz = 0.0f;
+    last.value = 0.0f;
+    float x, y, z;
+    for (unsigned it = 0; it < r.max_iter; it++) {
+        at(t, x, y, z);
+        const PointEval e = eval_point(p, r, o, l, n, x, y, z);
+        evals++;
+        last = e;
+        const float gv = e.value;
+        if (fabsf(gv) <= r.tol) {
+            converged = true;
+            break;
+        }
+        if ((gv < 0.0f) == (g0 < 0.0f)) {
+            t0 = t;
+            g0 = gv;
+            if (side_ == -1) g1 *= 0.5f;
+            side_ = -1;
+        } else {
+            t1 = t;
+            g1 = gv;
+            if (side_ == 1) g0 *= 0.5f;
+            side_ = 1;
+        }
+        const float slope = slope_of(p, r, o, e, x, y, z, axis);
+        const float newton = t - gv / slope;
+        if (fabsf(slope) > 1e-3f * hd && newton > t0 && newton < t1) {
+            t = newton;
+        } else {
+            const float s = (t0 * g1 - t1 * g0) / (g1 - g0);
+            t = (isfinite(s) && s > t0 && s < t1) ? s : 0.5f * (t0 + t1);
+        }
+    }
+    if (!converged) {
+        const bool neg0 = g0 < 0.0f;
+        for (unsigned it = 0; it < r.max_bisect; it++) {
+            t = 0.5f * (t0 + t1);
+            at(t, x, y, z);
+            const PointEval e = eval_point(p, r, o, l, n, x, y, z);
+            evals++;
+            last = e;
+            if (fabsf(e.value) <= r.tol || (t1 - t0) * hd <= 2.0f * r.tol) break;
+            if ((e.value < 0.0f) == neg0) t0 = t;
+            else t1 = t;
+        }
+    }
+    r.t_out[id] = t;
+    r.feat_out[id] = last.feat;
+    r.q_out[3 * id] = last.qx;
+    r.q_out[3 * id + 1] = last.qy;
+    r.q_out[3 * id + 2] = last.qz;
+    r.evals_out[id] = evals | (converged ? 0x80000000u : 0u);
+}
+
+// Refine pass: one workgroup (64 lanes) per sub-block. The lanes list the
+// sub-block's crossing edges in the CPU's order (a scan in LDS per round of
+// 64 candidates, into a buffer of up to 127), and refine 64 at a time, so
+// lanes stay busy; edge k of the sub-block goes to slot edge_off[j] + k.
+extern "C" __global__ void sesmesh_resident_refine(ResidentParams p, RefineParams r) {
+    const unsigned j = blockIdx.x;
+    if (j >= p.n_sub || blockDim.x != 64) return;
+    const unsigned first = r.edge_off[j], last = r.edge_off[j + 1];
+    if (last <= first || last > r.n_edges || !sampled_sub(p, j)) return;
     const unsigned* rec = p.rec + REC_WORDS * j;
-    if (rec[0] != ST_SAMPLE) return;
     const unsigned base = rec[1];
     const unsigned n[5] = {rec[2], rec[3], rec[4], rec[5], rec[6]};
     const unsigned long long total = (unsigned long long)n[0] + n[1] + n[2] + n[3] + n[4];
     if ((unsigned long long)base + total > p.ids_len) return;
     const unsigned* l = p.ids + base;
+    const unsigned brick = j / 8, sb = j % 8;
     const unsigned side = p.b + 1;
-    const unsigned long long spb = (unsigned long long)side * side * side;
-    if ((unsigned long long)(brick + 1) * spb > p.values_len) return;
-    const float* val = p.values + brick * spb;
+    const float* val = p.values + (unsigned long long)brick * side * side * side;
     Local o;
     origin_df(p.bricks[3 * brick], r.h_hi, r.h_lo, o.ohx, o.olx);
     origin_df(p.bricks[3 * brick + 1], r.h_hi, r.h_lo, o.ohy, o.oly);
     origin_df(p.bricks[3 * brick + 2], r.h_hi, r.h_lo, o.ohz, o.olz);
-    const float h = r.h_hi;
-    for (unsigned q = threadIdx.x; q < count; q += blockDim.x) {
-        const unsigned id = first + q;
-        const unsigned code = r.edges[id];
-        const unsigned ex = code & 15u, ey = (code >> 4) & 15u, ez = (code >> 8) & 15u,
-                       axis = (code >> 12) & 3u;
-        if (ex >= p.b || ey >= p.b || ez >= p.b || axis > 2) continue;
-        const unsigned i0 = ex + side * (ey + side * ez);
-        const unsigned st = axis == 0 ? 1u : (axis == 1 ? side : side * side);
-        const float fa = val[i0], fb = val[i0 + st];
-        // Lower end, local: integer offsets times h (double-float h).
-        const float ax = (float)ex * h + (float)ex * r.h_lo;
-        const float ay = (float)ey * h + (float)ey * r.h_lo;
-        const float az = (float)ez * h + (float)ez * r.h_lo;
-        const float hd = h + r.h_lo;  // edge length
-        auto at = [&](float t, float& x, float& y, float& z) {
-            x = ax + (axis == 0 ? hd * t : 0.0f);
-            y = ay + (axis == 1 ? hd * t : 0.0f);
-            z = az + (axis == 2 ? hd * t : 0.0f);
-        };
-        float t = fminf(fmaxf(fa / (fa - fb), 0.0f), 1.0f);
-        float t0 = 0.0f, g0 = fa, t1 = 1.0f, g1 = fb;
-        int side_ = 0;
-        bool converged = false;
-        unsigned evals = 0;
-        PointEval last;
-        last.feat = FEAT_BEYOND << FEAT_SHIFT;
-        last.qx = last.qy = last.qz = 0.0f;
-        last.value = 0.0f;
-        float x, y, z;
-        for (unsigned it = 0; it < r.max_iter; it++) {
-            at(t, x, y, z);
-            const PointEval e = eval_point(p, r, o, l, n, x, y, z);
-            evals++;
-            last = e;
-            const float gv = e.value;
-            if (fabsf(gv) <= r.tol) {
-                converged = true;
-                break;
-            }
-            if ((gv < 0.0f) == (g0 < 0.0f)) {
-                t0 = t;
-                g0 = gv;
-                if (side_ == -1) g1 *= 0.5f;
-                side_ = -1;
-            } else {
-                t1 = t;
-                g1 = gv;
-                if (side_ == 1) g0 *= 0.5f;
-                side_ = 1;
-            }
-            const float slope = slope_of(p, r, o, e, x, y, z, axis);
-            const float newton = t - gv / slope;
-            if (fabsf(slope) > 1e-3f * hd && newton > t0 && newton < t1) {
-                t = newton;
-            } else {
-                const float s = (t0 * g1 - t1 * g0) / (g1 - g0);
-                t = (isfinite(s) && s > t0 && s < t1) ? s : 0.5f * (t0 + t1);
-            }
+
+    __shared__ unsigned scan[64];
+    __shared__ unsigned buf[128];
+    const unsigned lane = threadIdx.x;
+    const unsigned nc = 3u * p.sub * p.sub * p.sub;
+    unsigned fill = 0, done = 0;
+    for (unsigned c0 = 0; c0 < nc; c0 += 64) {
+        unsigned x = 0, y = 0, z = 0, axis = 0;
+        const unsigned c = c0 + lane;
+        const bool f = c < nc && crossing_edge(p, val, sb, c, x, y, z, axis);
+        scan[lane] = f ? 1u : 0u;
+        __syncthreads();
+        for (unsigned off = 1; off < 64; off <<= 1) {
+            const unsigned add = lane >= off ? scan[lane - off] : 0u;
+            __syncthreads();
+            scan[lane] += add;
+            __syncthreads();
         }
-        if (!converged) {
-            const bool neg0 = g0 < 0.0f;
-            for (unsigned it = 0; it < r.max_bisect; it++) {
-                t = 0.5f * (t0 + t1);
-                at(t, x, y, z);
-                const PointEval e = eval_point(p, r, o, l, n, x, y, z);
-                evals++;
-                last = e;
-                if (fabsf(e.value) <= r.tol || (t1 - t0) * hd <= 2.0f * r.tol) break;
-                if ((e.value < 0.0f) == neg0) t0 = t;
-                else t1 = t;
-            }
+        const unsigned added = scan[63];
+        if (f) buf[fill + scan[lane] - 1] = x | y << 5 | z << 10 | axis << 15;
+        __syncthreads();
+        fill += added;
+        if (fill >= 64) {
+            const unsigned id = first + done + lane;
+            if (id < last) refine_edge(p, r, o, l, n, val, buf[lane], id);
+            done += 64;
+            const unsigned rest = fill - 64;
+            const unsigned moved = lane < rest ? buf[64 + lane] : 0u;
+            __syncthreads();
+            if (lane < rest) buf[lane] = moved;
+            __syncthreads();
+            fill = rest;
         }
-        r.t_out[id] = t;
-        r.feat_out[id] = last.feat;
-        r.q_out[3 * id] = last.qx;
-        r.q_out[3 * id + 1] = last.qy;
-        r.q_out[3 * id + 2] = last.qz;
-        r.evals_out[id] = evals | (converged ? 0x80000000u : 0u);
     }
+    const unsigned id = first + done + lane;
+    if (lane < fill && id < last) refine_edge(p, r, o, l, n, val, buf[lane], id);
 }

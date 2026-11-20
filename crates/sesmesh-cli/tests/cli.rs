@@ -680,6 +680,61 @@ fn sigint_cancels() {
     assert!(stderr.contains("interrupted"), "{stderr}");
 }
 
+/// `--refine fast` (Plan T11.5′): on the CPU the exact mesh (only the header
+/// names the mode); `engine.refine_cpu_edges` only in fast mode. On a GPU,
+/// the exact mode's faces.
+#[test]
+fn refine_fast() {
+    let ubq = fixture("1UBQ.cif.gz");
+    let mesh = |name: &str, extra: &[&str]| {
+        let out = tmp(name);
+        let stats = tmp(&format!("{name}.json"));
+        let mut args = vec![ubq.to_str().unwrap(), "-s", "0.6", "--quiet", "-o"];
+        args.push(out.to_str().unwrap());
+        args.extend_from_slice(&["--stats", stats.to_str().unwrap()]);
+        args.extend_from_slice(extra);
+        let o = run(&args);
+        assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+        let obj = std::fs::read_to_string(out).unwrap();
+        let stats: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(stats).unwrap()).unwrap();
+        (obj, stats)
+    };
+    let body = |obj: &str| {
+        obj.lines()
+            .filter(|l| !l.starts_with('#'))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let faces = |obj: &str| {
+        obj.lines()
+            .filter(|l| l.starts_with("f "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    let (exact, se) = mesh("ubq-exact.obj", &[]);
+    let (fast, sf) = mesh("ubq-fast.obj", &["--refine", "fast"]);
+    assert_eq!(body(&fast), body(&exact));
+    assert!(fast.contains("refine: fast"));
+    assert_eq!(sf["parameters"]["refine"], "fast");
+    assert_eq!(sf["engine"]["refine_cpu_edges"], 0);
+    assert!(se["engine"].get("refine_cpu_edges").is_none());
+    if cfg!(feature = "hip") && std::env::var("SESMESH_GPU_REQUIRE").as_deref() == Ok("1") {
+        let (gpu, sg) = mesh(
+            "ubq-fast-hip.obj",
+            &["--refine", "fast", "--backend", "hip"],
+        );
+        assert_eq!(faces(&gpu), faces(&exact));
+        assert_eq!(sg["engine"]["backend"], "hip");
+        assert!(sg["engine"]["refine_cpu_edges"].as_u64().is_some());
+        let (again, _) = mesh(
+            "ubq-fast-hip2.obj",
+            &["--refine", "fast", "--backend", "hip"],
+        );
+        assert_eq!(again, gpu);
+    }
+}
+
 /// `--backend` (Plan T11.2): every back end writes the CPU's bytes; a back
 /// end missing from the build is a usage error, an unusable device a
 /// runtime error.
