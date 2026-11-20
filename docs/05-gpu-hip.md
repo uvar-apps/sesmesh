@@ -6,6 +6,13 @@ document records the measurements behind the design (§2), the design (§3–§9
 and the plan (§10, Phase 11 of `docs/03-implementation-plan.md`).
 The decisions taken are listed in §11.
 
+> **Superseded in part (2026-11-21).** Device f64 is dropped: no f64 runs
+> on the GPU. The parts that assume it (§1 design bullets, §5 exact
+> refinement on the device, §8, §10 T11.3–T11.9) are replaced by the
+> prior-art review and revised plan in `docs/gpu-prior-art.md` (§5), which
+> Phase 11 now follows: spike S1, then T11.3′ (exact device sampling), S2,
+> T11.5′ (opt-in f32 refinement), T11.6′ (benchmarks, docs, release).
+
 ## 1. Summary
 
 * **The mesh stage is the target, and refinement is its largest part.** On
@@ -397,8 +404,16 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
     * `DeviceBuffer<T>` and `HostBuffer<T>` (pinned, device-visible,
       `Deref` to `[T]`) for a sealed set of plain number types;
     * `Stream`, `Event`;
-    * typed launchers for K1–K5 that take slices and descriptor structs
-      (T11.3 onwards).
+    * typed launchers that take slices and plain parameter structs. K1,
+      K2 and K4 (T11.3′) are `Resident` (the arrangement uploaded once:
+      frame-local `f32` copies, blocker tables, the CPU's cell grids)
+      and `Batch` (pinned per-batch buffers): `Resident::run` classifies,
+      gathers and samples a batch of bricks into a `Batch`. The kernels
+      bound every index by the uploaded lengths and the validated tables,
+      so bad input gives wrong values, never out-of-bounds accesses, and
+      the API stays safe. (The first T11.3, `Sampler` with CPU-gathered
+      jobs in staging words, was slower than the CPU and was removed;
+      `docs/gpu-prior-art.md` §4.)
   * It knows no sesmesh type; the packing code lives in `sesmesh`. No
     third-party types in its API.
   * **One crate rather than `sesmesh-hip`, `-cuda` and `-metal`.** HIP and
@@ -503,6 +518,14 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
   Metal has no f64, so it gets fast mode or CPU refinement only.
 
 ## 10. Plan (Phase 11)
+
+> **Status (2026-11-21).** Done: T11.0, T11.1, T11.2 (committed); spike S1
+> (`docs/gpu-prior-art.md` §5.2); T11.3′, exact device classification,
+> gathering and sampling (`docs/gpu-prior-art.md` §5.3). Deviations: the
+> first T11.3 (CPU-gathered jobs staged for the device) was measured
+> 2–27 % slower than the CPU and replaced by T11.3′; T11.4–T11.7 (device
+> f64) are dropped; the tasks that follow are those of
+> `docs/gpu-prior-art.md` §5.3 (S2, T11.5′, T11.6′).
 
 Every task's gate is checked on this machine. GitHub runners have no GPU,
 and the manual CI job only builds the feature in a ROCm container.

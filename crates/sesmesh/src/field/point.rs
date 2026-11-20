@@ -94,7 +94,46 @@ pub(crate) struct LocalCandidates {
     order: Vec<(f64, u32)>,
 }
 
+/// Candidate superset of one sub-block, in any order (S1 spike).
+#[cfg(all(test, feature = "hip"))]
+pub(crate) struct Superset<'a> {
+    pub(crate) inside: &'a [u32],
+    pub(crate) spheres: &'a [u32],
+    pub(crate) circles: &'a [u32],
+    pub(crate) vertices: &'a [u32],
+    pub(crate) near: &'a [u32],
+}
+
 impl LocalCandidates {
+    /// Same lists (SES `inside` compared as a set: only its membership
+    /// matters to [`SesField::eval_local`]).
+    #[cfg(all(test, feature = "hip"))]
+    pub(crate) fn same_as(&self, o: &Self, ses: bool) -> bool {
+        let inside = if ses {
+            let (mut x, mut y) = (self.inside.clone(), o.inside.clone());
+            x.sort_unstable();
+            y.sort_unstable();
+            x == y
+        } else {
+            self.inside == o.inside
+        };
+        inside
+            && self.near == o.near
+            && self.spheres == o.spheres
+            && self.s_off == o.s_off
+            && self.s_blk == o.s_blk
+            && self.circles == o.circles
+            && self.c_off == o.c_off
+            && self.c_blk == o.c_blk
+            && self.vertices == o.vertices
+    }
+
+    /// Something the optimiser cannot drop (S1 timing loops).
+    #[cfg(all(test, feature = "hip"))]
+    pub(crate) fn len_marker(&self) -> usize {
+        self.inside.len() + self.near.len() + self.s_blk.len() + self.c_blk.len()
+    }
+
     fn clear(&mut self) {
         self.inside.clear();
         self.near.clear();
@@ -534,6 +573,105 @@ impl SesField {
                         out.order.push((b.dist(a.centers[ku]) - a.expanded[ku], k));
                     }
                 });
+                sort_nearest(&mut out.order);
+                out.inside.extend(out.order.iter().map(|o| o.1));
+            }
+        }
+        out.order.clear();
+    }
+
+    /// [`Self::gather_local`] from a superset of its candidates (S1 spike:
+    /// device lists gathered with slack, in any order): the same exact f64
+    /// tests and orders, without the cell scans.
+    #[cfg(all(test, feature = "hip"))]
+    pub(crate) fn gather_local_from(
+        &self,
+        b: Vec3,
+        rho: f64,
+        band: f64,
+        sup: &Superset<'_>,
+        out: &mut LocalCandidates,
+    ) {
+        let a = &self.arr;
+        out.clear();
+        match self.kind {
+            SurfaceKind::Ses => {
+                let reach = self.probe + band + rho;
+                for &k in sup.near {
+                    let ku = k as usize;
+                    if a.status[ku] != Status::Contained
+                        && b.dist(a.centers[ku]) < a.expanded[ku] + reach
+                    {
+                        out.near.push(k);
+                    }
+                }
+                for &k in sup.inside {
+                    let ku = k as usize;
+                    if a.status[ku] != Status::Contained
+                        && b.dist(a.centers[ku]) < a.expanded[ku] + rho
+                    {
+                        out.inside.push(k);
+                    }
+                }
+                for &k in sup.spheres {
+                    let ku = k as usize;
+                    let lb = (b.dist(a.centers[ku]) - a.expanded[ku]).abs();
+                    if a.status[ku] == Status::Exposed && lb <= reach {
+                        out.order.push((lb, k));
+                    }
+                }
+                out.near.sort_unstable();
+                sort_nearest(&mut out.order);
+                for &(_, k) in &out.order {
+                    out.spheres.push(k);
+                    LocalCandidates::filter_blockers(
+                        &out.near,
+                        a.neighbors.row(k as usize),
+                        &mut out.s_blk,
+                    );
+                    out.s_off.push(out.s_blk.len() as u32);
+                }
+                out.order.clear();
+                for &ci in sup.circles {
+                    let c = &a.circles[ci as usize];
+                    let y = b - c.center;
+                    let along = y.dot(c.axis);
+                    let wl = (y - c.axis * along).norm();
+                    let dist = (along * along + (wl - c.radius) * (wl - c.radius)).sqrt();
+                    if dist <= reach {
+                        out.order.push((dist, ci));
+                    }
+                }
+                sort_nearest(&mut out.order);
+                for &(_, ci) in &out.order {
+                    out.circles.push(ci);
+                    LocalCandidates::filter_blockers(
+                        &out.near,
+                        a.circle_blockers.row(ci as usize),
+                        &mut out.c_blk,
+                    );
+                    out.c_off.push(out.c_blk.len() as u32);
+                }
+                out.order.clear();
+                for &vi in sup.vertices {
+                    let d = b.dist(a.vertices[vi as usize].position);
+                    if d <= reach {
+                        out.order.push((d, vi));
+                    }
+                }
+                sort_nearest(&mut out.order);
+                out.vertices.extend(out.order.iter().map(|o| o.1));
+            }
+            SurfaceKind::Sas | SurfaceKind::Vdw => {
+                let reach = band + rho;
+                for &k in sup.inside {
+                    let ku = k as usize;
+                    if a.status[ku] != Status::Contained
+                        && b.dist(a.centers[ku]) - a.expanded[ku] < reach
+                    {
+                        out.order.push((b.dist(a.centers[ku]) - a.expanded[ku], k));
+                    }
+                }
                 sort_nearest(&mut out.order);
                 out.inside.extend(out.order.iter().map(|o| o.1));
             }

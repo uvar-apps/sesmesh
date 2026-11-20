@@ -198,7 +198,15 @@ refused before any work.
 is installed but its device cannot be used (no code for the architecture,
 failed self-test). Opening the device (runtime, kernels, self-test) takes
 about 50 ms once per run. GPU support is being built (Phase 11,
-`docs/05-gpu-hip.md`): the mesh stages move to the device step by step.
+`docs/05-gpu-hip.md`): the mesh stages move to the device step by step. So
+far the device classifies the lattice, gathers candidates and samples the
+field, overlapped with the CPU's meshing; vertex refinement and the other
+stages stay on the CPU, and the output is the CPU back end's byte for
+byte. On a Ryzen AI Max+ 395 (16 Zen 5 cores, Radeon 8060S) runs take
+0.70–0.82 of the `cpu` time (1AON at 0.25 Å: 2.36 s instead of 3.41 s).
+Inputs that need the f64 sampling path (lattice points more than 2 000 Å
+from the structure's centre) and brick sizes that are odd or below 4 are
+sampled on the CPU.
 
 Ctrl-C (SIGINT) cancels the computation within about 100 ms and exits with
 code 130; in batch mode no further input is started. A closed standard

@@ -44,9 +44,30 @@ SESMESH_GPU_REQUIRE=1 cargo test -p sesmesh-gpu --features hip
 The device tests skip without a HIP runtime, device or kernels;
 `SESMESH_GPU_REQUIRE=1` turns a skip into a failure. They check the device
 properties, buffers, events, use from several threads, and that one million
-pairs of f32 and f64 inputs (including subnormals) give the CPU's results
-bit for bit. Tested on gfx1151 (Radeon 8060S, ROCm 7) with the
+pairs of f32 inputs (including subnormals) give the CPU's results bit for
+bit. Device code is f32 and integer only: no f64 runs on the GPU. Tested on gfx1151 (Radeon 8060S, ROCm 7) with the
 `gfx11-generic` object.
+
+## Kernels
+
+| Kernel | API | Replaces (sesmesh) |
+|---|---|---|
+| Classification, gathering and field sampling, SES and union of spheres (SAS, vdW) | `hip::Resident`, `hip::Batch` | `uniform_sign`, `gather_ses`, `gather_spheres`, `ses_kernel`, `sphere_kernel` |
+
+`Resident` holds the arrangement on the device: the frame-local f32 copies
+the CPU kernels use, the blocker tables and the CPU's cell grids, uploaded
+once. `Resident::run` takes a batch of bricks into a `Batch` (pinned host
+buffers the device reads and writes) in three passes: count (cheap
+classification, list sizes), fill (candidate lists, then the Lipschitz test
+at each sub-block centre) and sample (one workgroup per sub-block, one lane
+per sample). The list buffer is sized from the counts. Every f32 test that
+mirrors an f64 test of the CPU has a slack on its inclusive side, so the
+device's uniform sub-blocks are a subset of the CPU's and its lists
+supersets. The samples the CPU evaluates get its values bit for bit. The
+kernels bound every index by the uploaded lengths and the validated tables,
+so bad input gives wrong values, not memory errors. sesmesh's tests compare
+values and meshes with the CPU back end
+(`SESMESH_GPU_REQUIRE=1 cargo test -p sesmesh --features hip gpu`).
 
 ## Licence
 

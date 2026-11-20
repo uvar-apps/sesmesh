@@ -8,6 +8,20 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- GPU back end, HIP (Phase 11, #24; branch `phase-11-gpu-hip`, in
+  progress): crate `sesmesh-gpu` (all the `unsafe`, HIP loaded at run time,
+  kernels compiled by `hipcc` for generic AMD targets), `Backend::{Cpu,
+  Auto, Hip}` in `SurfaceParams` and `--backend` / `--gpu-device` in the
+  CLI (feature `hip`; default `Cpu`, output unchanged). With a HIP device
+  the mesh stage classifies, gathers and samples on the device from an
+  arrangement uploaded once, in batches that overlap the CPU's meshing;
+  vertex refinement stays on the CPU in f64. Device code is f32 and integer
+  only; its tests carry a slack above the f32 error, so the meshes equal
+  the CPU back end's byte for byte (`docs/gpu-prior-art.md` §3.2, §5).
+  On a Ryzen AI Max+ 395 (16 Zen 5 cores, Radeon 8060S) 1AON at 0.25 Å
+  takes 2.36 s instead of 3.41 s, 3J3Q at 1 Å 23.6 s instead of 29.0 s.
+  The first device sampling design (CPU-gathered jobs staged for the
+  device) was slower than the CPU and was replaced before release.
 - Ambient occlusion by post-processing with aomesh (#27):
   `tools/ao/ses_ao.py` runs sesmesh to OBJ and then aomesh 0.4.0 or later,
   which writes per-vertex AO as texture coordinates over a grey ramp

@@ -124,6 +124,15 @@ impl Resolved {
         Self::Cpu { fallback: None }
     }
 
+    /// The HIP device, if this is one.
+    #[cfg(feature = "hip")]
+    pub(crate) fn hip(&self) -> Option<&sesmesh_gpu::hip::Device> {
+        match self {
+            Self::Hip(d) => Some(d),
+            Self::Cpu { .. } => None,
+        }
+    }
+
     /// Name for [`crate::SurfaceStats::backend`].
     pub(crate) fn name(&self) -> &'static str {
         match self {

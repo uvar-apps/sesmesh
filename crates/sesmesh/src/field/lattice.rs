@@ -52,6 +52,12 @@ impl Lattice {
         )
     }
 
+    /// Lattice index of the `f32` frame origin.
+    #[cfg(feature = "hip")]
+    pub(crate) fn frame(&self) -> [i64; 3] {
+        self.frame
+    }
+
     /// Origin of the `f32` frame (a lattice point).
     pub(crate) fn frame_origin(&self) -> Vec3 {
         self.point(self.frame)

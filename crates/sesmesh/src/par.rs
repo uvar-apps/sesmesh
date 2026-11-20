@@ -43,6 +43,19 @@ where
     }
 }
 
+/// Threads of the current pool (1 without the `parallel` feature).
+#[cfg_attr(not(feature = "hip"), allow(dead_code))]
+pub(crate) fn threads() -> usize {
+    #[cfg(feature = "parallel")]
+    {
+        rayon::current_num_threads()
+    }
+    #[cfg(not(feature = "parallel"))]
+    {
+        1
+    }
+}
+
 /// Items per task when `n` items are processed in chunks with flat
 /// per-chunk arrays: about 256 tasks for large inputs, whose chunk arrays
 /// are then big allocations the allocator returns to the system when they

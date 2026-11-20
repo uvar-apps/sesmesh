@@ -114,8 +114,16 @@ any deviation from the plan.
   `estimate_memory`) and Taubin smoothing + re-projection (`mesh/post.rs`)
 - `crates/sesmesh-gpu` (Phase 11, `docs/05-gpu-hip.md`, unpublished): GPU back ends, all the
   `unsafe`; feature `hip`: `hip/ffi.rs` (`libloading` of `libamdhip64`), `hip/mod.rs`
-  (`Runtime`, `Device`, code-object selection), `memory.rs`, `stream.rs`, `selftest.rs`;
-  kernels in `kernels/hip/sesmesh.hip`, compiled by `build.rs` (README there)
+  (`Runtime`, `Device`, code-object selection), `memory.rs`, `stream.rs`, `selftest.rs`,
+  `resident.rs` (`Resident`: arrangement uploaded once; `Batch`: pinned per-batch buffers;
+  count → host scan → fill → sample passes); kernels in `kernels/hip/sesmesh.hip`, compiled by
+  `build.rs` (README there). In `sesmesh`: `field/gpu.rs` (feature `hip`, Plan T11.3′:
+  `Engine::resident`, `batch_params` (f32 radii + slack), `fold_brick_chunks_hip`: a device
+  thread fills a ring of 3 `Batch` buffers (one ≤ 64-brick chunk per pool thread each), the
+  pool takes chunks in order and meshes each once its batch is ready, no per-batch barrier;
+  `Batching`), called from `surface::mesh_stage` when
+  the back end is a HIP device and `Engine::device_ok` (f32 kernels, 8 sub-blocks per brick).
+  Spike S1 (`field/gpu_s1.rs`, ignored test `s1`, `docs/gpu-prior-art.md` §5.2)
 - `par.rs` rayon facade (feature `parallel`) · `crates/sesmesh-testkit` brute-force oracle,
   analytic two-sphere references, cluster generators, minimal OBJ reader
 - Website: `site/` (static HTML/CSS/JS, brutalist style, deployed by `.github/workflows/pages.yml`

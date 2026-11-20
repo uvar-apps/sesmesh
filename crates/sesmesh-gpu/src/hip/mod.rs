@@ -27,6 +27,7 @@ compile_error!("the HIP back end needs a 64-bit target");
 
 mod ffi;
 mod memory;
+mod resident;
 mod selftest;
 mod stream;
 
@@ -36,6 +37,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub use memory::{DeviceBuffer, DeviceCopy, HostBuffer};
+pub use resident::{
+    ArrangementRef, Batch, BatchParams, BatchTimes, GridRef, REC_WORDS, Resident, STATE_IN,
+    STATE_OUT, STATE_SAMPLE,
+};
 pub use selftest::SelfTestReport;
 pub use stream::{Event, Stream};
 
@@ -307,7 +312,9 @@ pub struct DeviceInfo {
 #[derive(Clone, Copy)]
 struct Kernels {
     selftest_f32: Handle,
-    selftest_f64: Handle,
+    resident_count: Handle,
+    resident_fill: Handle,
+    resident_sample: Handle,
 }
 
 impl Kernels {
@@ -323,7 +330,9 @@ impl Kernels {
         };
         Ok(Self {
             selftest_f32: func("sesmesh_selftest_f32")?,
-            selftest_f64: func("sesmesh_selftest_f64")?,
+            resident_count: func("sesmesh_resident_count")?,
+            resident_fill: func("sesmesh_resident_fill")?,
+            resident_sample: func("sesmesh_resident_sample")?,
         })
     }
 }
@@ -391,9 +400,9 @@ impl Device {
     }
 
     /// Runs the arithmetic self-test on `values` pseudo-random inputs (from
-    /// `seed`, including subnormals): the device computes f32 and f64
-    /// `+ − × ÷ √` and a few compound expressions, and the host compares
-    /// the bits with its own results.
+    /// `seed`, including subnormals): the device computes f32 `+ − × ÷ √`
+    /// and a few compound expressions, on device and on pinned host memory,
+    /// and the host compares the bits with its own results.
     ///
     /// # Errors
     ///

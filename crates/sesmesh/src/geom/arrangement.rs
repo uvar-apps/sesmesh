@@ -96,6 +96,12 @@ impl Csr {
         self.offsets.len().saturating_sub(1)
     }
 
+    /// Offsets and items (the GPU back end uploads them as they are).
+    #[cfg(feature = "hip")]
+    pub(crate) fn parts(&self) -> (&[u32], &[u32]) {
+        (&self.offsets, &self.items)
+    }
+
     pub(crate) fn row(&self, i: usize) -> &[u32] {
         &self.items[self.offsets[i] as usize..self.offsets[i + 1] as usize]
     }

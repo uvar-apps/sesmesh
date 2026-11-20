@@ -76,6 +76,13 @@ impl CellGrid {
         grid
     }
 
+    /// Origin, cell size, cells per axis, cell starts and items (the GPU
+    /// back end uploads them as they are).
+    #[cfg(feature = "hip")]
+    pub(crate) fn parts(&self) -> (Vec3, f64, [usize; 3], &[u32], &[u32]) {
+        (self.origin, self.cell, self.dims, &self.starts, &self.items)
+    }
+
     /// Cell edge actually used.
     pub(crate) fn cell(&self) -> f64 {
         self.cell

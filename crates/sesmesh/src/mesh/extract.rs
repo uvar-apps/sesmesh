@@ -679,6 +679,52 @@ mod tests {
         (converged, stalled)
     }
 
+    /// The assembled mesh does not depend on the chunk length (the device
+    /// path meshes in shorter chunks than the CPU path).
+    #[test]
+    fn mesh_does_not_depend_on_the_chunk_length() {
+        use crate::control::{Control, Stage};
+        use crate::field::ScratchPool;
+        let mut rng = Rng::new(5);
+        let c = random_chain(&mut rng, 40);
+        let spheres: Vec<Sphere> = c
+            .centers
+            .iter()
+            .zip(&c.radii)
+            .map(|(&p, &r)| Sphere::new(p, r))
+            .collect();
+        let field = SesField::new(&spheres, c.probe, SurfaceKind::Ses).unwrap();
+        let engine = Engine::new(field, 0.4, 10, SimdLevel::Auto).unwrap();
+        let (_, bricks) = engine.surface_bricks().unwrap();
+        let (control, pool) = (Control::new(), ScratchPool::default());
+        let mesh = |chunk: usize| {
+            let parts = engine
+                .fold_brick_chunks_with(
+                    &bricks,
+                    chunk,
+                    &control,
+                    Stage::Mesh,
+                    &pool,
+                    ChunkMesh::default,
+                    |m: &mut ChunkMesh, key, values: &[f32]| {
+                        m.push(&engine, key, values, RefineMode::Exact);
+                    },
+                )
+                .unwrap();
+            assemble(&bricks, chunk, parts).unwrap()
+        };
+        let reference = mesh(bricks.len());
+        assert!(reference.triangles.len() > 1000);
+        for chunk in [1, 3, 64] {
+            let m = mesh(chunk);
+            assert_eq!(m.positions, reference.positions, "chunk {chunk}");
+            assert_eq!(m.normals, reference.normals, "chunk {chunk}");
+            assert_eq!(m.triangles, reference.triangles, "chunk {chunk}");
+            assert_eq!(m.vertex_atom, reference.vertex_atom, "chunk {chunk}");
+            assert_eq!(m.vertex_patch, reference.vertex_patch, "chunk {chunk}");
+        }
+    }
+
     #[test]
     fn converged_edges_keep_their_1_1_vertices() {
         // Atoms around edges where Newton / Illinois stall (1AON, 4HHB, and

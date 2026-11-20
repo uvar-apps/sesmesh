@@ -22,6 +22,15 @@ use crate::error::{Error, Result};
 use crate::geom::{Status, Vec3};
 use crate::par;
 
+/// The mesh stage with classification, gathering and field sampling on a
+/// HIP device (Plan T11.3′).
+#[cfg(feature = "hip")]
+#[path = "gpu.rs"]
+pub(crate) mod gpu;
+#[cfg(all(test, feature = "hip"))]
+#[path = "gpu_s1.rs"]
+mod gpu_s1;
+
 /// Largest vector width (f32 lanes, AVX-512); sample buffers are padded to a
 /// multiple of it so no scalar tail path exists (bitwise consistency, P7).
 const MAX_LANES: usize = 16;
@@ -109,6 +118,10 @@ impl Gathered {
         self.c_blk.clear();
     }
 }
+
+/// Per sub-block of a brick: `Some(sign)` where the field provably has
+/// that sign (`true`: outside), `None` where the surface may pass.
+pub(crate) type SubStates = [Option<bool>; 8];
 
 /// Per-thread buffers reused across bricks.
 #[derive(Debug, Default)]
@@ -397,17 +410,62 @@ impl Engine {
     /// sub-blocks; signs are always exact, so neighbouring bricks agree on
     /// every inside/outside decision.
     pub(crate) fn evaluate(&self, key: [i32; 3], s: &mut BrickScratch) {
-        let b = self.lattice.b;
-        let side = b + 1;
-        let origin = self.lattice.brick_origin(key);
+        let state = self.sub_states(key);
+        self.assign(key, &state, s);
+        if !self.f32_ok {
+            return;
+        }
+        let probe = self.field.probe as f32;
+        let cutoff = (self.field.probe + self.band) as f32;
         let band = self.band as f32;
+        for sb in 0..self.sub_blocks() {
+            let Some(padded) = self.prepare_sub(key, sb, s) else {
+                continue;
+            };
+            let BrickScratch {
+                g, xs, ys, zs, out, ..
+            } = s;
+            let (xs, ys, zs, out) = (
+                &xs[..padded],
+                &ys[..padded],
+                &zs[..padded],
+                &mut out[..padded],
+            );
+            match self.field.kind {
+                SurfaceKind::Ses => {
+                    dispatch!(self.level, simd => ses_kernel(simd, g, xs, ys, zs, probe, cutoff * cutoff, out));
+                }
+                SurfaceKind::Sas | SurfaceKind::Vdw => {
+                    dispatch!(self.level, simd => sphere_kernel(simd, g, xs, ys, zs, band, out));
+                }
+            }
+            for (j, &i) in s.groups[sb].iter().enumerate() {
+                s.values[i as usize] = s.out[j];
+            }
+        }
+    }
 
-        // Sub-block classification.
+    /// Sub-block edge in cells and sub-blocks per brick edge: 2×2×2
+    /// sub-blocks for even brick sizes ≥ 4, else the brick itself.
+    fn sub_layout(&self) -> (i64, i64) {
+        let b = self.lattice.b;
         let sub = if b % 2 == 0 && b >= 4 { b / 2 } else { b };
-        let nsub = b / sub;
+        (sub, b / sub)
+    }
+
+    /// Sub-blocks per brick (8 or 1).
+    pub(crate) fn sub_blocks(&self) -> usize {
+        let (_, nsub) = self.sub_layout();
+        (nsub * nsub * nsub) as usize
+    }
+
+    /// Sign of each sub-block of brick `key` where it is provably uniform
+    /// (`None`: the surface may pass through it).
+    pub(crate) fn sub_states(&self, key: [i32; 3]) -> SubStates {
+        let (sub, nsub) = self.sub_layout();
         let mut state = [None::<bool>; 8];
         if nsub == 2 {
-            let base = self.lattice.point(origin);
+            let base = self.lattice.point(self.lattice.brick_origin(key));
             let h = self.lattice.h;
             let rho = 0.5 * 3f64.sqrt() * sub as f64 * h;
             for (i, st) in state.iter_mut().enumerate() {
@@ -417,6 +475,20 @@ impl Engine {
                 *st = lattice::uniform_sign(&self.field, center, rho);
             }
         }
+        state
+    }
+
+    /// Assigns every sample of brick `key` to the first non-uniform
+    /// sub-block containing it (`s.groups`), and gives the samples of
+    /// uniform sub-blocks their `±band` value. Without the `f32` kernels the
+    /// assigned samples get their exact value here. Depends only on `key`
+    /// and `state`.
+    pub(crate) fn assign(&self, key: [i32; 3], state: &SubStates, s: &mut BrickScratch) {
+        let b = self.lattice.b;
+        let side = b + 1;
+        let origin = self.lattice.brick_origin(key);
+        let band = self.band as f32;
+        let (sub, nsub) = self.sub_layout();
         let range = |v: i64| {
             let hi = (v / sub).min(nsub - 1);
             let lo = if v > 0 && v % sub == 0 {
@@ -468,74 +540,58 @@ impl Engine {
                 }
             }
         }
-        if !self.f32_ok {
-            return;
+    }
+
+    /// Prepares sub-block `sb` of brick `key` for a kernel (after
+    /// [`Engine::assign`]): the frame-local coordinates of its samples in
+    /// `s.xs/ys/zs` (padded to a multiple of the widest vector by repeating
+    /// the last) and its candidates in `s.g`. Returns the padded sample
+    /// count, or `None` if the sub-block evaluates no sample.
+    pub(crate) fn prepare_sub(
+        &self,
+        key: [i32; 3],
+        sb: usize,
+        s: &mut BrickScratch,
+    ) -> Option<usize> {
+        let m = s.groups[sb].len();
+        if m == 0 {
+            return None;
         }
-        let probe = self.field.probe as f32;
-        let cutoff = (self.field.probe + self.band) as f32;
+        let b = self.lattice.b;
+        let side = b + 1;
+        let origin = self.lattice.brick_origin(key);
+        let (sub, nsub) = self.sub_layout();
         let h = self.lattice.h;
         let base = self.lattice.point(origin);
         let (sub_rho, half) = (0.5 * 3f64.sqrt() * sub as f64 * h, sub as f64 * 0.5);
-        for sb in 0..(nsub * nsub * nsub) as usize {
-            let m = s.groups[sb].len();
-            if m == 0 {
-                continue;
-            }
-            // Gather candidates for this sub-block only (tighter reach).
-            let (center, rho) = if nsub == 2 {
-                let off = |bit: usize| ((sb >> bit) & 1) as f64 * sub as f64 + half;
-                (base + Vec3::new(off(0), off(1), off(2)) * h, sub_rho)
-            } else {
-                (self.lattice.brick_center(key), self.lattice.brick_radius())
-            };
-            let side_u = side as usize;
-            for (j, &i) in s.groups[sb].iter().enumerate() {
-                let i = i as usize;
-                let (x, y, z) = (i % side_u, (i / side_u) % side_u, i / (side_u * side_u));
-                let idx = [
-                    origin[0] + x as i64,
-                    origin[1] + y as i64,
-                    origin[2] + z as i64,
-                ];
-                let [lx, ly, lz] = self.lattice.local(idx);
-                (s.xs[j], s.ys[j], s.zs[j]) = (lx, ly, lz);
-            }
-            let padded = m.div_ceil(MAX_LANES) * MAX_LANES;
-            for k in m..padded {
-                (s.xs[k], s.ys[k], s.zs[k]) = (s.xs[m - 1], s.ys[m - 1], s.zs[m - 1]);
-            }
-            match self.field.kind {
-                SurfaceKind::Ses => {
-                    self.gather_ses(center, rho, s);
-                    let BrickScratch {
-                        g, xs, ys, zs, out, ..
-                    } = s;
-                    let (xs, ys, zs, out) = (
-                        &xs[..padded],
-                        &ys[..padded],
-                        &zs[..padded],
-                        &mut out[..padded],
-                    );
-                    dispatch!(self.level, simd => ses_kernel(simd, g, xs, ys, zs, probe, cutoff * cutoff, out));
-                }
-                SurfaceKind::Sas | SurfaceKind::Vdw => {
-                    self.gather_spheres(center, rho, self.band, s);
-                    let BrickScratch {
-                        g, xs, ys, zs, out, ..
-                    } = s;
-                    let (xs, ys, zs, out) = (
-                        &xs[..padded],
-                        &ys[..padded],
-                        &zs[..padded],
-                        &mut out[..padded],
-                    );
-                    dispatch!(self.level, simd => sphere_kernel(simd, g, xs, ys, zs, band, out));
-                }
-            }
-            for (j, &i) in s.groups[sb].iter().enumerate() {
-                s.values[i as usize] = s.out[j];
-            }
+        // Gather candidates for this sub-block only (tighter reach).
+        let (center, rho) = if nsub == 2 {
+            let off = |bit: usize| ((sb >> bit) & 1) as f64 * sub as f64 + half;
+            (base + Vec3::new(off(0), off(1), off(2)) * h, sub_rho)
+        } else {
+            (self.lattice.brick_center(key), self.lattice.brick_radius())
+        };
+        let side_u = side as usize;
+        for (j, &i) in s.groups[sb].iter().enumerate() {
+            let i = i as usize;
+            let (x, y, z) = (i % side_u, (i / side_u) % side_u, i / (side_u * side_u));
+            let idx = [
+                origin[0] + x as i64,
+                origin[1] + y as i64,
+                origin[2] + z as i64,
+            ];
+            let [lx, ly, lz] = self.lattice.local(idx);
+            (s.xs[j], s.ys[j], s.zs[j]) = (lx, ly, lz);
         }
+        let padded = m.div_ceil(MAX_LANES) * MAX_LANES;
+        for k in m..padded {
+            (s.xs[k], s.ys[k], s.zs[k]) = (s.xs[m - 1], s.ys[m - 1], s.zs[m - 1]);
+        }
+        match self.field.kind {
+            SurfaceKind::Ses => self.gather_ses(center, rho, s),
+            SurfaceKind::Sas | SurfaceKind::Vdw => self.gather_spheres(center, rho, self.band, s),
+        }
+        Some(padded)
     }
 
     /// Collects the spheres within `reach` of `b` (beyond their expanded

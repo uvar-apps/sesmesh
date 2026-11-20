@@ -933,6 +933,51 @@ fn select_components(
     (n, fragments)
 }
 
+/// Samples and meshes `bricks` in chunks, classifying, gathering and
+/// sampling on the back end's device where it has one (same mesh). Returns the chunk meshes and the chunk
+/// length, for [`extract::assemble`].
+fn mesh_stage(
+    engine: &Engine,
+    backend: &Resolved,
+    bricks: &[[i32; 3]],
+    control: &Control<'_>,
+    pool: &ScratchPool,
+    refine: RefineMode,
+) -> Result<(Vec<extract::ChunkMesh>, usize)> {
+    let push = |part: &mut extract::ChunkMesh, key, values: &[f32]| {
+        part.push(engine, key, values, refine);
+    };
+    #[cfg(feature = "hip")]
+    if let Some(device) = backend.hip()
+        && engine.device_ok()
+    {
+        let chunk = crate::field::device_chunk(bricks.len());
+        let parts = engine.fold_brick_chunks_hip(
+            device,
+            crate::field::Batching::default(),
+            bricks,
+            chunk,
+            control,
+            Stage::Mesh,
+            extract::ChunkMesh::default,
+            push,
+        )?;
+        return Ok((parts, chunk));
+    }
+    let _ = backend;
+    let chunk = crate::par::chunk_len(bricks.len());
+    let parts = engine.fold_brick_chunks_with(
+        bricks,
+        chunk,
+        control,
+        Stage::Mesh,
+        pool,
+        extract::ChunkMesh::default,
+        push,
+    )?;
+    Ok((parts, chunk))
+}
+
 /// The pipeline. `backend` is the engine's open back end, or `None` to
 /// resolve `params.backend` here (timed as [`Timings::device`]).
 fn run(
@@ -997,16 +1042,7 @@ fn run(
     control.report(Stage::Classify, 1, 1);
     lap(&mut timings.classify);
 
-    let chunk = crate::par::chunk_len(bricks.len());
-    let parts = engine.fold_brick_chunks_with(
-        &bricks,
-        chunk,
-        control,
-        Stage::Mesh,
-        pool,
-        extract::ChunkMesh::default,
-        |part, key, values| part.push(&engine, key, values, params.refine),
-    )?;
+    let (parts, chunk) = mesh_stage(&engine, backend, &bricks, control, pool, params.refine)?;
     let simd = engine.simd_name();
     // Only smoothing needs the field after meshing: free it before the
     // assembly, which with validation and decimation holds the peak
@@ -1280,13 +1316,22 @@ mod tests {
     }
 
     /// Setting the flag from the progress callback at the given stage stops
-    /// the computation with `Error::Cancelled`, promptly.
+    /// the computation with `Error::Cancelled`, promptly; on the CPU and, if
+    /// it opens, on HIP device 0.
     #[test]
     fn cancellation_is_prompt() {
         let c = random_chain(&mut Rng::new(21), 400);
         let s = spheres(&c);
-        let params = SurfaceParams::ses(c.probe).with_spacing(0.25);
-        for (stage, after) in [(Stage::Geometry, 0), (Stage::Classify, 0), (Stage::Mesh, 1)] {
+        let mut backends = vec![Backend::Cpu];
+        if Resolved::new(&Backend::hip(0)).is_ok() {
+            backends.push(Backend::hip(0));
+        }
+        for (backend, (stage, after)) in backends.into_iter().flat_map(|b| {
+            [(Stage::Geometry, 0), (Stage::Classify, 0), (Stage::Mesh, 1)].map(|s| (b, s))
+        }) {
+            let params = SurfaceParams::ses(c.probe)
+                .with_spacing(0.25)
+                .with_backend(backend);
             let flag = AtomicBool::new(false);
             let set_at = Mutex::new(None::<Instant>);
             let cb = |p: Progress| {
@@ -1300,11 +1345,14 @@ mod tests {
             let latency = set_at.lock().unwrap().expect("flag set").elapsed();
             assert!(
                 matches!(r, Err(Error::Cancelled)),
-                "{stage:?}: {:?}",
+                "{backend:?} {stage:?}: {:?}",
                 r.map(|o| o.stats)
             );
             let bound = if cfg!(debug_assertions) { 2.0 } else { 0.1 };
-            assert!(latency.as_secs_f64() < bound, "{stage:?}: {latency:?}");
+            assert!(
+                latency.as_secs_f64() < bound,
+                "{backend:?} {stage:?}: {latency:?}"
+            );
         }
     }
 
