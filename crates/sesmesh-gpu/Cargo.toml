@@ -1,0 +1,57 @@
+# sesmesh — Solvent Excluded Surface meshes for molecules
+# Copyright (c) 2026 Ugo Varetto
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "sesmesh-gpu"
+description = "GPU back ends of sesmesh (implementation crate; use sesmesh's features instead)"
+readme = "README.md"
+keywords = ["molecular-surface", "gpu", "hip", "rocm"]
+categories = ["science", "science::bioinformatics"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/sesmesh-gpu"
+# Published once `sesmesh` depends on it (Phase 11, docs/05-gpu-hip.md §9).
+publish = false
+
+[package.metadata.docs.rs]
+all-features = true
+
+[features]
+# AMD GPUs through HIP (ROCm). Needs `hipcc` at build time (docs/05-gpu-hip.md
+# §9); the runtime library is loaded when a device is opened.
+hip = ["dep:libloading"]
+
+[dependencies]
+libloading = { workspace = true, optional = true }
+thiserror.workspace = true
+
+# The workspace lints, except that `unsafe` is allowed where marked: this
+# crate holds the FFI of the GPU back ends (`sesmesh` forbids `unsafe`).
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ["cfg(fuzzing)"] }
+unsafe_code = "deny"
+missing_docs = "deny"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+cast_lossless = "warn"
+cloned_instead_of_copied = "warn"
+dbg_macro = "warn"
+explicit_iter_loop = "warn"
+manual_let_else = "warn"
+needless_pass_by_value = "warn"
+redundant_closure_for_method_calls = "warn"
+semicolon_if_nothing_returned = "warn"
+todo = "warn"
+uninlined_format_args = "warn"
+unnested_or_patterns = "warn"
+undocumented_unsafe_blocks = "warn"

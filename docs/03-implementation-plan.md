@@ -453,6 +453,26 @@ Shared design for the CUDA (#25) and Metal (#26) back ends in §9.
 >   * one implementation crate `sesmesh-gpu` with vendor features; back ends
 >     are features of `sesmesh`/`sesmesh-cli`;
 >   * HIP code objects are built at build time for ROCm's generic targets.
+> * T11.1 done (2026-11-20): crate `crates/sesmesh-gpu` (feature `hip`,
+>   README there). `libloading` 0.9 opens `libamdhip64` (`.so.7`, `.so.6`,
+>   `.so`, then `$ROCM_PATH`/`$HIP_PATH`/`/opt/rocm`); device properties via
+>   the versioned `hipGetDevicePropertiesR0600` with a layout sanity check;
+>   `build.rs` compiles `kernels/hip/sesmesh.hip` per target (default
+>   `gfx10-3-generic`, `gfx11-generic`, `gfx12-generic`, wave64 on RDNA,
+>   ≈ 12 KB offload bundles) and fails with a clear message without
+>   `hipcc`; `SESMESH_GPU_NO_KERNELS=1` builds without kernels for clippy and
+>   rustdoc on machines without ROCm (added to the validation commands), and
+>   `DOCS_RS` implies it. Tests (`tests/hip.rs`, skip without a device unless
+>   `SESMESH_GPU_REQUIRE=1`) pass on gfx1151 (HIP 7.16) with the
+>   `gfx11-generic` object: 1 M f32/f64 input pairs bit-identical, buffers,
+>   events, threads; a `gfx1030`-only build reports "no GPU code in this
+>   build runs on gfx1151", a `gfx1151` object loads before the generic
+>   one, and with `/opt/rocm` hidden (mount namespace) the same test binary
+>   reports "GPU runtime library not found" and skips. Deviations from design §9 (updated there): `Runtime::load()` then
+>   `Runtime::open(index)` instead of `Device::open`; no f64 rate class yet
+>   (T11.8); the module is internal to `Device`; the self-test also runs on
+>   pinned host memory (zero copy); `publish = false` until `sesmesh`
+>   depends on the crate (T11.2).
 
 ---
 

@@ -11,7 +11,7 @@ task IDs (T7.1 …) and requirement IDs (FR-*, NFR-*) come from there. Every pla
 ```bash
 cargo test --workspace                     # all tests (debug, ~1.5 min)
 cargo test --workspace --release -- --include-ignored   # + 10k clusters, 3J3Q, 4HHB/1AON determinism
-cargo clippy --workspace --all-targets --all-features -- -D warnings
+SESMESH_GPU_NO_KERNELS=1 cargo clippy --workspace --all-targets --all-features -- -D warnings  # no ROCm here
 cargo clippy -p sesmesh -p sesmesh-cli --lib --bins --target x86_64-unknown-linux-gnu -- -D warnings  # x86-only cfg code
 cargo fmt --all
 cargo +1.89 check -p sesmesh -p sesmesh-cli  # MSRV
@@ -21,6 +21,7 @@ cargo xtask fetch --set validation --set sweep   # Phase 9 corpora (~70 MB)
 cargo run --release -p xtask -- validate   # accuracy study → docs/validation/accuracy.csv (~3 min)
 cargo run --release -p xtask -- sweep      # robustness sweep → docs/validation/sweep.csv (~2 min)
 SESMESH_BLESS=1 cargo test -p sesmesh mc_table   # regenerate mesh/mc_table.rs (then rerun tests)
+SESMESH_GPU_REQUIRE=1 cargo +stable test -p sesmesh-gpu --features hip   # on a ROCm machine (gfx1151)
 python3 -m unittest discover -s tools/ao   # ses_ao.py (end-to-end tests need aomesh >= 0.4.0)
 target/release/sesmesh data/1crn.cif -q high --timings   # CLI smoke run (writes 1crn.obj)
 ```
@@ -31,7 +32,8 @@ Apache-2.0` (comment syntax of the language; after a shebang, before `#![…]`; 
 it, see `CONTRIBUTING.md`). Author everywhere: Ugo Varetto (Cargo `authors`, licences, README,
 site footer).
 
-MSRV 1.89, edition 2024, `unsafe_code = "forbid"`, `missing_docs = "deny"`, the library never
+MSRV 1.89, edition 2024, `unsafe_code = "forbid"` (except `crates/sesmesh-gpu`, the GPU FFI:
+`deny`, allowed in its `hip` module, `// SAFETY:` on every block), `missing_docs = "deny"`, the library never
 prints, output must not depend on thread count (byte-identical OBJ is tested), no third-party
 types in the public API, public option structs are `#[non_exhaustive]` (outside the crate build
 them with `Default` + field assignment). Keep docs, plan status boxes and CHANGELOG in sync with
@@ -109,6 +111,10 @@ any deviation from the plan.
   `export/` OBJ (colours, groups), binary PLY, MSMS `.vert`/`.face` writers + fixed-point
   formatter · `color/` palettes · density/memory estimate (`Resolution::Density`,
   `estimate_memory`) and Taubin smoothing + re-projection (`mesh/post.rs`)
+- `crates/sesmesh-gpu` (Phase 11, `docs/05-gpu-hip.md`, unpublished): GPU back ends, all the
+  `unsafe`; feature `hip`: `hip/ffi.rs` (`libloading` of `libamdhip64`), `hip/mod.rs`
+  (`Runtime`, `Device`, code-object selection), `memory.rs`, `stream.rs`, `selftest.rs`;
+  kernels in `kernels/hip/sesmesh.hip`, compiled by `build.rs` (README there)
 - `par.rs` rayon facade (feature `parallel`) · `crates/sesmesh-testkit` brute-force oracle,
   analytic two-sphere references, cluster generators, minimal OBJ reader
 - Website: `site/` (static HTML/CSS/JS, brutalist style, deployed by `.github/workflows/pages.yml`
@@ -223,6 +229,11 @@ tick them in #19. Summary:
   `mesh_k.vert/.face`; ChimeraX reads no PQR (set radii on the atoms) and writes unshared
   vertices per patch.
 
+- GPU (Phase 11): the gfx1151 machine's default Rust toolchain is 1.88 (below the MSRV): use
+  `cargo +stable` there, with `~/.cargo/bin` on `PATH` in non-interactive ssh. `hipcc --genco`
+  writes a clang offload bundle, not an ELF: inspect it with `/opt/rocm/lib/llvm/bin/
+  clang-offload-bundler --unbundle --type=o --targets=hipv4-amdgcn-amd-amdhsa--<target>`, then
+  `llvm-readelf --notes` (`.wavefront_size`). Check GPU load (`gpu_busy_percent`) before timing.
 - Timing on this machine is noisy (Defender and other apps; load average often 10–25): write
   outputs to `/dev/null`, check `uptime`, compare with criterion baselines
   (`--save-baseline` / `--baseline`), repeat runs. Single-thread runs are steadier.

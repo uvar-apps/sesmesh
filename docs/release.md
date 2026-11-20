@@ -2,7 +2,8 @@
 
 Publishable crates: `sesmesh` (library) and `sesmesh-cli` (binary
 `sesmesh`), published in that order. `sesmesh-testkit` and `xtask` are
-private (`publish = false`).
+private (`publish = false`), and so is `sesmesh-gpu` (GPU back ends) until
+`sesmesh` depends on it (Phase 11).
 
 ## v1.0 criteria (Spec §6.2) — status at 1.0.0 (2026-11-13)
 
@@ -21,17 +22,23 @@ steps as `.github/workflows/ci.yml`, which runs only by hand:
 
 ```bash
 cargo fmt --all --check
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+SESMESH_GPU_NO_KERNELS=1 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo clippy -p sesmesh -p sesmesh-cli --lib --bins --target x86_64-unknown-linux-gnu --locked -- -D warnings
 cargo test --workspace --locked
 cargo test --workspace --locked --release -- --include-ignored
 for e in file_to_obj spheres_to_mesh trajectory custom_radii field_queries; do cargo run -q --release --locked -p sesmesh --example $e; done
-RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked
+SESMESH_GPU_NO_KERNELS=1 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked
 cargo +1.89 check --package sesmesh --package sesmesh-cli --locked
 cargo deny check
 cargo publish --workspace --dry-run --locked
 python3 -m unittest discover -s tools/ao
 ```
+
+`SESMESH_GPU_NO_KERNELS=1` lets `--all-features` build `sesmesh-gpu`'s `hip`
+feature without ROCm (no kernels are compiled; docs/05-gpu-hip.md §9). The
+HIP tests themselves run on a ROCm machine:
+`SESMESH_GPU_REQUIRE=1 cargo test -p sesmesh-gpu --features hip` (they skip
+without a device unless `SESMESH_GPU_REQUIRE=1`).
 
 This covers the host only (macOS arm64 here). Linux x86-64, Linux arm64 and
 Windows are covered by running the CI workflow by hand, or by testing on

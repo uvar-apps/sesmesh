@@ -40,7 +40,10 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      # No ROCm on the runner: build the `hip` feature without kernels.
       - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+        env:
+          SESMESH_GPU_NO_KERNELS: "1"
 
   test:
     name: test (${{ matrix.os }})
@@ -95,6 +98,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RUSTDOCFLAGS: -D warnings
+      SESMESH_GPU_NO_KERNELS: "1"
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable

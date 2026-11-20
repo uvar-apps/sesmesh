@@ -9,8 +9,8 @@ IDs it implements (`FR-*`, `NFR-*` from the
 
 A task is done when:
 
-1. Code is formatted (`cargo fmt --all`) and `cargo clippy --workspace --all-targets --all-features -- -D warnings` is clean.
-2. There is no `unsafe` code (enforced by `unsafe_code = "forbid"`).
+1. Code is formatted (`cargo fmt --all`) and `SESMESH_GPU_NO_KERNELS=1 cargo clippy --workspace --all-targets --all-features -- -D warnings` is clean (the variable builds the `hip` feature of `sesmesh-gpu` without ROCm).
+2. There is no `unsafe` code (enforced by `unsafe_code = "forbid"`), except the GPU FFI in `crates/sesmesh-gpu` (`unsafe_code = "deny"`, allowed per module, every block with a `// SAFETY:` comment).
 3. Every public item is documented (`missing_docs = "deny"`), with an example
    when it is user-facing.
 4. Unit tests (and property tests where the plan asks for them) pass on all
@@ -29,7 +29,7 @@ cargo fmt --all --check
 ```
 
 ```bash
-cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+SESMESH_GPU_NO_KERNELS=1 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 ```
 
 ```bash
@@ -37,7 +37,7 @@ cargo test --workspace --locked
 ```
 
 ```bash
-RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked
+SESMESH_GPU_NO_KERNELS=1 RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --all-features --locked
 ```
 
 ```bash

@@ -387,14 +387,18 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
       differences);
     * Metal MSL separately;
     * the `#[repr(C)]` batch descriptors, shared by all vendors.
-  * A safe API in plain types:
-    * `Device::open(index)` (properties: name, arch, CUs, wave sizes,
-      integrated, memory, f64 rate class);
-    * `Module` (embedded code objects);
-    * `DeviceBuffer<T>` and `HostBuffer<T>` (device-visible, `Deref` to
-      `[T]`);
+  * A safe API in plain types (as built in T11.1, except the launchers):
+    * `Runtime::load()` (the runtime library) and `Runtime::open(index)`,
+      which returns a `Device` with the embedded code object loaded and the
+      self-test passed. `DeviceInfo`: name, arch, CUs, native wave size,
+      integrated, memory, code object, runtime version. An f64 rate class
+      comes with tuning (T11.8), if it is needed;
+    * the loaded module stays internal to `Device`;
+    * `DeviceBuffer<T>` and `HostBuffer<T>` (pinned, device-visible,
+      `Deref` to `[T]`) for a sealed set of plain number types;
     * `Stream`, `Event`;
-    * typed launchers for K1–K5 that take slices and descriptor structs.
+    * typed launchers for K1–K5 that take slices and descriptor structs
+      (T11.3 onwards).
   * It knows no sesmesh type; the packing code lives in `sesmesh`. No
     third-party types in its API.
   * **One crate rather than `sesmesh-hip`, `-cuda` and `-metal`.** HIP and
@@ -403,8 +407,9 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
     crates would need a fourth, common one. Splitting would not buy
     isolation either: the build script runs only the enabled vendors'
     compilers, and target-gated dependencies keep Metal off Linux.
-  * **Versioning.** Published with every release at the workspace version.
-    `sesmesh` requires it as `=x.y.z`. It is documented as an
+  * **Versioning.** Published with every release at the workspace version,
+    from the first release in which `sesmesh` depends on it (until then
+    `publish = false`). `sesmesh` requires it as `=x.y.z`. It is documented as an
     implementation detail whose API may change in minor releases.
 * **`sesmesh`:**
   * Optional dependency on `sesmesh-gpu` behind the feature `hip` (later
@@ -432,7 +437,10 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
     `gfx10-3-generic` (RDNA 2), `gfx11-generic` (RDNA 3 and 3.5),
     `gfx12-generic` (RDNA 4). Data-centre targets (`gfx90a`,
     `gfx9-4-generic`) are added when those GPUs are tested. The list can be
-    overridden with `SESMESH_HIP_ARCHS`.
+    overridden with `SESMESH_HIP_ARCHS`; specific targets load before
+    generic ones. Without `hipcc` the build fails with a message saying so;
+    `SESMESH_GPU_NO_KERNELS=1` builds without kernels for code checks
+    (clippy, rustdoc) on machines without ROCm.
   * **Measured.** A `gfx11-generic` object ran the sampling kernel on
     gfx1151 at the same speed as a `gfx1151` object (60 ms on 1AON 0.5 Å)
     and bit-identical to the CPU. Each object is ≈ 17 KB and takes
@@ -443,8 +451,9 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
     device supports. A device that no object covers is unsupported, and
     `auto` falls back to the CPU.
   * **Self-test.** When a device opens, a short test (the arithmetic
-    agreement of §2.4 on a few thousand values, about 1 ms) confirms that
-    it computes as the CPU does. A device that fails is not used.
+    agreement of §2.4 on 4 096 values, f32 on device buffers and f64 on
+    pinned host memory) confirms that it computes as the CPU does. A device
+    that fails is not used.
   * **docs.rs.** The build script skips kernel compilation when `DOCS_RS`
     is set.
   * **Why not hiprtc at run time.** Cold compilation took 200 ms for the

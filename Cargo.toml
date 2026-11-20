@@ -7,6 +7,7 @@ resolver = "3"
 members = [
     "crates/sesmesh",
     "crates/sesmesh-cli",
+    "crates/sesmesh-gpu",
     "crates/sesmesh-testkit",
     "xtask",
 ]
@@ -14,6 +15,7 @@ exclude = ["fuzz"]
 default-members = [
     "crates/sesmesh",
     "crates/sesmesh-cli",
+    "crates/sesmesh-gpu",
     "crates/sesmesh-testkit",
 ]
 
@@ -45,6 +47,7 @@ criterion = "0.8"
 fast-float2 = "0.2"
 fearless_simd = { version = "1.2", features = ["force_support_fallback"] }
 flate2 = { version = "1.1", default-features = false, features = ["zlib-rs"] }
+libloading = "0.9"
 memchr = "2.8"
 proptest = "1.12"
 rayon = "1.12"
