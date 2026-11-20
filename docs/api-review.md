@@ -27,11 +27,12 @@ Review of the `sesmesh` public API against the
 
 * **Non-exhaustive** (may grow without a breaking change): all option and
   result structs with public fields (`SurfaceParams`, `SurfaceStats`,
-  `SurfaceOutput`, `Timings`, `Mesh`, `Component`, `Validation`, `ObjOptions`,
+  `SurfaceOutput`, `Timings`, `HipOptions`, `Mesh`, `Component`, `Validation`, `ObjOptions`,
   `PlyOptions`, `MsmsHeader`, `ReadOptions`, `RadiusOptions`, `Selection`,
   `AtomRecord`, `Model`, `Structure`, `Source`, `FieldSample`, `Progress`,
   `AssemblySummary`, `Warning`, `ArrangementStats`) and all enums except
   `PatchKind` (`Error`, `WarningKind`, `Format`, `SurfaceKind`, `SimdLevel`,
+  `Backend`,
   `Quality`, `Resolution`, `RefineMode`, `CavityMode`, `NormalMode`,
   `Stage`, `Patch`, `ModelChoice`, `AltLocPolicy`, `ChainIdKind`,
   `RadiusSet`, `BuiltinRadii`).

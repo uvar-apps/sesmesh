@@ -7,6 +7,7 @@
 
 use std::time::{Duration, Instant};
 
+use crate::backend::{Backend, Resolved};
 use crate::control::{Control, Stage};
 use crate::diag::Diagnostics;
 use crate::error::{Error, Result};
@@ -223,6 +224,9 @@ pub struct SurfaceParams {
     /// Decimation after smoothing (Spec FR-LOD-4); retained vertices stay
     /// on the exact surface. Default `None`.
     pub decimation: Option<mesh::Decimation>,
+    /// Where the mesh stages run. Default [`Backend::Cpu`]. GPU back ends
+    /// give the same output (docs/05-gpu-hip.md §3).
+    pub backend: Backend,
 }
 
 impl Default for SurfaceParams {
@@ -250,6 +254,7 @@ impl SurfaceParams {
             auto_coarsen: false,
             smoothing: 0,
             decimation: None,
+            backend: Backend::Cpu,
         }
     }
 
@@ -373,6 +378,13 @@ impl SurfaceParams {
         self
     }
 
+    /// Sets the compute back end.
+    #[must_use]
+    pub fn with_backend(mut self, backend: Backend) -> Self {
+        self.backend = backend;
+        self
+    }
+
     /// Sets the vertex normal mode.
     #[must_use]
     pub fn with_normals(mut self, normals: NormalMode) -> Self {
@@ -456,6 +468,9 @@ impl SurfaceParams {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Timings {
+    /// Opening the GPU device (loading the runtime and the kernels, the
+    /// self-test); zero on the CPU and when the device is already open.
+    pub device: Duration,
     /// SAS arrangement (neighbours, circles, vertices).
     pub geometry: Duration,
     /// Brick classification.
@@ -471,7 +486,7 @@ pub struct Timings {
 impl Timings {
     /// Sum of all stages.
     pub fn total(&self) -> Duration {
-        self.geometry + self.classify + self.mesh + self.assemble + self.measure
+        self.device + self.geometry + self.classify + self.mesh + self.assemble + self.measure
     }
 }
 
@@ -512,8 +527,14 @@ pub struct SurfaceStats {
     pub euler: i64,
     /// Exact field evaluations spent on vertex placement.
     pub refine_evaluations: u64,
-    /// Kernel instruction set used.
+    /// Kernel instruction set used (CPU).
     pub simd: &'static str,
+    /// Back end used: `cpu` or `hip` (see [`SurfaceParams::backend`]).
+    pub backend: &'static str,
+    /// The GPU used, e.g. `AMD Radeon 8060S Graphics (gfx1151,
+    /// gfx11-generic)`: name, architecture and code object; `None` on the
+    /// CPU.
+    pub device: Option<String>,
     /// With [`SurfaceParams::max_memory`]: the memory guard's triangle
     /// estimate at the spacing used (before decimation), else `None`.
     pub estimated_triangles: Option<u64>,
@@ -557,7 +578,9 @@ pub struct SurfaceOutput {
 ///
 /// # Errors
 /// [`Error::InvalidInput`] for invalid spheres or parameters,
-/// [`Error::ResourceLimit`] for meshes beyond `u32` indices, and
+/// [`Error::ResourceLimit`] for meshes beyond `u32` indices,
+/// [`Error::Unsupported`] for a [`Backend`] not in this build,
+/// [`Error::Backend`] when an explicitly requested GPU cannot be used, and
 /// [`Error::Internal`] if the mesh fails validation (a bug).
 pub fn compute_surface(spheres: &[Sphere], params: &SurfaceParams) -> Result<SurfaceOutput> {
     compute_surface_with(spheres, params, &Control::new())
@@ -574,12 +597,12 @@ pub fn compute_surface_with(
     params: &SurfaceParams,
     control: &Control<'_>,
 ) -> Result<SurfaceOutput> {
-    run(spheres, params, control, &ScratchPool::default())
+    run(spheres, params, control, &ScratchPool::default(), None)
 }
 
 /// A reusable surface computation (Spec FR-LIB-3), e.g. for the frames of a
-/// trajectory: parameters are validated once and the per-thread field
-/// sampling buffers are kept between calls.
+/// trajectory: parameters are validated and the back end's device is opened
+/// once, and the per-thread field sampling buffers are kept between calls.
 ///
 /// ```
 /// use sesmesh::{Sphere, SurfaceEngine, SurfaceParams};
@@ -596,18 +619,22 @@ pub fn compute_surface_with(
 pub struct SurfaceEngine {
     params: SurfaceParams,
     pool: ScratchPool,
+    backend: Resolved,
 }
 
 impl SurfaceEngine {
-    /// Creates an engine.
+    /// Creates an engine and opens the back end's device.
     ///
     /// # Errors
-    /// [`Error::InvalidInput`] for invalid parameters.
+    /// [`Error::InvalidInput`] for invalid parameters, [`Error::Unsupported`]
+    /// or [`Error::Backend`] for a back end that cannot be used.
     pub fn new(params: SurfaceParams) -> Result<Self> {
         params.validate()?;
+        let backend = Resolved::new(&params.backend)?;
         Ok(Self {
             params,
             pool: ScratchPool::default(),
+            backend,
         })
     }
 
@@ -633,7 +660,13 @@ impl SurfaceEngine {
         spheres: &[Sphere],
         control: &Control<'_>,
     ) -> Result<SurfaceOutput> {
-        run(spheres, &self.params, control, &self.pool)
+        run(
+            spheres,
+            &self.params,
+            control,
+            &self.pool,
+            Some(&self.backend),
+        )
     }
 }
 
@@ -900,11 +933,14 @@ fn select_components(
     (n, fragments)
 }
 
+/// The pipeline. `backend` is the engine's open back end, or `None` to
+/// resolve `params.backend` here (timed as [`Timings::device`]).
 fn run(
     spheres: &[Sphere],
     params: &SurfaceParams,
     control: &Control<'_>,
     pool: &ScratchPool,
+    backend: Option<&Resolved>,
 ) -> Result<SurfaceOutput> {
     params.validate()?;
     control.check()?;
@@ -915,6 +951,15 @@ fn run(
         *slot = now - clock;
         clock = now;
     };
+    let resolved;
+    let backend = match backend {
+        Some(b) => b,
+        None => {
+            resolved = Resolved::new(&params.backend)?;
+            &resolved
+        }
+    };
+    lap(&mut timings.device);
 
     if let Some(limit) = params.max_memory {
         // The spheres alone may exceed the limit: refuse before building.
@@ -1070,15 +1115,19 @@ fn run(
         euler: components.iter().map(|c| c.euler).sum(),
         refine_evaluations,
         simd,
+        backend: backend.name(),
+        device: backend.device(),
         estimated_triangles: memory_estimate.map(|e| e.0),
         estimated_memory: memory_estimate.map(|e| e.1),
         timings,
     };
+    let mut diagnostics = Diagnostics::new();
+    backend.report(&mut diagnostics);
     Ok(SurfaceOutput {
         mesh,
         components,
         stats,
-        diagnostics: Diagnostics::new(),
+        diagnostics,
     })
 }
 

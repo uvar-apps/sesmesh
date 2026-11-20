@@ -473,6 +473,22 @@ Shared design for the CUDA (#25) and Metal (#26) back ends in §9.
 >   (T11.8); the module is internal to `Device`; the self-test also runs on
 >   pinned host memory (zero copy); `publish = false` until `sesmesh`
 >   depends on the crate (T11.2).
+> * T11.2 done (2026-11-20): `Backend::{Cpu, Auto, Hip(HipOptions)}` in
+>   `SurfaceParams` (`crates/sesmesh/src/backend.rs`), features `hip` in
+>   `sesmesh` and `sesmesh-cli`, `--backend`/`--gpu-device`, stats
+>   (`backend`, `device`, `Timings::device`), `Error::Backend`,
+>   `WarningKind::GpuFallback`, devices opened once per process; design §9
+>   updated. No stage runs on the device yet (T11.3): a `hip` run opens and
+>   self-tests the device (≈ 45 ms) and meshes on the CPU. Gate: OBJ, PLY
+>   and MSMS from the merge base (1.1.2 code) and from this branch, with
+>   and without `--backend auto`, are byte-identical on the fixtures and
+>   4HHB/1BRS/1ECA under ten option sets; on gfx1151 `--backend hip` and
+>   `auto` give the CPU's bytes; `--backend hip` without the feature exits
+>   2, with no device (`HIP_VISIBLE_DEVICES=-1`, ROCm hidden, index 3)
+>   exits 1, and `auto` falls back to the CPU silently. `sesmesh-gpu` is
+>   publishable now (`publish = false` removed; `sesmesh` requires
+>   `=x.y.z`), first in the publish order. `GpuRefine` and `--gpu-refine`
+>   come with fast mode (T11.7).
 
 ---
 

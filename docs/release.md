@@ -1,9 +1,11 @@
 # Release process (Plan T10.4)
 
-Publishable crates: `sesmesh` (library) and `sesmesh-cli` (binary
-`sesmesh`), published in that order. `sesmesh-testkit` and `xtask` are
-private (`publish = false`), and so is `sesmesh-gpu` (GPU back ends) until
-`sesmesh` depends on it (Phase 11).
+Publishable crates: `sesmesh-gpu` (GPU back ends, an implementation
+crate that `sesmesh` requires at the exact same version), `sesmesh`
+(library) and `sesmesh-cli` (binary `sesmesh`), published in that order
+(`cargo publish --workspace` orders them). `sesmesh-testkit` and `xtask` are
+private (`publish = false`). `sesmesh-gpu` is new with Phase 11: check that
+its name is still free on crates.io before its first release.
 
 ## v1.0 criteria (Spec §6.2) — status at 1.0.0 (2026-11-13)
 
@@ -60,7 +62,8 @@ such a machine.
 1. Local validation passes on the commit to release, before anything is
    pushed (GitHub CI is manual-only; see *Local validation* below).
 2. Set the version in `Cargo.toml` (`[workspace.package] version` and the
-   `sesmesh` entry of `[workspace.dependencies]`), run
+   `sesmesh` and `sesmesh-gpu` (`=x.y.z`) entries of
+   `[workspace.dependencies]`), run
    `cargo update -w`. Also set `version` and `date-released` in
    `CITATION.cff` and the version shown on the website
    (`grep -n 'X.Y.Z' site/*.html` with the old version: the header badges, the

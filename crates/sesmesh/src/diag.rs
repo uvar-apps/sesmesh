@@ -27,6 +27,9 @@ pub enum WarningKind {
     /// The chosen radius set does not cover some atoms well (for example
     /// explicit hydrogens with united-atom ProtOr radii).
     RadiusSetMismatch,
+    /// [`Backend::Auto`](crate::Backend::Auto) found a GPU runtime but could
+    /// not use its device, and computed on the CPU (the message says why).
+    GpuFallback,
 }
 
 /// An aggregated warning: one entry per distinct `(kind, message)`, with an
@@ -96,6 +99,18 @@ impl Diagnostics {
         if entry.examples.len() < Self::MAX_EXAMPLES {
             entry.examples.push(example());
         }
+    }
+
+    /// Records one occurrence of a warning that has no examples.
+    pub(crate) fn note(&mut self, kind: WarningKind, message: &str) {
+        self.merge(Self {
+            warnings: vec![Warning {
+                kind,
+                message: message.to_owned(),
+                count: 1,
+                examples: Vec::new(),
+            }],
+        });
     }
 
     /// Adds all warnings of `other`, aggregating identical entries.

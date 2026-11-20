@@ -192,9 +192,9 @@ pub(crate) fn load<P: AsRef<Path>>(paths: &[P]) -> Result<Api> {
     }
     Err(Error::NoRuntime {
         tried: if tried.is_empty() {
-            "nothing: no HIP runtime on this platform".to_owned()
+            "no HIP runtime on this platform".to_owned()
         } else {
-            tried.join(", ")
+            format!("tried {}", tried.join(", "))
         },
     })
 }

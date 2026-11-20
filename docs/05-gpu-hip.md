@@ -414,22 +414,38 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
 * **`sesmesh`:**
   * Optional dependency on `sesmesh-gpu` behind the feature `hip` (later
     `cuda`, `metal`), off by default. `unsafe_code = "forbid"` stays.
-  * `SurfaceParams::backend: Backend`, with
-    `#[non_exhaustive] enum Backend { Cpu, Auto, Hip(HipOptions) }`.
-    `HipOptions { device, refine: GpuRefine }` is `#[non_exhaustive]` and
-    defaults to device 0 and `GpuRefine::Exact`.
+  * `SurfaceParams::backend: Backend` (`with_backend`), with
+    `#[non_exhaustive] enum Backend { Cpu, Auto, Hip(HipOptions) }`
+    (`Backend::hip(index)`, `name()`, `is_compiled()`).
+    `HipOptions { device }` is `#[non_exhaustive]` and defaults to device 0;
+    `refine: GpuRefine` (default `Exact`) is added with fast mode (T11.7).
   * Default `Cpu`: default output stays byte-identical.
-  * `Auto` uses the device when one opens, else the CPU.
-  * An explicit `Hip` with no usable device returns an error. Without the
-    feature, `Hip` returns an "unsupported back end" error, so the API is
+  * `Auto` uses device 0 when it opens and passes its self-test, else the
+    CPU. It warns (`WarningKind::GpuFallback`) only when a GPU runtime is
+    installed but its device cannot be used, not when there is no GPU.
+  * An explicit `Hip` with no usable device returns `Error::Backend`.
+    Without the feature, `Hip` returns `Error::Unsupported`, so the API is
     the same in every build.
-  * `SurfaceStats::backend: &'static str` (`"cpu"`, `"hip gfx1151"`) plus
-    the flagged-edge count in fast mode.
+  * Devices are opened once per process (runtime library and devices are
+    cached), so repeated `compute_surface` calls do not repeat the
+    self-test; `SurfaceEngine::new` opens the device and fails early.
+  * `SurfaceStats::backend: &'static str` (`"cpu"`, `"hip"`) and
+    `SurfaceStats::device: Option<String>` (`"AMD Radeon 8060S Graphics
+    (gfx1151, gfx11-generic)"`), `Timings::device` (time to open the
+    device, ≈ 45 ms on gfx1151, mostly HIP initialisation), plus the
+    flagged-edge count in fast mode.
 * **CLI:**
-  * `--backend cpu|auto|hip`, `--gpu-device N`, `--gpu-refine exact|fast`;
-  * `--timings` names the back end and device;
-  * JSON stats gain `engine.backend` and `engine.flagged_edges`;
-  * a usage error (exit 2) when the binary lacks the feature.
+  * `--backend cpu|auto|hip`, `--gpu-device N` (with `--backend hip`
+    only), `--gpu-refine exact|fast` (T11.7);
+  * `--timings` names the back end, device and device-open time; the CPU
+    line is unchanged;
+  * JSON stats gain `parameters.backend`, `parameters.gpu_device`,
+    `engine.backend`, `engine.device`, `timings_ms.device`, later
+    `engine.flagged_edges`;
+  * OBJ/PLY/MSMS headers do not name the back end, so the files are the
+    same on every back end;
+  * a usage error (exit 2) when the binary lacks the feature; an unusable
+    device is a runtime error (exit 1).
 * **Kernel delivery (HIP): code objects built at build time** (decided
   2026-11-20).
   * **Build.** The build script of `sesmesh-gpu` runs `hipcc --genco`, one

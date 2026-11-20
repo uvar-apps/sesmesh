@@ -71,7 +71,7 @@ any deviation from the plan.
   deployed from `main` by `.github/workflows/pages.yml`; branch `website` holds its history).
 - The crates.io token lives in the user's `~/.cargo/credentials.toml` (never read or print it).
   Next releases follow `docs/release.md` (bump `[workspace.package] version` and the `sesmesh`
-  workspace dependency, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).
+  and `sesmesh-gpu` (`=x.y.z`) workspace dependencies, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).
 - `out/` is untracked on purpose.
 - Discoverability (2026-11-14): repo description + 13 topics set, `CITATION.cff` (bump
   `version`/`date-released` per release), crates' `homepage` + `science::bioinformatics`
@@ -106,6 +106,7 @@ any deviation from the plan.
 - `mesh/decimate.rs` QEM half-edge decimation (pass-based, deterministic)
 - `mesh/post.rs` grouping by component, sub-grid fragments (`fragments`), cavity filtering +
   enclosure (ray parity), vertex compaction, face-averaged normals, `atom_areas`
+- `backend.rs` `Backend::{Cpu, Auto, Hip}` (Phase 11), device cache, CPU fallback
 - `surface.rs` `SurfaceParams` (incl. `CavityMode`, `NormalMode`, filters),
   `compute_surface[_with]`, `SurfaceEngine`, stats · `control.rs` `Control`/`Progress`/`Stage` ·
   `export/` OBJ (colours, groups), binary PLY, MSMS `.vert`/`.face` writers + fixed-point

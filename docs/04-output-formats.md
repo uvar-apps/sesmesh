@@ -134,7 +134,7 @@ column sums to the total area of the written mesh.
                  "min_cavity_volume": 0.0, "min_component_area": 0.0,
                  "drop_fragments": false, "normals": "analytic",
                  "brick_size": 10, "simd": "auto", "smoothing": 0,
-                 "decimation": null},
+                 "decimation": null, "backend": "cpu", "gpu_device": null},
   "mesh": {"vertices": 55542, "triangles": 111076, "area": 2314.2,
            "volume": 4662.7, "euler": 4, "components": 2, "cavities": 1,
            "removed_components": 0, "removed_fragments": 0,
@@ -142,10 +142,11 @@ column sums to the total area of the written mesh.
   "components": [{"index": 0, "cavity": false, "vertices": 54331,
                   "triangles": 108654, "first_triangle": 0, "area": 2269.4,
                   "volume": 4687.6, "euler": 2, "genus": 0}, "..."],
-  "engine": {"kernel": "neon", "touched_bricks": 1100, "surface_bricks": 900,
+  "engine": {"kernel": "neon", "backend": "cpu", "device": null,
+             "touched_bricks": 1100, "surface_bricks": 900,
              "refine_evaluations": 120000, "estimated_triangles": null,
              "estimated_memory": null},
-  "timings_ms": {"read": 1.0, "geometry": 2.8, "classify": 1.9, "mesh": 44.4,
+  "timings_ms": {"read": 1.0, "device": 0.0, "geometry": 2.8, "classify": 1.9, "mesh": 44.4,
                  "assemble": 1.0, "measure": 6.3, "write": 4.6, "total": 62.2},
   "warnings": []
 }
@@ -157,6 +158,11 @@ column sums to the total area of the written mesh.
 * With `--max-memory`, `engine.estimated_triangles` and
   `engine.estimated_memory` (bytes) are the memory guard's estimate at the
   grid spacing used (`null` without a limit).
+* `parameters.backend` is the back end asked for (`cpu`, `auto`, `hip`),
+  `engine.backend` the one used (`cpu` or `hip`) and `engine.device` the GPU
+  (`"AMD Radeon 8060S Graphics (gfx1151, gfx11-generic)"`: name,
+  architecture, code object; `null` on the CPU). `timings_ms.device` is the
+  time to open the GPU (0 on the CPU).
 * `volume` is signed: outer components count positive, cavities negative; the
   mesh total is their sum.
 * `genus` is `(2 − euler) / 2` per closed component (tunnels through the

@@ -30,9 +30,9 @@ use sesmesh::io::{Format, ReadOptions};
 use sesmesh::radii::{BuiltinRadii, RadiusOptions, RadiusRules, RadiusSet};
 use sesmesh::structure::{AltLocPolicy, ChainIdKind, ModelChoice, WATER_RESIDUES};
 use sesmesh::{
-    AtomSet, CavityMode, Control, Diagnostics, Element, Error, NormalMode, Progress, Quality,
-    RefineMode, Selection, SimdLevel, Sphere, Stage, Structure, SurfaceKind, SurfaceOutput,
-    SurfaceParams, compute_surface_with, mesh,
+    AtomSet, Backend, CavityMode, Control, Diagnostics, Element, Error, NormalMode, Progress,
+    Quality, RefineMode, Selection, SimdLevel, Sphere, Stage, Structure, SurfaceKind,
+    SurfaceOutput, SurfaceParams, compute_surface_with, mesh,
 };
 
 /// Compute Solvent Excluded Surfaces (Connolly surfaces) of molecules and
@@ -270,6 +270,14 @@ struct SurfaceArgs {
     /// levels are capped at what the CPU supports).
     #[arg(long, value_enum, default_value_t = SimdArg::Auto, help_heading = "Performance")]
     simd: SimdArg,
+    /// Compute back end: `cpu`; `hip` (AMD GPU, builds with the `hip`
+    /// feature; fails without a usable device); `auto` (a GPU if one is
+    /// usable, else the CPU). The mesh is the same on every back end.
+    #[arg(long, value_enum, default_value_t = BackendArg::Cpu, help_heading = "Performance")]
+    backend: BackendArg,
+    /// GPU device index for `--backend hip` (default 0).
+    #[arg(long, value_name = "N", help_heading = "Performance")]
+    gpu_device: Option<usize>,
     /// Print errors only.
     #[arg(long, help_heading = "Diagnostics")]
     quiet: bool,
@@ -388,6 +396,13 @@ enum QualityArg {
 enum RefineArg {
     Exact,
     Linear,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+enum BackendArg {
+    Cpu,
+    Auto,
+    Hip,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -662,6 +677,11 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
             SimdArg::Avx2 => SimdLevel::Avx2,
             SimdArg::Avx512 => SimdLevel::Avx512,
             SimdArg::Neon => SimdLevel::Neon,
+        })
+        .with_backend(match a.backend {
+            BackendArg::Cpu => Backend::Cpu,
+            BackendArg::Auto => Backend::Auto,
+            BackendArg::Hip => Backend::hip(a.gpu_device.unwrap_or(0)),
         });
     let p = if a.decimate.is_some() || a.max_triangles.is_some() {
         let mut d = mesh::Decimation::ratio(a.decimate.unwrap_or(1.0));
@@ -680,6 +700,16 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
         None => p,
     };
     p.validate().map_err(|e| Failure::Usage(e.to_string()))?;
+    if a.gpu_device.is_some() && a.backend != BackendArg::Hip {
+        return Err(Failure::Usage("--gpu-device needs --backend hip".into()));
+    }
+    if !p.backend.is_compiled() {
+        return Err(Failure::Usage(format!(
+            "--backend {} is not in this build (build sesmesh-cli with `--features {}`)",
+            p.backend.name(),
+            p.backend.name()
+        )));
+    }
     if p.simd.effective().is_none() {
         return Err(Failure::Usage(format!(
             "--simd {} is not available on this CPU",
@@ -1038,8 +1068,12 @@ fn surface_one(a: &SurfaceArgs, params: &SurfaceParams, job: &Job) -> CliResult<
         }
         if a.timings {
             let t = &s.timings;
+            // The CPU line is unchanged from 1.x; GPU runs add the device.
+            let gpu = s.device.as_ref().map_or_else(String::new, |d| {
+                format!(", {} on {d}, device open {}", s.backend, ms(t.device))
+            });
             eprintln!(
-                "sesmesh: time: read {}, geometry {}, classify {}, mesh {}, assemble {}, measure {}, write {} ({}, {} kernel)",
+                "sesmesh: time: read {}, geometry {}, classify {}, mesh {}, assemble {}, measure {}, write {} ({}, {} kernel{gpu})",
                 ms(read_time),
                 ms(t.geometry),
                 ms(t.classify),
@@ -1561,6 +1595,11 @@ fn stats_json(
             })),
             "brick_size": params.brick_size,
             "simd": params.simd.name(),
+            "backend": params.backend.name(),
+            "gpu_device": match params.backend {
+                Backend::Hip(o) => Some(o.device),
+                _ => None,
+            },
         },
         "mesh": {
             "vertices": s.vertices,
@@ -1587,6 +1626,8 @@ fn stats_json(
         })).collect::<Vec<_>>(),
         "engine": {
             "kernel": s.simd,
+            "backend": s.backend,
+            "device": s.device,
             "touched_bricks": s.touched_bricks,
             "surface_bricks": s.surface_bricks,
             "refine_evaluations": s.refine_evaluations,
@@ -1595,6 +1636,7 @@ fn stats_json(
         },
         "timings_ms": {
             "read": msf(read),
+            "device": msf(t.device),
             "geometry": msf(t.geometry),
             "classify": msf(t.classify),
             "mesh": msf(t.mesh),

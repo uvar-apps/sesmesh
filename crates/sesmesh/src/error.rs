@@ -72,6 +72,12 @@ pub enum Error {
         /// The limit in bytes.
         limit: u64,
     },
+
+    /// The requested GPU back end cannot be used: no runtime, no such
+    /// device, no code for it, or a failed self-test
+    /// ([`Backend`](crate::Backend)).
+    #[error("GPU back end unavailable: {0}")]
+    Backend(String),
 }
 
 fn display_path(path: Option<&Path>) -> String {

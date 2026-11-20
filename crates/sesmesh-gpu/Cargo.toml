@@ -16,8 +16,6 @@ authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
 documentation = "https://docs.rs/sesmesh-gpu"
-# Published once `sesmesh` depends on it (Phase 11, docs/05-gpu-hip.md §9).
-publish = false
 
 [package.metadata.docs.rs]
 all-features = true

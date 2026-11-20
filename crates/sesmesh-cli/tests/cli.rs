@@ -679,3 +679,72 @@ fn sigint_cancels() {
     assert_eq!(out.status.code(), Some(130), "{stderr}");
     assert!(stderr.contains("interrupted"), "{stderr}");
 }
+
+/// `--backend` (Plan T11.2): every back end writes the CPU's bytes; a back
+/// end missing from the build is a usage error, an unusable device a
+/// runtime error.
+#[test]
+fn backends() {
+    let ubq = fixture("1UBQ.cif.gz");
+    let mesh = |name: &str, extra: &[&str]| {
+        let out = tmp(name);
+        let mut args = vec![ubq.to_str().unwrap(), "-s", "0.6", "--quiet", "-o"];
+        args.push(out.to_str().unwrap());
+        args.extend_from_slice(extra);
+        let o = run(&args);
+        (o, out)
+    };
+    let (o, cpu) = mesh("ubq-cpu.obj", &[]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    let cpu = std::fs::read(cpu).unwrap();
+    let (o, explicit) = mesh("ubq-cpu2.obj", &["--backend", "cpu"]);
+    assert_eq!(code(&o), 0);
+    assert_eq!(std::fs::read(explicit).unwrap(), cpu);
+    let (o, auto) = mesh("ubq-auto.obj", &["--backend", "auto"]);
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    assert_eq!(
+        std::fs::read(auto).unwrap(),
+        cpu,
+        "--backend auto changed the mesh"
+    );
+
+    let (o, hip) = mesh("ubq-hip.obj", &["--backend", "hip"]);
+    let err = String::from_utf8_lossy(&o.stderr);
+    if cfg!(feature = "hip") {
+        match code(&o) {
+            0 => assert_eq!(
+                std::fs::read(hip).unwrap(),
+                cpu,
+                "--backend hip changed the mesh"
+            ),
+            1 => assert!(
+                err.contains("GPU back end unavailable: hip device 0"),
+                "{err}"
+            ),
+            c => panic!("exit code {c}: {err}"),
+        }
+    } else {
+        assert_eq!(code(&o), 2, "{err}");
+        assert!(err.contains("--backend hip is not in this build"), "{err}");
+    }
+    let (o, _) = mesh("ubq-dev.obj", &["--gpu-device", "1"]);
+    assert_eq!(code(&o), 2);
+    assert!(String::from_utf8_lossy(&o.stderr).contains("--gpu-device needs --backend hip"));
+    if cfg!(feature = "hip") {
+        let (o, _) = mesh("ubq-dev.obj", &["--backend", "hip", "--gpu-device", "999"]);
+        assert_eq!(code(&o), 1, "{}", String::from_utf8_lossy(&o.stderr));
+    }
+
+    let stats = tmp("ubq-auto.json");
+    let (o, _) = mesh(
+        "ubq-auto.ply",
+        &["--backend", "auto", "--stats", stats.to_str().unwrap()],
+    );
+    assert_eq!(code(&o), 0, "{}", String::from_utf8_lossy(&o.stderr));
+    let stats: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&stats).unwrap()).unwrap();
+    assert_eq!(stats["parameters"]["backend"], "auto");
+    let backend = stats["engine"]["backend"].as_str().unwrap();
+    assert!(matches!(backend, "cpu" | "hip"), "{backend}");
+    assert_eq!(stats["engine"]["device"].is_null(), backend == "cpu");
+}

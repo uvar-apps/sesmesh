@@ -28,6 +28,11 @@ parallel = ["dep:rayon"]
 gzip = ["dep:flate2"]
 # TOML custom radius files (Spec FR-RAD-3).
 radii-file = ["dep:serde", "dep:toml"]
+# GPU back end for AMD GPUs through HIP (ROCm; docs/05-gpu-hip.md):
+# `Backend::Hip`, and `Backend::Auto` tries it. Building needs ROCm's `hipcc`
+# (or SESMESH_GPU_NO_KERNELS=1 for code checks); running without ROCm falls
+# back to the CPU under `Auto`.
+hip = ["dep:sesmesh-gpu", "sesmesh-gpu/hip"]
 
 [dependencies]
 fast-float2.workspace = true
@@ -37,6 +42,7 @@ memchr.workspace = true
 rayon = { workspace = true, optional = true }
 rustc-hash.workspace = true
 serde = { workspace = true, optional = true }
+sesmesh-gpu = { workspace = true, optional = true }
 thiserror.workspace = true
 toml = { workspace = true, optional = true }
 

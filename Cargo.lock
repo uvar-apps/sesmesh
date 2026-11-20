@@ -976,6 +976,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
+ "sesmesh-gpu",
  "sesmesh-testkit",
  "thiserror",
  "toml",

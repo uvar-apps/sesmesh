@@ -96,6 +96,9 @@
 //! `parallel` (rayon, default), `gzip` (compressed input and output,
 //! default), `radii-file` (TOML radius rules, default). Without default
 //! features the crate is single-threaded and dependency-light (WASM).
+//! `hip` (off by default) adds the AMD GPU back end, [`Backend::Hip`]; it
+//! needs ROCm's `hipcc` to build, and its binaries still run on machines
+//! without ROCm (see [`Backend`]).
 //!
 //! ## Versioning
 //!
@@ -112,6 +115,7 @@
 // (Spec FR-DIAG-1).
 #![deny(clippy::print_stdout, clippy::print_stderr)]
 
+mod backend;
 pub mod color;
 mod control;
 pub mod diag;
@@ -126,6 +130,7 @@ pub mod radii;
 pub mod structure;
 mod surface;
 
+pub use backend::{Backend, HipOptions};
 pub use control::{Control, Progress, Stage};
 pub use diag::{Diagnostics, Warning, WarningKind};
 pub use error::{Error, Result};

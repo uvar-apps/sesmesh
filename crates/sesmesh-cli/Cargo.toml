@@ -22,6 +22,11 @@ path = "src/main.rs"
 # Avoid a rustdoc output collision with the `sesmesh` library.
 doc = false
 
+[features]
+# AMD GPUs through HIP (ROCm): `--backend hip|auto` (docs/05-gpu-hip.md).
+# Building needs ROCm's `hipcc`; the binary still runs without ROCm.
+hip = ["sesmesh/hip"]
+
 [dependencies]
 sesmesh.workspace = true
 clap.workspace = true
