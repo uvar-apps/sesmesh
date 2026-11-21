@@ -33,8 +33,8 @@ The sources in this directory, which are committed, are
 |---|---|---|
 | `cover-letter.pdf` | Cover letter | Built from `cover-letter.tex`. Edit the source, not the PDF. |
 | `latex/manuscript.tex`, the other `latex/*.tex`, `latex/manuscript.bbl`, `latex/references.bib`, `latex/*.dat` | LaTeX source files | `manuscript.tex` is the main file. The other `.tex` files are the sections and the generated tables and values; the `.dat` files are the plot data. All files sit in one directory, because the system puts every upload in one directory. |
-| `latex/Figure_1a.jpg` … `latex/Figure_8c.jpg` | Figure | The photographs. The source includes them under these names. The letters are the panels (a), (b), (c). |
-| `latex/Figure_2.pdf`, `Figure_5.pdf`, `Figure_6.pdf`, `Figure_7.pdf` | Figure | Vector PDFs of the TikZ and pgfplots figures, with fonts embedded. They are cut from the compiled source, which also draws these figures itself. |
+| `latex/Figure_1a.jpg` … `latex/Figure_9c.jpg` | Figure | The photographs. The source includes them under these names. The letters are the panels (a), (b), (c). |
+| `latex/Figure_2.pdf`, `Figure_3.pdf`, `Figure_6.pdf`, `Figure_7.pdf`, `Figure_8.pdf` | Figure | Vector PDFs of the TikZ and pgfplots figures, with fonts embedded. They are cut from the compiled source, which also draws these figures itself. |
 | `highlights.docx` | Highlights | 5 bullets. |
 | `graphical-abstract.tiff` (or `.pdf`) | Graphical abstract | 2661 × 1065 px, 13 × 5.2 cm. |
 | (not built here) | Declaration of interest | The Word file from Elsevier's declarations tool (see below). |
@@ -42,7 +42,7 @@ The sources in this directory, which are committed, are
 | `manuscript-preview.pdf` | — | The manuscript built from `latex/`. Compare it with the PDF the system builds. A PDF is not a source file. |
 | `submission-form.txt` | — | Plain text for the form fields: article type, title, author, abstract, keywords, highlights, funding, competing interests, research data, AI declaration. |
 
-Figure 4 is a code listing. It is typeset from the source as text and has
+Figure 5 is a code listing. It is typeset from the source as text and has
 no separate file. Figures 5 and 6 each hold two plots, (a) and (b), in one
 file, as the source draws them. Elsevier asks for separate files except for
 images meant to be compared. Split the plots only if production asks for it.

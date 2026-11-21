@@ -82,7 +82,7 @@ On the submission form:
 | Primary category | q-bio.BM (the endorsement must cover q-bio) |
 | Cross-lists | cs.CG, physics.comp-ph (arXiv: "rarely" more than one or two) |
 | Comments | From `arxiv-metadata.txt` (pages, figures, tables, code and Zenodo DOI). Add "Submitted to the Journal of Molecular Graphics and Modelling" once that is true. |
-| Licence | Cannot be changed later. The arXiv perpetual non-exclusive licence keeps every route open for the journal; CC BY 4.0 allows the widest reuse. Elsevier does not count a preprint as prior publication. |
+| Licence | CC BY 4.0 ("Creative Commons Attribution license"), chosen on 2026-11-19. It allows the widest reuse with attribution, like the code's MIT or Apache-2.0, and matches the CC BY licence of the journal's open-access route. It cannot be changed later. Elsevier lets authors post preprints anywhere at any time and does not count them as prior publication. |
 
 Then check the PDF that arXiv builds before announcing. arXiv compiles
 with TeX Live 2025 by default (2023 is still offered), and its help page

@@ -12,8 +12,9 @@ Inputs (read only):
   paper/data/analytic.csv        one/two-sphere references (paper/scripts/analytic)
   paper/data/scaling.csv         thread scaling (Design §11.1, transcribed)
 
-Outputs: paper/generated/*.tex and *.dat, and the journal highlights
-paper/generated/highlights.txt. Standard library only, so the
+Outputs: paper/generated/*.tex and *.dat, the journal highlights
+paper/generated/highlights.txt, and fig-lattice.tex, the drawing of the
+2D brick-classification sketch (computed here, from no input file). Standard library only, so the
 paper builds without a Python environment beyond python3 itself.
 
 Usage: python3 paper/scripts/make_data.py   (from any directory)
@@ -718,6 +719,189 @@ def highlights() -> None:
     (OUT / "highlights.txt").write_text("".join(f"\u2022 {i}\n" for i in items))
 
 
+# Slice through a small molecule for the 2D sketch of the brick
+# classification (x, y, vdW radius in Å).
+SKETCH_ATOMS = [
+    (-3.5, -4.9, 1.7), (-8.6, 0.5, 1.55), (1.0, -6.2, 1.8), (-7.5, -3.9, 1.8),
+    (9.0, 1.1, 1.52), (-1.6, 0.6, 1.8), (-3.8, 4.4, 1.7), (4.2, 0.9, 1.8),
+    (-1.4, -2.6, 1.8), (8.5, -1.9, 1.7), (-5.1, 1.0, 1.8), (3.9, -6.1, 1.55),
+    (6.4, 5.1, 1.55), (2.2, -2.5, 1.7), (5.6, -2.4, 1.7), (-0.1, 3.2, 1.7),
+    (-0.5, 6.1, 1.7), (-7.3, 4.5, 1.8), (-4.8, -2.1, 1.55), (6.9, -5.0, 1.52),
+]
+
+
+def simplify(points: list[tuple[float, float]], tol: float) -> list[tuple[float, float]]:
+    """Douglas-Peucker simplification of a closed polyline."""
+    def dp(p):
+        (ax, ay), (bx, by) = p[0], p[-1]
+        length = math.hypot(bx - ax, by - ay) or 1e-12
+        dist = [abs((bx - ax) * (ay - y) - (ax - x) * (by - ay)) / length for x, y in p[1:-1]]
+        if not dist or max(dist) <= tol:
+            return [p[0], p[-1]]
+        i = dist.index(max(dist)) + 1
+        return dp(p[: i + 1])[:-1] + dp(p[i:])
+
+    far = max(range(len(points)), key=lambda i: math.dist(points[0], points[i]))
+    ring = points + [points[0]]
+    return dp(ring[: far + 1])[:-1] + dp(ring[far:])[:-1]
+
+
+def lattice_sketch() -> None:
+    """generated/fig-lattice.tex: TikZ commands for the 2D analogue of the
+    brick classification (Fig. "lattice"; its styles are in sections/method.tex).
+
+    The tests are those of the method section and Algorithm 1 in the plane:
+    touched bricks from the bounding boxes of the SAS discs, then the SAS and
+    vdW bounds and the Lipschitz test with the brick circumradius B h / sqrt 2,
+    then the same for the 2 x 2 sub-blocks of each surface brick. In 2D the
+    SAS has no circles, so F is the minimum over radial projections (class S)
+    and disc intersection points (class V). The SES is contoured by marching
+    squares inside the surface bricks only; a contour that left them would
+    stay open and fail the assertion, a check that the tests are conservative.
+    """
+    rp, h, b, eps = 1.4, 0.25, 4, 2e-3
+    centres = [(x, y) for x, y, _ in SKETCH_ATOMS]
+    vdw = [r for *_, r in SKETCH_ATOMS]
+    sas = [r + rp for r in vdw]
+    n = len(centres)
+
+    def inside(p, skip=()):
+        return any(i not in skip and math.dist(p, centres[i]) < sas[i] - 1e-9 for i in range(n))
+
+    verts = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            d = math.dist(centres[i], centres[j])
+            if not abs(sas[i] - sas[j]) < d < sas[i] + sas[j]:
+                continue
+            a = (d * d + sas[i] ** 2 - sas[j] ** 2) / (2 * d)
+            off = math.sqrt(sas[i] ** 2 - a * a)
+            (xi, yi), (xj, yj) = centres[i], centres[j]
+            ux, uy = (xj - xi) / d, (yj - yi) / d
+            for s in (1, -1):
+                p = (xi + a * ux - s * off * uy, yi + a * uy + s * off * ux)
+                if not inside(p, (i, j)):
+                    verts.append(p)
+
+    def field(x):
+        """F = r_p - d(x, P), exact."""
+        if not inside(x):
+            return rp
+        best = min((math.dist(x, v) for v in verts), default=math.inf)
+        for i, (cx, cy) in enumerate(centres):
+            r = math.dist(x, (cx, cy))
+            if r > 0:
+                q = (cx + sas[i] * (x[0] - cx) / r, cy + sas[i] * (x[1] - cy) / r)
+                if not inside(q, (i,)):
+                    best = min(best, math.dist(x, q))
+        return rp - best
+
+    def uniform(c, rho):
+        """UniformSign of Algorithm 1: "out", "in" or None."""
+        m = rho + eps
+        if min(math.dist(c, p) - r for p, r in zip(centres, sas)) >= m:
+            return "out"
+        if min(math.dist(c, p) - r for p, r in zip(centres, vdw)) <= -m:
+            return "in"
+        f = field(c)
+        return "out" if f > m else "in" if f < -m else None
+
+    w = b * h
+    rho = w / math.sqrt(2)
+    touched = set()
+    for (x, y), r in zip(centres, sas):
+        r += eps
+        for bx in range(math.floor((x - r) / w), math.floor((x + r) / w) + 1):
+            for by in range(math.floor((y - r) / w), math.floor((y + r) / w) + 1):
+                touched.add((bx, by))
+    kind = {k: uniform(((k[0] + 0.5) * w, (k[1] + 0.5) * w), rho) or "surf"
+            for k in sorted(touched)}
+    surface = [k for k in kind if kind[k] == "surf"]
+    active = [(k[0] * w + sx * w / 2, k[1] * w + sy * w / 2)
+              for k in surface for sx in (0, 1) for sy in (0, 1)
+              if uniform((k[0] * w + (sx + 0.5) * w / 2, k[1] * w + (sy + 0.5) * w / 2),
+                         rho / 2) is None]
+
+    fs = 20  # contour nodes per brick side
+    fh = w / fs
+    values: dict[tuple[int, int], float] = {}
+    point: dict[tuple[int, int, int], tuple[float, float]] = {}
+    nbr: dict[tuple[int, int, int], list] = {}
+
+    def fv(ix, iy):
+        if (ix, iy) not in values:
+            values[ix, iy] = field((ix * fh, iy * fh))
+        return values[ix, iy]
+
+    def crossing(e):
+        if e not in point:
+            ix, iy, axis = e
+            jx, jy = ix + (axis == 0), iy + (axis == 1)
+            fa, fb = fv(ix, iy), fv(jx, jy)
+            t = fa / (fa - fb)
+            point[e] = ((ix + t * (jx - ix)) * fh, (iy + t * (jy - iy)) * fh)
+        return e
+
+    def link(e1, e2):
+        nbr.setdefault(e1, []).append(e2)
+        nbr.setdefault(e2, []).append(e1)
+
+    for k in surface:
+        for cx in range(k[0] * fs, (k[0] + 1) * fs):
+            for cy in range(k[1] * fs, (k[1] + 1) * fs):
+                ins = [fv(*c) < 0 for c in ((cx, cy), (cx + 1, cy), (cx + 1, cy + 1), (cx, cy + 1))]
+                if len(set(ins)) == 1:
+                    continue
+                # edge c joins corners c and c + 1
+                edge = [(cx, cy, 0), (cx + 1, cy, 1), (cx, cy + 1, 0), (cx, cy, 1)]
+                cut = [c for c in range(4) if ins[c] != ins[(c + 1) % 4]]
+                if len(cut) == 2:
+                    link(crossing(edge[cut[0]]), crossing(edge[cut[1]]))
+                else:  # saddle: separate the inside corners
+                    for c in range(4):
+                        if ins[c]:
+                            link(crossing(edge[c - 1]), crossing(edge[c]))
+    assert all(len(v) == 2 for v in nbr.values()), "the SES leaves the surface bricks"
+    loops, seen = [], set()
+    for start in sorted(nbr):
+        loop, prev, cur = [], None, start
+        while cur not in seen:
+            seen.add(cur)
+            loop.append(point[cur])
+            e1, e2 = nbr[cur]
+            prev, cur = cur, (e2 if e1 == prev else e1)
+        if loop:
+            loops.append(simplify(loop, 0.005))
+
+    def num(v):
+        return f"{round(v, 2) + 0.0:g}"
+
+    def squares(keys):
+        return " ".join(f"({num(k[0] * w)},{num(k[1] * w)}) rectangle +({num(w)},{num(w)})"
+                        for k in keys)
+
+    lines = [f"% {n} discs, r_p = {rp} A, h = {h} A, B = {b}"]
+    for name in ("out", "in", "surf"):
+        lines.append(f"\\fill[lat{name}] " + squares(k for k in kind if kind[k] == name) + ";")
+    lines.append("\\foreach \\x/\\y in {" + ",".join(f"{num(x)}/{num(y)}" for x, y in active)
+                 + f"}}\n  \\draw[latcell] (\\x,\\y) grid[step={num(h)}] +({num(w / 2)},{num(w / 2)});")
+    lines.append("\\draw[latbrick] " + squares(kind) + ";")
+    for style, radii in (("latsas", sas), ("latvdw", vdw)):
+        for (x, y), r in zip(centres, radii):
+            lines.append(f"\\draw[{style}] ({num(x)},{num(y)}) circle[radius={num(r)}];")
+    for loop in loops:
+        lines.append("\\draw[latses] " + " -- ".join(f"({num(x)},{num(y)})" for x, y in loop)
+                     + " -- cycle;")
+    write("fig-lattice.tex", "\n".join(lines) + "\n")
+    val("sketch-atoms", str(n))
+    val("sketch-touched", str(len(kind)))
+    val("sketch-surface", str(len(surface)))
+    val("sketch-inside", str(sum(v == "in" for v in kind.values())))
+    val("sketch-outside", str(sum(v == "out" for v in kind.values())))
+    val("sketch-sub-active", str(len(active)))
+    val("sketch-sub-total", str(4 * len(surface)))
+
+
 def main() -> None:
     OUT.mkdir(exist_ok=True)
     accuracy()
@@ -728,6 +912,7 @@ def main() -> None:
     analytic()
     scaling()
     comparison()
+    lattice_sketch()
     highlights()
     body = ["\\makeatletter"]
     for k in sorted(macros):

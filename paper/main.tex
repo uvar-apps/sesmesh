@@ -28,10 +28,15 @@
 \usepackage{pgfplots}
 \pgfplotsset{compat=1.18}
 \usepgfplotslibrary{groupplots,fillbetween}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\algnewcommand{\IfReturn}[2]{\State \algorithmicif\ #1\ \algorithmicthen\ \Return #2}
 \usepackage[numbers,sort&compress]{natbib}
 \usepackage[hidelinks]{hyperref}
 \usepackage[nameinlink,capitalise]{cleveref}
 \usepackage{orcidlink}
+% Unique hyperref anchors for algorithm line numbers (one set per algorithm).
+\makeatletter\def\theHALG@line{\thealgorithm.\arabic{ALG@line}}\makeatother
 
 \setlist{itemsep=2pt,topsep=4pt}
 \graphicspath{{figures/}}
