@@ -13,11 +13,11 @@
 #                                               SECONDS (WORKERS × SECONDS ≥
 #                                               86 400 for 24 CPU-hours)
 #
-# The corpus is seeded from tests/data/fixtures (decompressed, as in the
-# nightly CI job) and grows in fuzz/corpus/TARGET; crashes, timeouts and
-# out-of-memory inputs are kept in fuzz/artifacts/TARGET/ and the run goes
-# on. The libFuzzer log and GNU time's report (CPU time of all workers) go
-# to fuzz/logs/TARGET.{log,time}.
+# The corpus is seeded from tests/data/fixtures (decompressed) and grows
+# in fuzz/corpus/TARGET; crashes, timeouts and out-of-memory inputs are
+# kept in fuzz/artifacts/TARGET/ and the run goes on. The libFuzzer log
+# and GNU time's report (CPU time of all workers) go to
+# fuzz/logs/TARGET.{log,time}.
 set -euo pipefail
 cd "$(dirname "$0")"
 triple=x86_64-unknown-linux-gnu

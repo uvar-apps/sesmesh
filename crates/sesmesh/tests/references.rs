@@ -171,7 +171,7 @@ fn trypsin_cavities_match() {
     }
 }
 
-/// The whole validation corpus (nightly; needs `tests/data/cache`).
+/// The whole validation corpus (`--include-ignored`; needs `tests/data/cache`).
 #[test]
 #[ignore = "needs the validation set in tests/data/cache; minutes in release"]
 fn corpus_matches_nanoshaper_and_eses() {

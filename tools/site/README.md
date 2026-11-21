@@ -1,7 +1,7 @@
 # Website (`site/`)
 
 The project website, published to <https://uvar-apps.github.io/sesmesh/> by
-`.github/workflows/pages.yml` on every push to `main` that touches `site/`.
+`.github/workflows/pages.yml`, which the maintainer starts by hand.
 Plain static HTML/CSS/JS: no build step, no generator. three.js (viewer only)
 and the two fonts load from jsDelivr and Google Fonts.
 
@@ -21,8 +21,7 @@ and the two fonts load from jsDelivr and Google Fonts.
 ## One-time setup (GitHub)
 
 Repository **Settings → Pages → Build and deployment → Source: GitHub
-Actions**. The workflow then deploys on the next push to `main` (or run it by
-hand: Actions → pages → Run workflow).
+Actions**. Deploy by hand: Actions → pages → Run workflow.
 
 ## Search engines
 

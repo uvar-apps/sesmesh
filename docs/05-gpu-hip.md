@@ -539,8 +539,7 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
 > `docs/gpu-prior-art.md` §5.3 (S2, T11.5′, T11.6′).
 
 Every task's gate is checked on this machine. Nothing runs on GitHub
-(`docs/release.md`); the CI workflow, kept for reference and run only by
-hand, would only build the feature in a ROCm container.
+(`docs/release.md`).
 
 | ID | Task | Gate |
 |---|---|---|

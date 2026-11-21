@@ -276,7 +276,7 @@ fn large_mmcif_beyond_pdb_format_limits() {
 }
 
 #[test]
-#[ignore = "parses a 2.4 M-atom file; run with --include-ignored (nightly CI)"]
+#[ignore = "parses a 2.4 M-atom file; run with --include-ignored"]
 fn very_large_mmcif_3j3q() {
     let Some(path) = cached("3J3Q.cif.gz") else {
         return;

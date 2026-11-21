@@ -20,8 +20,7 @@ its name is still free on crates.io before its first release.
 ## Local validation
 
 Run before every push, not only releases; push only when all pass. Nothing
-runs on GitHub: the workflows in `.github/workflows/` start only by hand and
-are kept for reference (`ci.yml` lists the same steps):
+runs on GitHub:
 
 ```bash
 cargo fmt --all --check

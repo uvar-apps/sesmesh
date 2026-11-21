@@ -53,8 +53,8 @@ any deviation from the plan.
   https://github.com/uvar-apps/sesmesh (public); push `main` and the phase branches.
 - Validate locally before every push (full list: `docs/release.md`, *Local validation*: fmt,
   both clippy commands, debug + release `--include-ignored` tests, examples, rustdoc, MSRV,
-  cargo-deny, publish dry run); never push and rely on GitHub CI. Never run anything on
-  GitHub (user, 2026-11-21): every workflow is `workflow_dispatch` only and is not started;
+  cargo-deny, publish dry run). Never run anything on GitHub (user, 2026-11-21): the only
+  workflow is `pages.yml` (website, started by hand by the user);
   release binaries are built locally (`tools/release/package.sh`), the GitHub release is
   created with `gh release create`, crates are published with `cargo publish --workspace`.
   Release tags only on a locally validated commit.
@@ -184,7 +184,8 @@ any deviation from the plan.
   Interior cavities bake black (no outside viewpoint sees them).
 - Docs: `docs/cli.md` (CLI manual), `docs/api-review.md` (API checklist, semver policy),
   `docs/release.md` (release process, v1.0 status), `tools/release/package.sh` (local
-  release archives), `.github/workflows/` (all manual-only, not run; kept for reference)
+  release archives), `.github/workflows/pages.yml` (website deploy, started by hand; the ci, nightly and
+  release workflows were deleted on 2026-11-21)
 - `crates/sesmesh/examples/` five runnable examples (run by the local validation)
 - `crates/sesmesh-cli/src/main.rs` CLI (`surface` default, `info`, `radii`; `--progress`,
   `--simd`, `-j`, `--timings`, `--cavities`, `--drop-fragments`, `--vertex-colors`, `--palette`, `--group-components`,
@@ -320,11 +321,8 @@ tick them in #19. Summary:
   modifier to `$h` (scp then writes a local file): write `"${h}:path"`. `podman rm a b c`
   removes nothing when one name is missing; remove containers one by one. Foreground
   `sleep` is blocked; run long jobs in the background.
-- The nightly fuzz jobs must pass `cargo fuzz run --target x86_64-unknown-linux-gnu`: the
-  prebuilt cargo-fuzz from `taiki-e/install-action` is a musl build and defaults to the musl
-  target, where AddressSanitizer fails ("sanitizer is incompatible with statically linked libc").
-- CI's clippy job uses the latest stable Rust: keep the local `stable` toolchain current, or new
-  lints break `main` (Phase 8: `needless_range_loop` on 1.100, unseen on 1.99).
+- Keep the local `stable` toolchain current: the local clippy run uses it, and new lints
+  appear with new releases (Phase 8: `needless_range_loop` on 1.100, unseen on 1.99).
 - Clippy here is strict (pedantic subset): `is_multiple_of`, method paths instead of closures,
   `;` after unit expressions, `clamp`. Code under `#[cfg(target_arch = "x86_64")]` is only
   linted by the x86 target command above.

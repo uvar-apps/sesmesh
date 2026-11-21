@@ -63,7 +63,7 @@ fn trypsin_any_thread_count() {
     check("fixtures/2PTN.cif.gz", h, &[3, 16]);
 }
 
-/// Larger inputs from the download cache (nightly: `--include-ignored`).
+/// Larger inputs from the download cache (`--include-ignored`).
 #[test]
 #[ignore = "needs tests/data/cache (cargo xtask fetch --set bench); slow"]
 fn large_structures_any_thread_count() {
