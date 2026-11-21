@@ -6,7 +6,7 @@
 name = "sesmesh-gpu"
 description = "GPU back ends of sesmesh (implementation crate; use sesmesh's features instead)"
 readme = "README.md"
-keywords = ["molecular-surface", "gpu", "hip", "rocm"]
+keywords = ["molecular-surface", "gpu", "hip", "cuda", "rocm"]
 categories = ["science", "science::bioinformatics"]
 version.workspace = true
 edition.workspace = true
@@ -24,6 +24,9 @@ all-features = true
 # AMD GPUs through HIP (ROCm). Needs `hipcc` at build time (docs/05-gpu-hip.md
 # §9); the runtime library is loaded when a device is opened.
 hip = ["dep:libloading"]
+# NVIDIA GPUs through the CUDA driver API. Needs `nvcc` at build time
+# (docs/06-gpu-cuda.md); the driver library is loaded when a device is opened.
+cuda = ["dep:libloading"]
 
 [dependencies]
 libloading = { workspace = true, optional = true }

@@ -36,13 +36,15 @@ use std::fmt;
 use std::path::Path;
 use std::sync::Arc;
 
-pub use memory::{DeviceBuffer, DeviceCopy, HostBuffer};
-pub use resident::{
-    ArrangementRef, Batch, BatchParams, BatchTimes, EDGE_CONVERGED, FEATURE_BEYOND, FEATURE_CIRCLE,
+pub use crate::DeviceCopy;
+pub use crate::batch::{
+    ArrangementRef, BatchParams, BatchTimes, EDGE_CONVERGED, FEATURE_BEYOND, FEATURE_CIRCLE,
     FEATURE_SHIFT, FEATURE_SOLVENT, FEATURE_SPHERE, FEATURE_VERTEX, GridRef, REC_WORDS, RefineRef,
-    RefineTimes, Resident, STATE_IN, STATE_OUT, STATE_SAMPLE,
+    RefineTimes, STATE_IN, STATE_OUT, STATE_SAMPLE,
 };
-pub use selftest::SelfTestReport;
+pub use crate::selftest::SelfTestReport;
+pub use memory::{DeviceBuffer, HostBuffer};
+pub use resident::{Batch, Resident};
 pub use stream::{Event, Stream};
 
 use crate::{Error, Result};

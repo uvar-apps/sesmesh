@@ -26,6 +26,9 @@ doc = false
 # AMD GPUs through HIP (ROCm): `--backend hip|auto` (docs/05-gpu-hip.md).
 # Building needs ROCm's `hipcc`; the binary still runs without ROCm.
 hip = ["sesmesh/hip"]
+# NVIDIA GPUs through CUDA: `--backend cuda|auto` (docs/06-gpu-cuda.md).
+# Building needs CUDA's `nvcc`; the binary still runs without the driver.
+cuda = ["sesmesh/cuda"]
 
 [dependencies]
 sesmesh.workspace = true

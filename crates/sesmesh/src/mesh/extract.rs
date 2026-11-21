@@ -18,7 +18,7 @@ use rustc_hash::FxHashMap;
 use super::tables::{self, corner_offset, edge_axis_lower};
 use super::{Mesh, PatchKind};
 use crate::error::{Error, Result};
-#[cfg(feature = "hip")]
+#[cfg(any(feature = "hip", feature = "cuda"))]
 use crate::field::DeviceEdges;
 use crate::field::{Engine, Feature, LocalCandidates, NearEval, SurfaceKind, pack};
 use crate::geom::Vec3;
@@ -98,7 +98,7 @@ impl ChunkMesh {
 
     /// Meshes brick `key` with vertices from the device's refinement (see
     /// [`mesh_brick_device`]) and appends it.
-    #[cfg(feature = "hip")]
+    #[cfg(any(feature = "hip", feature = "cuda"))]
     pub(crate) fn push_device(
         &mut self,
         engine: &Engine,
@@ -270,7 +270,7 @@ fn cells(b: usize, values: &[f32], out: &mut BrickMesh) {
 /// and attributes of the exact path. Edges the device did not converge on
 /// are refined here in `f64`, as in [`mesh_brick`]. Same edges, same order
 /// and same triangles as [`mesh_brick`].
-#[cfg(feature = "hip")]
+#[cfg(any(feature = "hip", feature = "cuda"))]
 pub(crate) fn mesh_brick_device(
     engine: &Engine,
     key: [i32; 3],
@@ -364,7 +364,7 @@ pub(crate) fn mesh_brick_device(
     cells(b, values, out);
 }
 
-#[cfg(all(test, feature = "hip"))]
+#[cfg(all(test, any(feature = "hip", feature = "cuda")))]
 impl BrickMesh {
     /// Vertices: positions, normals, atoms, patches.
     #[allow(clippy::type_complexity, reason = "test only")]
@@ -377,6 +377,8 @@ impl BrickMesh {
         &self.tris
     }
 
+    /// Empties the mesh (S2 spike).
+    #[cfg(feature = "hip")]
     pub(crate) fn clear(&mut self) {
         *self = Self::default();
     }

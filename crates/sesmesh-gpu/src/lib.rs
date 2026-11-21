@@ -11,20 +11,38 @@
 //!
 //! Each GPU vendor is a feature:
 //!
-//! * `hip`: AMD GPUs through HIP (ROCm), module [`hip`]. Building it needs
+//! * `hip`: AMD GPUs through HIP (ROCm), module `hip`. Building it needs
 //!   ROCm's `hipcc` (or `SESMESH_GPU_NO_KERNELS=1` for code checks: such a
 //!   build has no kernels). Running needs only the HIP runtime library,
 //!   which is loaded when a device is opened, so a binary built with the
 //!   feature still runs, on the CPU, where ROCm is missing.
+//! * `cuda`: NVIDIA GPUs through the CUDA driver API, module `cuda`.
+//!   Building it needs CUDA's `nvcc` (or `SESMESH_GPU_NO_KERNELS=1`, as
+//!   above). Running needs only the NVIDIA driver (`libcuda`), loaded when a
+//!   device is opened.
+//!
+//! Both back ends run the same kernels (`kernels/sesmesh.cuh`) on the same
+//! batch descriptions (module `batch`).
 //!
 //! All the `unsafe` code of sesmesh lives here: `sesmesh` itself forbids
 //! it. Device code follows the exactness rules of `docs/05-gpu-hip.md` §3,
 //! so kernels reproduce the CPU's floating-point results bit for bit.
 
+#[cfg(any(feature = "hip", feature = "cuda"))]
+pub mod batch;
+#[cfg(any(feature = "hip", feature = "cuda"))]
+mod copy;
 mod error;
+#[cfg(any(feature = "hip", feature = "cuda"))]
+mod selftest;
 
+#[cfg(any(feature = "hip", feature = "cuda"))]
+pub use copy::DeviceCopy;
 pub use error::{Error, Result};
 
+#[cfg(feature = "cuda")]
+#[allow(unsafe_code)]
+pub mod cuda;
 #[cfg(feature = "hip")]
 #[allow(unsafe_code)]
 pub mod hip;

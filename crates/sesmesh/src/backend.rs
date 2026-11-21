@@ -30,14 +30,17 @@ pub enum Backend {
     /// The CPU (the threads of the current rayon pool). Default.
     #[default]
     Cpu,
-    /// The first GPU of this build's GPU back ends that opens and passes
-    /// its self-test (device 0), else the CPU. When a GPU runtime is
-    /// installed but its device cannot be used, the output carries a
-    /// [`WarningKind::GpuFallback`] warning saying why.
+    /// Device 0 of the first of this build's GPU back ends (HIP, then
+    /// CUDA) that opens and passes its self-test, else the CPU. When a GPU
+    /// runtime is installed but its device cannot be used, the output
+    /// carries a [`WarningKind::GpuFallback`] warning saying why.
     Auto,
     /// An AMD GPU through HIP (ROCm; feature `hip`). Fails if the device
     /// cannot be used.
     Hip(HipOptions),
+    /// An NVIDIA GPU through CUDA (feature `cuda`). Fails if the device
+    /// cannot be used.
+    Cuda(CudaOptions),
 }
 
 /// Options of [`Backend::Hip`].
@@ -49,6 +52,15 @@ pub struct HipOptions {
     pub device: usize,
 }
 
+/// Options of [`Backend::Cuda`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[non_exhaustive]
+pub struct CudaOptions {
+    /// Device index (CUDA ordinal, as `CUDA_VISIBLE_DEVICES` counts; with
+    /// `CUDA_DEVICE_ORDER=PCI_BUS_ID` also as `nvidia-smi` does). Default 0.
+    pub device: usize,
+}
+
 impl Backend {
     /// [`Backend::Hip`] on device `index`.
     #[must_use]
@@ -56,21 +68,29 @@ impl Backend {
         Self::Hip(HipOptions { device: index })
     }
 
-    /// Lower-case name: `cpu`, `auto` or `hip`.
+    /// [`Backend::Cuda`] on device `index`.
+    #[must_use]
+    pub fn cuda(index: usize) -> Self {
+        Self::Cuda(CudaOptions { device: index })
+    }
+
+    /// Lower-case name: `cpu`, `auto`, `hip` or `cuda`.
     pub fn name(&self) -> &'static str {
         match self {
             Self::Cpu => "cpu",
             Self::Auto => "auto",
             Self::Hip(_) => "hip",
+            Self::Cuda(_) => "cuda",
         }
     }
 
     /// Whether this build includes the back end (`Cpu` and `Auto` always;
-    /// `Hip` with the feature `hip`).
+    /// `Hip` with the feature `hip`, `Cuda` with `cuda`).
     pub fn is_compiled(&self) -> bool {
         match self {
             Self::Cpu | Self::Auto => true,
             Self::Hip(_) => cfg!(feature = "hip"),
+            Self::Cuda(_) => cfg!(feature = "cuda"),
         }
     }
 }
@@ -84,6 +104,9 @@ pub(crate) enum Resolved {
     /// An open, self-tested HIP device.
     #[cfg(feature = "hip")]
     Hip(std::sync::Arc<sesmesh_gpu::hip::Device>),
+    /// An open, self-tested CUDA device.
+    #[cfg(feature = "cuda")]
+    Cuda(std::sync::Arc<sesmesh_gpu::cuda::Device>),
 }
 
 impl Resolved {
@@ -99,37 +122,52 @@ impl Resolved {
             Backend::Cpu => Ok(Self::Cpu { fallback: None }),
             Backend::Auto => Ok(Self::auto()),
             #[cfg(feature = "hip")]
-            Backend::Hip(o) => hip::open(o.device)
+            Backend::Hip(o) => open::hip(o.device)
                 .map(Self::Hip)
-                .map_err(|u| Error::Backend(format!("hip device {}: {}", o.device, u.message))),
-            #[cfg(not(feature = "hip"))]
-            Backend::Hip(_) => Err(Error::Unsupported(
-                "the hip back end is not in this build (rebuild with the `hip` feature)".into(),
-            )),
+                .map_err(|u| unusable("hip", o.device, &u.message)),
+            #[cfg(feature = "cuda")]
+            Backend::Cuda(o) => open::cuda(o.device)
+                .map(Self::Cuda)
+                .map_err(|u| unusable("cuda", o.device, &u.message)),
+            #[allow(unreachable_patterns, reason = "with every GPU feature")]
+            b => Err(Error::Unsupported(format!(
+                "the {name} back end is not in this build (rebuild with the `{name}` feature)",
+                name = b.name()
+            ))),
         }
     }
 
-    #[cfg(feature = "hip")]
+    /// Device 0 of the first GPU back end that opens: HIP, then CUDA.
     fn auto() -> Self {
-        match hip::open(0) {
-            Ok(d) => Self::Hip(d),
-            Err(u) => Self::Cpu {
-                fallback: (!u.quiet).then(|| format!("hip device 0: {}", u.message)),
-            },
+        #[allow(unused_mut, reason = "without GPU features")]
+        let mut why: Vec<String> = Vec::new();
+        #[cfg(feature = "hip")]
+        match open::hip(0) {
+            Ok(d) => return Self::Hip(d),
+            Err(u) if u.quiet => {}
+            Err(u) => why.push(format!("hip device 0: {}", u.message)),
+        }
+        #[cfg(feature = "cuda")]
+        match open::cuda(0) {
+            Ok(d) => return Self::Cuda(d),
+            Err(u) if u.quiet => {}
+            Err(u) => why.push(format!("cuda device 0: {}", u.message)),
+        }
+        Self::Cpu {
+            fallback: (!why.is_empty()).then(|| why.join("; ")),
         }
     }
 
-    #[cfg(not(feature = "hip"))]
-    fn auto() -> Self {
-        Self::Cpu { fallback: None }
-    }
-
-    /// The HIP device, if this is one.
-    #[cfg(feature = "hip")]
-    pub(crate) fn hip(&self) -> Option<&sesmesh_gpu::hip::Device> {
+    /// The GPU device, if this is one.
+    #[cfg(any(feature = "hip", feature = "cuda"))]
+    pub(crate) fn gpu(&self) -> Option<crate::field::GpuDevice<'_>> {
+        use crate::field::GpuDevice;
         match self {
-            Self::Hip(d) => Some(d),
             Self::Cpu { .. } => None,
+            #[cfg(feature = "hip")]
+            Self::Hip(d) => Some(GpuDevice::Hip(d)),
+            #[cfg(feature = "cuda")]
+            Self::Cuda(d) => Some(GpuDevice::Cuda(d)),
         }
     }
 
@@ -139,6 +177,8 @@ impl Resolved {
             Self::Cpu { .. } => "cpu",
             #[cfg(feature = "hip")]
             Self::Hip(_) => "hip",
+            #[cfg(feature = "cuda")]
+            Self::Cuda(_) => "cuda",
         }
     }
 
@@ -150,6 +190,15 @@ impl Resolved {
             Self::Hip(d) => {
                 let i = d.info();
                 Some(format!("{} ({}, {})", i.name, i.arch, i.code_object))
+            }
+            #[cfg(feature = "cuda")]
+            Self::Cuda(d) => {
+                let i = d.info();
+                Some(if i.code == i.arch {
+                    format!("{} ({})", i.name, i.arch)
+                } else {
+                    format!("{} ({}, {})", i.name, i.arch, i.code)
+                })
             }
         }
     }
@@ -168,14 +217,19 @@ impl Resolved {
     }
 }
 
-/// Process-wide HIP state: the runtime library is loaded once and devices
+/// The error of an explicit GPU back end whose device cannot be used.
+#[cfg(any(feature = "hip", feature = "cuda"))]
+fn unusable(name: &str, index: usize, why: &str) -> Error {
+    Error::Backend(format!("{name} device {index}: {why}"))
+}
+
+/// Process-wide GPU state: each runtime library is loaded once and devices
 /// stay open (opening runs the self-test).
-#[cfg(feature = "hip")]
-mod hip {
+#[cfg(any(feature = "hip", feature = "cuda"))]
+mod open {
     use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
     use sesmesh_gpu::Error as GpuError;
-    use sesmesh_gpu::hip::{Device, Runtime};
 
     /// Why a device cannot be used.
     pub(super) struct Unusable {
@@ -194,29 +248,58 @@ mod hip {
         }
     }
 
-    fn runtime() -> Result<Runtime, Unusable> {
-        static RUNTIME: OnceLock<Result<Runtime, (bool, String)>> = OnceLock::new();
-        RUNTIME
-            .get_or_init(|| {
-                Runtime::load().map_err(|e| {
-                    let u = Unusable::from(e);
-                    (u.quiet, u.message)
-                })
-            })
-            .clone()
-            .map_err(|(quiet, message)| Unusable { quiet, message })
+    /// One back end's runtime and open devices.
+    struct Devices<R, D> {
+        runtime: OnceLock<Result<R, (bool, String)>>,
+        open: Mutex<Vec<(usize, Arc<D>)>>,
     }
 
-    pub(super) fn open(index: usize) -> Result<Arc<Device>, Unusable> {
-        static DEVICES: Mutex<Vec<(usize, Arc<Device>)>> = Mutex::new(Vec::new());
-        let runtime = runtime()?;
-        let mut devices = DEVICES.lock().unwrap_or_else(PoisonError::into_inner);
-        if let Some((_, d)) = devices.iter().find(|(i, _)| *i == index) {
-            return Ok(Arc::clone(d));
+    impl<R: Clone, D> Devices<R, D> {
+        const fn new() -> Self {
+            Self {
+                runtime: OnceLock::new(),
+                open: Mutex::new(Vec::new()),
+            }
         }
-        let device = Arc::new(runtime.open(index)?);
-        devices.push((index, Arc::clone(&device)));
-        Ok(device)
+
+        fn get(
+            &self,
+            index: usize,
+            load: impl FnOnce() -> Result<R, GpuError>,
+            open: impl FnOnce(&R, usize) -> Result<D, GpuError>,
+        ) -> Result<Arc<D>, Unusable> {
+            let runtime = self
+                .runtime
+                .get_or_init(|| {
+                    load().map_err(|e| {
+                        let u = Unusable::from(e);
+                        (u.quiet, u.message)
+                    })
+                })
+                .clone()
+                .map_err(|(quiet, message)| Unusable { quiet, message })?;
+            let mut devices = self.open.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some((_, d)) = devices.iter().find(|(i, _)| *i == index) {
+                return Ok(Arc::clone(d));
+            }
+            let device = Arc::new(open(&runtime, index)?);
+            devices.push((index, Arc::clone(&device)));
+            Ok(device)
+        }
+    }
+
+    #[cfg(feature = "hip")]
+    pub(super) fn hip(index: usize) -> Result<Arc<sesmesh_gpu::hip::Device>, Unusable> {
+        use sesmesh_gpu::hip::{Device, Runtime};
+        static DEVICES: Devices<Runtime, Device> = Devices::new();
+        DEVICES.get(index, Runtime::load, Runtime::open)
+    }
+
+    #[cfg(feature = "cuda")]
+    pub(super) fn cuda(index: usize) -> Result<Arc<sesmesh_gpu::cuda::Device>, Unusable> {
+        use sesmesh_gpu::cuda::{Device, Runtime};
+        static DEVICES: Devices<Runtime, Device> = Devices::new();
+        DEVICES.get(index, Runtime::load, Runtime::open)
     }
 }
 
@@ -228,13 +311,21 @@ mod tests {
     fn names_and_defaults() {
         assert_eq!(Backend::default(), Backend::Cpu);
         assert_eq!(Backend::hip(1), Backend::Hip(HipOptions { device: 1 }));
+        assert_eq!(Backend::cuda(2), Backend::Cuda(CudaOptions { device: 2 }));
         assert_eq!(HipOptions::default().device, 0);
-        let names: Vec<_> = [Backend::Cpu, Backend::Auto, Backend::hip(0)]
-            .iter()
-            .map(Backend::name)
-            .collect();
-        assert_eq!(names, ["cpu", "auto", "hip"]);
+        assert_eq!(CudaOptions::default().device, 0);
+        let names: Vec<_> = [
+            Backend::Cpu,
+            Backend::Auto,
+            Backend::hip(0),
+            Backend::cuda(0),
+        ]
+        .iter()
+        .map(Backend::name)
+        .collect();
+        assert_eq!(names, ["cpu", "auto", "hip", "cuda"]);
         assert_eq!(Backend::hip(0).is_compiled(), cfg!(feature = "hip"));
+        assert_eq!(Backend::cuda(0).is_compiled(), cfg!(feature = "cuda"));
     }
 
     #[test]
@@ -253,11 +344,20 @@ mod tests {
         let e = Resolved::new(&Backend::hip(0)).unwrap_err();
         assert!(matches!(e, Error::Unsupported(_)), "{e}");
         assert!(e.to_string().contains("`hip` feature"), "{e}");
+        #[cfg(not(feature = "cuda"))]
         assert_eq!(Resolved::new(&Backend::Auto).unwrap().name(), "cpu");
     }
 
-    /// With the feature: `Auto` and `Hip` agree on whether a device is
-    /// usable, and an absent device index is an error.
+    #[cfg(not(feature = "cuda"))]
+    #[test]
+    fn cuda_without_the_feature_is_unsupported() {
+        let e = Resolved::new(&Backend::cuda(0)).unwrap_err();
+        assert!(matches!(e, Error::Unsupported(_)), "{e}");
+        assert!(e.to_string().contains("`cuda` feature"), "{e}");
+    }
+
+    /// With the feature: `Auto` uses HIP whenever `Hip` opens, and an
+    /// absent device index is an error.
     #[cfg(feature = "hip")]
     #[test]
     fn hip_and_auto_agree() {
@@ -273,10 +373,36 @@ mod tests {
                     e.to_string()
                         .starts_with("GPU back end unavailable: hip device 0")
                 );
-                assert_eq!(auto.name(), "cpu");
+                assert_ne!(auto.name(), "hip");
             }
         }
         let e = Resolved::new(&Backend::hip(1 << 20)).unwrap_err();
+        assert!(matches!(e, Error::Backend(_)), "{e}");
+    }
+
+    /// With the feature: `Auto` uses CUDA whenever `Cuda` opens and HIP does
+    /// not, and an absent device index is an error.
+    #[cfg(feature = "cuda")]
+    #[test]
+    fn cuda_and_auto_agree() {
+        let auto = Resolved::new(&Backend::Auto).unwrap();
+        let hip = cfg!(feature = "hip") && Resolved::new(&Backend::hip(0)).is_ok();
+        match Resolved::new(&Backend::cuda(0)) {
+            Ok(r) => {
+                assert_eq!(r.name(), "cuda");
+                assert_eq!(auto.name(), if hip { "hip" } else { "cuda" });
+                assert!(r.device().is_some_and(|d| d.contains("sm_")));
+            }
+            Err(e) => {
+                assert!(matches!(e, Error::Backend(_)), "{e}");
+                assert!(
+                    e.to_string()
+                        .starts_with("GPU back end unavailable: cuda device 0")
+                );
+                assert_ne!(auto.name(), "cuda");
+            }
+        }
+        let e = Resolved::new(&Backend::cuda(1 << 20)).unwrap_err();
         assert!(matches!(e, Error::Backend(_)), "{e}");
     }
 }

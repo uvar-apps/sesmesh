@@ -98,7 +98,9 @@
 //! features the crate is single-threaded and dependency-light (WASM).
 //! `hip` (off by default) adds the AMD GPU back end, [`Backend::Hip`]; it
 //! needs ROCm's `hipcc` to build, and its binaries still run on machines
-//! without ROCm (see [`Backend`]).
+//! without ROCm (see [`Backend`]). `cuda` (off by default) adds the NVIDIA
+//! GPU back end, [`Backend::Cuda`]; it needs CUDA's `nvcc` to build, and its
+//! binaries still run without the NVIDIA driver.
 //!
 //! ## Versioning
 //!
@@ -130,7 +132,7 @@ pub mod radii;
 pub mod structure;
 mod surface;
 
-pub use backend::{Backend, HipOptions};
+pub use backend::{Backend, CudaOptions, HipOptions};
 pub use control::{Control, Progress, Stage};
 pub use diag::{Diagnostics, Warning, WarningKind};
 pub use error::{Error, Result};

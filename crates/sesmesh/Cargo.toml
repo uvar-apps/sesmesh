@@ -33,6 +33,11 @@ radii-file = ["dep:serde", "dep:toml"]
 # (or SESMESH_GPU_NO_KERNELS=1 for code checks); running without ROCm falls
 # back to the CPU under `Auto`.
 hip = ["dep:sesmesh-gpu", "sesmesh-gpu/hip"]
+# GPU back end for NVIDIA GPUs through CUDA (docs/06-gpu-cuda.md):
+# `Backend::Cuda`, and `Backend::Auto` tries it after HIP. Building needs
+# CUDA's `nvcc` (or SESMESH_GPU_NO_KERNELS=1); running needs only the NVIDIA
+# driver, and without it `Auto` falls back to the CPU.
+cuda = ["dep:sesmesh-gpu", "sesmesh-gpu/cuda"]
 
 [dependencies]
 fast-float2.workspace = true

@@ -23,8 +23,8 @@ use crate::geom::{Status, Vec3};
 use crate::par;
 
 /// The mesh stage with classification, gathering and field sampling on a
-/// HIP device (Plan T11.3′).
-#[cfg(feature = "hip")]
+/// GPU (Plan T11.3′, T12.3).
+#[cfg(any(feature = "hip", feature = "cuda"))]
 #[path = "gpu.rs"]
 pub(crate) mod gpu;
 #[cfg(all(test, feature = "hip"))]

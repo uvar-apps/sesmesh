@@ -18,8 +18,8 @@ mod point;
 
 pub use point::{FieldSample, Patch, SesField};
 
-#[cfg(feature = "hip")]
-pub(crate) use kernel::gpu::{Batching, DeviceEdges, device_chunk};
+#[cfg(any(feature = "hip", feature = "cuda"))]
+pub(crate) use kernel::gpu::{Batching, DeviceEdges, GpuDevice, device_chunk};
 pub(crate) use kernel::{Engine, ScratchPool};
 pub(crate) use lattice::pack;
 pub(crate) use point::{Feature, LocalCandidates, NearEval};

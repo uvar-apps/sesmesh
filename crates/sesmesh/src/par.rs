@@ -44,7 +44,7 @@ where
 }
 
 /// Threads of the current pool (1 without the `parallel` feature).
-#[cfg_attr(not(feature = "hip"), allow(dead_code))]
+#[cfg_attr(not(any(feature = "hip", feature = "cuda")), allow(dead_code))]
 pub(crate) fn threads() -> usize {
     #[cfg(feature = "parallel")]
     {

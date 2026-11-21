@@ -19,7 +19,9 @@
 
 use std::time::Instant;
 
-use sesmesh_gpu::hip::{Batch, Device, REC_WORDS, Runtime, STATE_IN, STATE_OUT, STATE_SAMPLE};
+use sesmesh_gpu::hip::{
+    Batch, Device, REC_WORDS, Resident, Runtime, STATE_IN, STATE_OUT, STATE_SAMPLE,
+};
 
 use super::{Engine, SubStates};
 use crate::field::LocalCandidates;
@@ -124,7 +126,7 @@ fn run_one(device: &Device, spheres: &[Sphere], kind: SurfaceKind, h: f64) {
     let t_bricks = t.elapsed().as_secs_f64();
     let origins = engine.frame_origins(&bricks);
     let t = Instant::now();
-    let res = engine.resident(device).unwrap();
+    let res = engine.resident(|a| Resident::new(device, a)).unwrap();
     let t_upload = t.elapsed().as_secs_f64();
     let mut batch = Batch::new(device).unwrap();
     let mut p = engine.batch_params();

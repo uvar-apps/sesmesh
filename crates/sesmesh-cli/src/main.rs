@@ -273,11 +273,12 @@ struct SurfaceArgs {
     #[arg(long, value_enum, default_value_t = SimdArg::Auto, help_heading = "Performance")]
     simd: SimdArg,
     /// Compute back end: `cpu`; `hip` (AMD GPU, builds with the `hip`
-    /// feature; fails without a usable device); `auto` (a GPU if one is
-    /// usable, else the CPU). The mesh is the same on every back end.
+    /// feature) or `cuda` (NVIDIA GPU, builds with the `cuda` feature), which
+    /// fail without a usable device; `auto` (a GPU if one is usable, else the
+    /// CPU). The mesh is the same on every back end.
     #[arg(long, value_enum, default_value_t = BackendArg::Cpu, help_heading = "Performance")]
     backend: BackendArg,
-    /// GPU device index for `--backend hip` (default 0).
+    /// GPU device index for `--backend hip|cuda` (default 0).
     #[arg(long, value_name = "N", help_heading = "Performance")]
     gpu_device: Option<usize>,
     /// Print errors only.
@@ -406,6 +407,7 @@ enum BackendArg {
     Cpu,
     Auto,
     Hip,
+    Cuda,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -686,6 +688,7 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
             BackendArg::Cpu => Backend::Cpu,
             BackendArg::Auto => Backend::Auto,
             BackendArg::Hip => Backend::hip(a.gpu_device.unwrap_or(0)),
+            BackendArg::Cuda => Backend::cuda(a.gpu_device.unwrap_or(0)),
         });
     let p = if a.decimate.is_some() || a.max_triangles.is_some() {
         let mut d = mesh::Decimation::ratio(a.decimate.unwrap_or(1.0));
@@ -704,8 +707,10 @@ fn params(a: &SurfaceArgs) -> CliResult<SurfaceParams> {
         None => p,
     };
     p.validate().map_err(|e| Failure::Usage(e.to_string()))?;
-    if a.gpu_device.is_some() && a.backend != BackendArg::Hip {
-        return Err(Failure::Usage("--gpu-device needs --backend hip".into()));
+    if a.gpu_device.is_some() && !matches!(a.backend, BackendArg::Hip | BackendArg::Cuda) {
+        return Err(Failure::Usage(
+            "--gpu-device needs --backend hip or --backend cuda".into(),
+        ));
     }
     if !p.backend.is_compiled() {
         return Err(Failure::Usage(format!(
@@ -1602,6 +1607,7 @@ fn stats_json(
             "backend": params.backend.name(),
             "gpu_device": match params.backend {
                 Backend::Hip(o) => Some(o.device),
+                Backend::Cuda(o) => Some(o.device),
                 _ => None,
             },
         },

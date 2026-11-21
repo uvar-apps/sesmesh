@@ -18,7 +18,7 @@
 
 use std::time::Instant;
 
-use sesmesh_gpu::hip::{Batch, Device, EDGE_CONVERGED, Runtime};
+use sesmesh_gpu::hip::{Batch, Device, EDGE_CONVERGED, Resident, Runtime};
 
 use super::Engine;
 use super::gpu::DeviceEdges;
@@ -118,7 +118,9 @@ fn run_one(device: &Device, spheres: &[Sphere], kind: SurfaceKind, h: f64) {
     let reps = if quick { 1 } else { 3 };
     let (_, bricks) = engine.surface_bricks().unwrap();
     let origins = engine.frame_origins(&bricks);
-    let res = engine.resident_for(device, true).unwrap();
+    let res = engine
+        .resident_for(true, |a| Resident::new(device, a))
+        .unwrap();
     let mut batch = Batch::new(device).unwrap();
     let p = engine.batch_params();
     let mut cmp = Compare::default();

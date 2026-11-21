@@ -53,7 +53,7 @@ impl Lattice {
     }
 
     /// Lattice index of the `f32` frame origin.
-    #[cfg(feature = "hip")]
+    #[cfg(any(feature = "hip", feature = "cuda"))]
     pub(crate) fn frame(&self) -> [i64; 3] {
         self.frame
     }

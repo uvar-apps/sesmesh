@@ -543,7 +543,7 @@ pub struct SurfaceStats {
     pub refine_cpu_edges: u64,
     /// Kernel instruction set used (CPU).
     pub simd: &'static str,
-    /// Back end used: `cpu` or `hip` (see [`SurfaceParams::backend`]).
+    /// Back end used: `cpu`, `hip` or `cuda` (see [`SurfaceParams::backend`]).
     pub backend: &'static str,
     /// The GPU used, e.g. `AMD Radeon 8060S Graphics (gfx1151,
     /// gfx11-generic)`: name, architecture and code object; `None` on the
@@ -961,12 +961,12 @@ fn mesh_stage(
     let push = |part: &mut extract::ChunkMesh, key, values: &[f32]| {
         part.push(engine, key, values, refine);
     };
-    #[cfg(feature = "hip")]
-    if let Some(device) = backend.hip()
+    #[cfg(any(feature = "hip", feature = "cuda"))]
+    if let Some(device) = backend.gpu()
         && engine.device_ok()
     {
         let chunk = crate::field::device_chunk(bricks.len());
-        let parts = engine.fold_brick_chunks_hip(
+        let parts = engine.fold_brick_chunks_gpu(
             device,
             crate::field::Batching::mesh(refine == RefineMode::Fast, chunk),
             refine == RefineMode::Fast,
@@ -1337,15 +1337,17 @@ mod tests {
 
     /// Setting the flag from the progress callback at the given stage stops
     /// the computation with `Error::Cancelled`, promptly; on the CPU and, if
-    /// it opens, on HIP device 0.
+    /// it opens, on HIP and CUDA device 0.
     #[test]
     fn cancellation_is_prompt() {
         let c = random_chain(&mut Rng::new(21), 400);
         let s = spheres(&c);
         let mut backends = vec![(Backend::Cpu, RefineMode::Exact)];
-        if Resolved::new(&Backend::hip(0)).is_ok() {
-            backends.push((Backend::hip(0), RefineMode::Exact));
-            backends.push((Backend::hip(0), RefineMode::Fast));
+        for gpu in [Backend::hip(0), Backend::cuda(0)] {
+            if Resolved::new(&gpu).is_ok() {
+                backends.push((gpu, RefineMode::Exact));
+                backends.push((gpu, RefineMode::Fast));
+            }
         }
         for ((backend, refine), (stage, after)) in backends.into_iter().flat_map(|b| {
             [(Stage::Geometry, 0), (Stage::Classify, 0), (Stage::Mesh, 1)].map(|s| (b, s))

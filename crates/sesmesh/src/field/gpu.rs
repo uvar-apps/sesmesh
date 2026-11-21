@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 //! The mesh stage with classification, gathering and field sampling on a
-//! HIP device (Plan T11.3′, docs/gpu-prior-art.md §3.2 and §5.2).
+//! GPU, HIP or CUDA (Plan T11.3′ and T12.3, docs/gpu-prior-art.md §3.2 and
+//! §5.2). The back ends share the kernels and the batch interface
+//! ([`DeviceResident`], [`DeviceBatch`]), so this pipeline serves both.
 //!
 //! The arrangement is uploaded once ([`Resident`]): the frame-local `f32`
 //! copies the CPU kernels compute, the blocker tables and the CPU's three
@@ -30,9 +32,10 @@
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use sesmesh_gpu::hip::{
-    ArrangementRef, Batch, BatchParams, Device, EDGE_CONVERGED, FEATURE_BEYOND, FEATURE_CIRCLE,
-    FEATURE_SHIFT, FEATURE_SOLVENT, FEATURE_SPHERE, FEATURE_VERTEX, GridRef, RefineRef, Resident,
+use sesmesh_gpu::batch::{
+    ArrangementRef, BatchParams, DeviceBatch, DeviceResident, EDGE_CONVERGED, FEATURE_BEYOND,
+    FEATURE_CIRCLE, FEATURE_SHIFT, FEATURE_SOLVENT, FEATURE_SPHERE, FEATURE_VERTEX, GridRef,
+    RefineRef,
 };
 
 use super::{Engine, INSIDE_TOL};
@@ -103,8 +106,19 @@ impl Default for Batching {
     }
 }
 
-fn device_error(e: &sesmesh_gpu::Error) -> Error {
-    Error::Backend(format!("hip: {e}"))
+/// An open GPU device of one of this build's back ends.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum GpuDevice<'a> {
+    /// A HIP device.
+    #[cfg(feature = "hip")]
+    Hip(&'a sesmesh_gpu::hip::Device),
+    /// A CUDA device.
+    #[cfg(feature = "cuda")]
+    Cuda(&'a sesmesh_gpu::cuda::Device),
+}
+
+fn device_error(backend: &str, e: &sesmesh_gpu::Error) -> Error {
+    Error::Backend(format!("{backend}: {e}"))
 }
 
 /// The device's refinement of one brick's crossing edges (fast mode): views
@@ -124,7 +138,7 @@ pub(crate) struct DeviceEdges<'a> {
 
 impl<'a> DeviceEdges<'a> {
     /// Brick `i` of `batch`, if it was refined.
-    pub(super) fn of(batch: &'a Batch<'_>, i: usize) -> Option<Self> {
+    pub(super) fn of<B: DeviceBatch>(batch: &'a B, i: usize) -> Option<Self> {
         batch.refined().then(|| Self {
             offsets: &batch.edge_offsets()[8 * i..8 * i + 9],
             t: batch.edge_params(),
@@ -303,30 +317,33 @@ impl Engine {
         }
     }
 
-    /// Uploads the arrangement to `device`, with what fast-mode refinement
-    /// needs if `refine`.
+    /// Uploads the arrangement with `new` (a back end's `Resident::new`),
+    /// with what fast-mode refinement needs if `refine`.
     ///
     /// # Errors
     /// [`Error::Backend`] if an allocation or copy fails.
-    pub(super) fn resident_for<'d>(
+    pub(super) fn resident_for<R: DeviceResident>(
         &self,
-        device: &'d Device,
         refine: bool,
-    ) -> Result<Resident<'d>> {
-        let mut r = self.resident(device)?;
+        new: impl FnOnce(&ArrangementRef<'_>) -> sesmesh_gpu::Result<R>,
+    ) -> Result<R> {
+        let mut r = self.resident(new)?;
         if refine {
             let lo = Residuals::new(self);
             r.set_refinement(&lo.as_ref(self))
-                .map_err(|e| device_error(&e))?;
+                .map_err(|e| device_error(R::BACKEND, &e))?;
         }
         Ok(r)
     }
 
-    /// Uploads the arrangement to `device`.
+    /// Uploads the arrangement with `new` (a back end's `Resident::new`).
     ///
     /// # Errors
     /// [`Error::Backend`] if an allocation or copy fails.
-    pub(super) fn resident<'d>(&self, device: &'d Device) -> Result<Resident<'d>> {
+    pub(super) fn resident<R: DeviceResident>(
+        &self,
+        new: impl FnOnce(&ArrangementRef<'_>) -> sesmesh_gpu::Result<R>,
+    ) -> Result<R> {
         let host = self.host_arrangement();
         let a = &self.field.arr;
         let fo = self.lattice.frame_origin();
@@ -343,7 +360,7 @@ impl Engine {
             max_expanded: a.max_expanded as f32,
             rho_max: self.field.rho_max as f32,
         };
-        Resident::new(device, &aref).map_err(|e| device_error(&e))
+        new(&aref).map_err(|e| device_error(R::BACKEND, &e))
     }
 
     /// The device's batch parameters: the CPU's radii and margins
@@ -464,9 +481,9 @@ impl Engine {
     /// # Errors
     /// [`Error::Cancelled`]; [`Error::Backend`] if a device operation fails.
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn fold_brick_chunks_hip<A, I, F>(
+    pub(crate) fn fold_brick_chunks_gpu<A, I, F>(
         &self,
-        device: &Device,
+        device: GpuDevice<'_>,
         batching: Batching,
         refine: bool,
         bricks: &[[i32; 3]],
@@ -477,6 +494,56 @@ impl Engine {
         f: F,
     ) -> Result<Vec<A>>
     where
+        A: Send,
+        I: Fn() -> A + Sync + Send,
+        F: Fn(&mut A, [i32; 3], &[f32], Option<&DeviceEdges<'_>>) + Sync + Send,
+    {
+        match device {
+            #[cfg(feature = "hip")]
+            GpuDevice::Hip(d) => self.fold_resident(
+                || self.resident_for(refine, |a| sesmesh_gpu::hip::Resident::new(d, a)),
+                batching,
+                refine,
+                bricks,
+                chunk,
+                control,
+                stage,
+                init,
+                f,
+            ),
+            #[cfg(feature = "cuda")]
+            GpuDevice::Cuda(d) => self.fold_resident(
+                || self.resident_for(refine, |a| sesmesh_gpu::cuda::Resident::new(d, a)),
+                batching,
+                refine,
+                bricks,
+                chunk,
+                control,
+                stage,
+                init,
+                f,
+            ),
+        }
+    }
+
+    /// [`Engine::fold_brick_chunks_gpu`] on the arrangement `upload`
+    /// returns (called once, unless there are no bricks).
+    #[allow(clippy::too_many_arguments)]
+    fn fold_resident<R, U, A, I, F>(
+        &self,
+        upload: U,
+        batching: Batching,
+        refine: bool,
+        bricks: &[[i32; 3]],
+        chunk: usize,
+        control: &Control<'_>,
+        stage: Stage,
+        init: I,
+        f: F,
+    ) -> Result<Vec<A>>
+    where
+        R: DeviceResident,
+        U: FnOnce() -> Result<R>,
         A: Send,
         I: Fn() -> A + Sync + Send,
         F: Fn(&mut A, [i32; 3], &[f32], Option<&DeviceEdges<'_>>) + Sync + Send,
@@ -500,7 +567,8 @@ impl Engine {
             control.report(stage, total, total);
             return Ok(Vec::new());
         }
-        let resident = self.resident_for(device, refine)?;
+        let resident = upload()?;
+        let backend = R::BACKEND;
         let p = self.batch_params();
         control.check()?;
         let per_batch = batching.chunks.clamp(1, chunks);
@@ -511,9 +579,9 @@ impl Engine {
             (c.start * chunk)..bricks.len().min(c.end * chunk)
         };
         let ring = (0..RING.min(batches))
-            .map(|_| Batch::new(device).map(RwLock::new))
+            .map(|_| resident.new_batch().map(RwLock::new))
             .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| device_error(&e))?;
+            .map_err(|e| device_error(backend, &e))?;
         let state = Mutex::new(Pipeline {
             meshed: vec![0; batches],
             ..Pipeline::default()
@@ -552,7 +620,7 @@ impl Engine {
                 match ran {
                     Ok(_) => g.ready = k + 1,
                     Err(e) => {
-                        g.error = Some(device_error(&e));
+                        g.error = Some(device_error(backend, &e));
                         break;
                     }
                 }
@@ -593,7 +661,7 @@ impl Engine {
                     if control.is_cancelled() {
                         break 'chunks;
                     }
-                    let edges = DeviceEdges::of(&slot, i - first);
+                    let edges = DeviceEdges::of(&*slot, i - first);
                     f(
                         &mut acc,
                         bricks[i],
@@ -621,7 +689,9 @@ impl Engine {
             // Wake the device thread if the meshing threads stopped early.
             cv.notify_all();
             if device_side.join().is_err() {
-                lock(&state).error = Some(Error::Internal("hip: device thread panicked".into()));
+                lock(&state).error = Some(Error::Internal(format!(
+                    "{backend}: device thread panicked"
+                )));
             }
             parts
         });
@@ -632,7 +702,7 @@ impl Engine {
         let mut parts: Vec<(usize, A)> = parts.into_iter().flatten().collect();
         if parts.len() != chunks {
             return Err(Error::Internal(format!(
-                "hip: {} of {chunks} chunks meshed",
+                "{backend}: {} of {chunks} chunks meshed",
                 parts.len()
             )));
         }
@@ -644,7 +714,6 @@ impl Engine {
 
 #[cfg(test)]
 mod tests {
-    use sesmesh_gpu::hip::Runtime;
     use sesmesh_testkit::clusters::{Cluster, Rng, cage, random_box, random_chain};
 
     use super::*;
@@ -653,14 +722,59 @@ mod tests {
     use crate::mesh::extract::{BrickMesh, ChunkMesh, assemble, mesh_brick, mesh_brick_device};
     use crate::surface::RefineMode;
 
-    /// Device 0, or `None` (skip) without one unless `SESMESH_GPU_REQUIRE=1`.
-    fn device() -> Option<Device> {
-        match Runtime::load().and_then(|r| r.open(0)) {
-            Ok(d) => Some(d),
-            // Skipped silently: the library denies printing, also in tests.
-            Err(_) if std::env::var("SESMESH_GPU_REQUIRE").as_deref() != Ok("1") => None,
-            Err(e) => panic!("{e}"),
+    /// An open device of a compiled back end.
+    enum Opened {
+        #[cfg(feature = "hip")]
+        Hip(sesmesh_gpu::hip::Device),
+        #[cfg(feature = "cuda")]
+        Cuda(sesmesh_gpu::cuda::Device),
+    }
+
+    impl Opened {
+        fn get(&self) -> GpuDevice<'_> {
+            match self {
+                #[cfg(feature = "hip")]
+                Self::Hip(d) => GpuDevice::Hip(d),
+                #[cfg(feature = "cuda")]
+                Self::Cuda(d) => GpuDevice::Cuda(d),
+            }
         }
+    }
+
+    /// Device 0 of each compiled back end that has one (the tests skip
+    /// without any). With `SESMESH_GPU_REQUIRE=1`, a device that fails to
+    /// open for another reason than a missing runtime, device or kernels,
+    /// or no device at all, is a failure.
+    fn devices() -> Vec<Opened> {
+        let required = std::env::var("SESMESH_GPU_REQUIRE").as_deref() == Ok("1");
+        // Skipped silently: the library denies printing, also in tests.
+        let absent = |e: &sesmesh_gpu::Error| {
+            !required
+                || matches!(
+                    e,
+                    sesmesh_gpu::Error::NoRuntime { .. }
+                        | sesmesh_gpu::Error::NoDevice(_)
+                        | sesmesh_gpu::Error::NoKernels
+                )
+        };
+        let mut out = Vec::new();
+        #[cfg(feature = "hip")]
+        match sesmesh_gpu::hip::Runtime::load().and_then(|r| r.open(0)) {
+            Ok(d) => out.push(Opened::Hip(d)),
+            Err(e) if absent(&e) => {}
+            Err(e) => panic!("hip: {e}"),
+        }
+        #[cfg(feature = "cuda")]
+        match sesmesh_gpu::cuda::Runtime::load().and_then(|r| r.open(0)) {
+            Ok(d) => out.push(Opened::Cuda(d)),
+            Err(e) if absent(&e) => {}
+            Err(e) => panic!("cuda: {e}"),
+        }
+        assert!(
+            !required || !out.is_empty(),
+            "SESMESH_GPU_REQUIRE=1 but no GPU device opens"
+        );
+        out
     }
 
     fn spheres(c: &Cluster) -> (Vec<Sphere>, f64) {
@@ -731,56 +845,58 @@ mod tests {
     /// unless the CPU gave it `±band` (a sub-block only the device samples).
     #[test]
     fn device_values_match_cpu_values() {
-        let Some(device) = device() else { return };
-        let pool = ScratchPool::default();
-        let control = Control::new();
-        for c in &clusters() {
-            for kind in [SurfaceKind::Ses, SurfaceKind::Sas, SurfaceKind::Vdw] {
-                for h in [0.3, 0.7] {
-                    let e = engine(c, kind, h);
-                    let band = e.band as f32;
-                    let (_, bricks) = e.surface_bricks().unwrap();
-                    let chunk = par::chunk_len(bricks.len()).max(3);
-                    let cpu = e
-                        .fold_brick_chunks_with(
-                            &bricks,
-                            chunk,
-                            &control,
-                            Stage::Mesh,
-                            &pool,
-                            Vec::new,
-                            collect,
-                        )
-                        .unwrap();
-                    let (mut same, mut uniform) = (0usize, 0usize);
-                    for batching in BATCHINGS.into_iter().chain([Batching::default()]) {
-                        let gpu = e
-                            .fold_brick_chunks_hip(
-                                &device,
-                                batching,
-                                false,
+        for opened in devices() {
+            let device = opened.get();
+            let pool = ScratchPool::default();
+            let control = Control::new();
+            for c in &clusters() {
+                for kind in [SurfaceKind::Ses, SurfaceKind::Sas, SurfaceKind::Vdw] {
+                    for h in [0.3, 0.7] {
+                        let e = engine(c, kind, h);
+                        let band = e.band as f32;
+                        let (_, bricks) = e.surface_bricks().unwrap();
+                        let chunk = par::chunk_len(bricks.len()).max(3);
+                        let cpu = e
+                            .fold_brick_chunks_with(
                                 &bricks,
                                 chunk,
                                 &control,
                                 Stage::Mesh,
+                                &pool,
                                 Vec::new,
-                                collect_dev,
+                                collect,
                             )
                             .unwrap();
-                        assert_eq!(gpu.len(), cpu.len());
-                        for (g, c) in gpu.iter().flatten().zip(cpu.iter().flatten()) {
-                            for (&d, &v) in g.iter().zip(c) {
-                                assert_eq!(d < 0.0, v < 0.0, "{kind:?} h {h} {batching:?}");
-                                if d.to_bits() == v.to_bits() {
-                                    same += 1;
-                                } else {
-                                    assert_eq!(v.abs(), band, "{kind:?} h {h} {batching:?}");
-                                    uniform += 1;
+                        let (mut same, mut uniform) = (0usize, 0usize);
+                        for batching in BATCHINGS.into_iter().chain([Batching::default()]) {
+                            let gpu = e
+                                .fold_brick_chunks_gpu(
+                                    device,
+                                    batching,
+                                    false,
+                                    &bricks,
+                                    chunk,
+                                    &control,
+                                    Stage::Mesh,
+                                    Vec::new,
+                                    collect_dev,
+                                )
+                                .unwrap();
+                            assert_eq!(gpu.len(), cpu.len());
+                            for (g, c) in gpu.iter().flatten().zip(cpu.iter().flatten()) {
+                                for (&d, &v) in g.iter().zip(c) {
+                                    assert_eq!(d < 0.0, v < 0.0, "{kind:?} h {h} {batching:?}");
+                                    if d.to_bits() == v.to_bits() {
+                                        same += 1;
+                                    } else {
+                                        assert_eq!(v.abs(), band, "{kind:?} h {h} {batching:?}");
+                                        uniform += 1;
+                                    }
                                 }
                             }
                         }
+                        assert!(same > 20 * uniform, "{kind:?} h {h}: {same} {uniform}");
                     }
-                    assert!(same > 20 * uniform, "{kind:?} h {h}: {same} {uniform}");
                 }
             }
         }
@@ -789,55 +905,57 @@ mod tests {
     /// The device path's meshes equal the CPU path's, for any batch size.
     #[test]
     fn device_meshes_equal_cpu_meshes() {
-        let Some(device) = device() else { return };
-        let pool = ScratchPool::default();
-        let control = Control::new();
-        for c in &clusters() {
-            for kind in [SurfaceKind::Ses, SurfaceKind::Sas, SurfaceKind::Vdw] {
-                let e = engine(c, kind, 0.4);
-                let (_, bricks) = e.surface_bricks().unwrap();
-                let push = |m: &mut ChunkMesh, key, values: &[f32]| {
-                    m.push(&e, key, values, RefineMode::Exact);
-                };
-                let chunk = par::chunk_len(bricks.len());
-                let parts = e
-                    .fold_brick_chunks_with(
-                        &bricks,
-                        chunk,
-                        &control,
-                        Stage::Mesh,
-                        &pool,
-                        ChunkMesh::default,
-                        push,
-                    )
-                    .unwrap();
-                let cpu = assemble(&bricks, chunk, parts).unwrap();
-                assert!(!cpu.triangles.is_empty());
-                let chunk = device_chunk(bricks.len());
-                for batching in BATCHINGS {
+        for opened in devices() {
+            let device = opened.get();
+            let pool = ScratchPool::default();
+            let control = Control::new();
+            for c in &clusters() {
+                for kind in [SurfaceKind::Ses, SurfaceKind::Sas, SurfaceKind::Vdw] {
+                    let e = engine(c, kind, 0.4);
+                    let (_, bricks) = e.surface_bricks().unwrap();
+                    let push = |m: &mut ChunkMesh, key, values: &[f32]| {
+                        m.push(&e, key, values, RefineMode::Exact);
+                    };
+                    let chunk = par::chunk_len(bricks.len());
                     let parts = e
-                        .fold_brick_chunks_hip(
-                            &device,
-                            batching,
-                            false,
+                        .fold_brick_chunks_with(
                             &bricks,
                             chunk,
                             &control,
                             Stage::Mesh,
+                            &pool,
                             ChunkMesh::default,
-                            |m, key, values, edges| {
-                                assert!(edges.is_none());
-                                push(m, key, values);
-                            },
+                            push,
                         )
                         .unwrap();
-                    let gpu = assemble(&bricks, chunk, parts).unwrap();
-                    let what = format!("{kind:?} {batching:?}");
-                    assert_eq!(gpu.positions, cpu.positions, "{what}");
-                    assert_eq!(gpu.normals, cpu.normals, "{what}");
-                    assert_eq!(gpu.triangles, cpu.triangles, "{what}");
-                    assert_eq!(gpu.vertex_atom, cpu.vertex_atom, "{what}");
-                    assert_eq!(gpu.vertex_patch, cpu.vertex_patch, "{what}");
+                    let cpu = assemble(&bricks, chunk, parts).unwrap();
+                    assert!(!cpu.triangles.is_empty());
+                    let chunk = device_chunk(bricks.len());
+                    for batching in BATCHINGS {
+                        let parts = e
+                            .fold_brick_chunks_gpu(
+                                device,
+                                batching,
+                                false,
+                                &bricks,
+                                chunk,
+                                &control,
+                                Stage::Mesh,
+                                ChunkMesh::default,
+                                |m, key, values, edges| {
+                                    assert!(edges.is_none());
+                                    push(m, key, values);
+                                },
+                            )
+                            .unwrap();
+                        let gpu = assemble(&bricks, chunk, parts).unwrap();
+                        let what = format!("{kind:?} {batching:?}");
+                        assert_eq!(gpu.positions, cpu.positions, "{what}");
+                        assert_eq!(gpu.normals, cpu.normals, "{what}");
+                        assert_eq!(gpu.triangles, cpu.triangles, "{what}");
+                        assert_eq!(gpu.vertex_atom, cpu.vertex_atom, "{what}");
+                        assert_eq!(gpu.vertex_patch, cpu.vertex_patch, "{what}");
+                    }
                 }
             }
         }
@@ -845,29 +963,31 @@ mod tests {
 
     #[test]
     fn cancellation_stops_device_batches() {
-        let Some(device) = device() else { return };
-        let mut rng = Rng::new(3);
-        let e = engine(
-            &spheres(&random_box(&mut rng, 60, 12.0)),
-            SurfaceKind::Ses,
-            0.4,
-        );
-        let (_, bricks) = e.surface_bricks().unwrap();
-        let flag = std::sync::atomic::AtomicBool::new(true);
-        let control = Control::new().with_cancel(&flag);
-        for refine in [false, true] {
-            let r = e.fold_brick_chunks_hip(
-                &device,
-                Batching::default(),
-                refine,
-                &bricks,
-                4,
-                &control,
-                Stage::Mesh,
-                Vec::new,
-                collect_dev,
+        for opened in devices() {
+            let device = opened.get();
+            let mut rng = Rng::new(3);
+            let e = engine(
+                &spheres(&random_box(&mut rng, 60, 12.0)),
+                SurfaceKind::Ses,
+                0.4,
             );
-            assert!(matches!(r, Err(Error::Cancelled)));
+            let (_, bricks) = e.surface_bricks().unwrap();
+            let flag = std::sync::atomic::AtomicBool::new(true);
+            let control = Control::new().with_cancel(&flag);
+            for refine in [false, true] {
+                let r = e.fold_brick_chunks_gpu(
+                    device,
+                    Batching::default(),
+                    refine,
+                    &bricks,
+                    4,
+                    &control,
+                    Stage::Mesh,
+                    Vec::new,
+                    collect_dev,
+                );
+                assert!(matches!(r, Err(Error::Cancelled)));
+            }
         }
     }
 
@@ -875,71 +995,73 @@ mod tests {
     /// surface, the same output for any batch size.
     #[test]
     fn fast_meshes_match_exact_meshes() {
-        let Some(device) = device() else { return };
-        let pool = ScratchPool::default();
-        let control = Control::new();
-        for c in &clusters() {
-            for kind in [SurfaceKind::Ses, SurfaceKind::Sas, SurfaceKind::Vdw] {
-                let e = engine(c, kind, 0.4);
-                let (_, bricks) = e.surface_bricks().unwrap();
-                let chunk = par::chunk_len(bricks.len());
-                let parts = e
-                    .fold_brick_chunks_with(
-                        &bricks,
-                        chunk,
-                        &control,
-                        Stage::Mesh,
-                        &pool,
-                        ChunkMesh::default,
-                        |m: &mut ChunkMesh, key, values: &[f32]| {
-                            m.push(&e, key, values, RefineMode::Exact);
-                        },
-                    )
-                    .unwrap();
-                let cpu = assemble(&bricks, chunk, parts).unwrap();
-                let chunk = device_chunk(bricks.len());
-                let mut first: Option<crate::mesh::Mesh> = None;
-                for batching in BATCHINGS {
+        for opened in devices() {
+            let device = opened.get();
+            let pool = ScratchPool::default();
+            let control = Control::new();
+            for c in &clusters() {
+                for kind in [SurfaceKind::Ses, SurfaceKind::Sas, SurfaceKind::Vdw] {
+                    let e = engine(c, kind, 0.4);
+                    let (_, bricks) = e.surface_bricks().unwrap();
+                    let chunk = par::chunk_len(bricks.len());
                     let parts = e
-                        .fold_brick_chunks_hip(
-                            &device,
-                            batching,
-                            true,
+                        .fold_brick_chunks_with(
                             &bricks,
                             chunk,
                             &control,
                             Stage::Mesh,
+                            &pool,
                             ChunkMesh::default,
-                            |m, key, values, edges| {
-                                m.push_device(&e, key, values, edges.expect("refined batch"));
+                            |m: &mut ChunkMesh, key, values: &[f32]| {
+                                m.push(&e, key, values, RefineMode::Exact);
                             },
                         )
                         .unwrap();
-                    let fast = assemble(&bricks, chunk, parts).unwrap();
-                    let what = format!("{kind:?} {batching:?}");
-                    assert_eq!(fast.triangles, cpu.triangles, "{what}");
-                    let f = |p: [f32; 3]| e.field.value(p.map(f64::from)).abs();
-                    let worst = |m: &crate::mesh::Mesh| {
-                        m.positions.iter().map(|&p| f(p)).fold(0.0, f64::max)
-                    };
-                    assert!(worst(&fast) <= worst(&cpu) + 1e-5, "{what}");
-                    let far = fast
-                        .positions
-                        .iter()
-                        .zip(&cpu.positions)
-                        .filter(|(a, b)| {
-                            let d = (0..3).map(|i| f64::from(a[i] - b[i]).powi(2)).sum::<f64>();
-                            d.sqrt() > 1e-4
-                        })
-                        .count();
-                    assert!(far * 1000 <= cpu.positions.len(), "{what}: {far}");
-                    match &first {
-                        None => first = Some(fast),
-                        Some(m) => {
-                            assert_eq!(fast.positions, m.positions, "{what}");
-                            assert_eq!(fast.normals, m.normals, "{what}");
-                            assert_eq!(fast.vertex_atom, m.vertex_atom, "{what}");
-                            assert_eq!(fast.vertex_patch, m.vertex_patch, "{what}");
+                    let cpu = assemble(&bricks, chunk, parts).unwrap();
+                    let chunk = device_chunk(bricks.len());
+                    let mut first: Option<crate::mesh::Mesh> = None;
+                    for batching in BATCHINGS {
+                        let parts = e
+                            .fold_brick_chunks_gpu(
+                                device,
+                                batching,
+                                true,
+                                &bricks,
+                                chunk,
+                                &control,
+                                Stage::Mesh,
+                                ChunkMesh::default,
+                                |m, key, values, edges| {
+                                    m.push_device(&e, key, values, edges.expect("refined batch"));
+                                },
+                            )
+                            .unwrap();
+                        let fast = assemble(&bricks, chunk, parts).unwrap();
+                        let what = format!("{kind:?} {batching:?}");
+                        assert_eq!(fast.triangles, cpu.triangles, "{what}");
+                        let f = |p: [f32; 3]| e.field.value(p.map(f64::from)).abs();
+                        let worst = |m: &crate::mesh::Mesh| {
+                            m.positions.iter().map(|&p| f(p)).fold(0.0, f64::max)
+                        };
+                        assert!(worst(&fast) <= worst(&cpu) + 1e-5, "{what}");
+                        let far = fast
+                            .positions
+                            .iter()
+                            .zip(&cpu.positions)
+                            .filter(|(a, b)| {
+                                let d = (0..3).map(|i| f64::from(a[i] - b[i]).powi(2)).sum::<f64>();
+                                d.sqrt() > 1e-4
+                            })
+                            .count();
+                        assert!(far * 1000 <= cpu.positions.len(), "{what}: {far}");
+                        match &first {
+                            None => first = Some(fast),
+                            Some(m) => {
+                                assert_eq!(fast.positions, m.positions, "{what}");
+                                assert_eq!(fast.normals, m.normals, "{what}");
+                                assert_eq!(fast.vertex_atom, m.vertex_atom, "{what}");
+                                assert_eq!(fast.vertex_patch, m.vertex_patch, "{what}");
+                            }
                         }
                     }
                 }

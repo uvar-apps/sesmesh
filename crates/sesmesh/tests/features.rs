@@ -622,7 +622,7 @@ fn hemoglobin_fragment() {
     }
 }
 
-/// Back ends (Plan T11.2): `Auto` and an available `Hip` give the CPU's
+/// Back ends (Plan T11.2, T12.3): `Auto` and an available GPU give the CPU's
 /// mesh and stats; an unavailable one fails up front, in the engine too.
 #[test]
 fn backends_give_the_cpu_mesh() {
@@ -648,30 +648,32 @@ fn backends_give_the_cpu_mesh() {
         .with_backend(Backend::Auto);
     let out = run(&s, &auto);
     same(&out);
-    assert!(matches!(out.stats.backend, "cpu" | "hip"));
+    assert!(matches!(out.stats.backend, "cpu" | "hip" | "cuda"));
     let mut engine = SurfaceEngine::new(auto).unwrap();
     same(&engine.compute(&s).unwrap());
 
-    let hip = SurfaceParams::ses(1.4)
-        .with_spacing(0.5)
-        .with_backend(Backend::hip(0));
-    match compute_surface(&s, &hip) {
-        Ok(out) => {
-            same(&out);
-            assert_eq!(out.stats.backend, "hip");
-            assert!(out.stats.device.is_some());
-            same(&SurfaceEngine::new(hip).unwrap().compute(&s).unwrap());
-        }
-        Err(e) => {
-            assert!(
-                matches!(e, Error::Unsupported(_) | Error::Backend(_)),
-                "{e}"
-            );
-            assert!(
-                !cfg!(feature = "hip") || matches!(e, Error::Backend(_)),
-                "{e}"
-            );
-            assert!(SurfaceEngine::new(hip).is_err());
+    for (backend, compiled) in [
+        (Backend::hip(0), cfg!(feature = "hip")),
+        (Backend::cuda(0), cfg!(feature = "cuda")),
+    ] {
+        let gpu = SurfaceParams::ses(1.4)
+            .with_spacing(0.5)
+            .with_backend(backend);
+        match compute_surface(&s, &gpu) {
+            Ok(out) => {
+                same(&out);
+                assert_eq!(out.stats.backend, backend.name());
+                assert!(out.stats.device.is_some());
+                same(&SurfaceEngine::new(gpu).unwrap().compute(&s).unwrap());
+            }
+            Err(e) => {
+                assert!(
+                    matches!(e, Error::Unsupported(_) | Error::Backend(_)),
+                    "{e}"
+                );
+                assert!(!compiled || matches!(e, Error::Backend(_)), "{e}");
+                assert!(SurfaceEngine::new(gpu).is_err());
+            }
         }
     }
 }

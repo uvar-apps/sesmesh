@@ -62,27 +62,30 @@ fn surface(c: &mut Criterion) {
             group.bench_function(format!("{name}/h{h}"), |b| {
                 b.iter(|| black_box(compute_surface(&spheres, &params).expect("valid")));
             });
-            for refine in [RefineMode::Exact, RefineMode::Fast] {
-                let gpu = params
-                    .clone()
-                    .with_backend(Backend::hip(0))
-                    .with_refine(refine);
+            for (gpu, refine) in [Backend::hip(0), Backend::cuda(0)]
+                .into_iter()
+                .flat_map(|b| [(b, RefineMode::Exact), (b, RefineMode::Fast)])
+            {
+                let backend = gpu.name();
+                let gpu = params.clone().with_backend(gpu).with_refine(refine);
                 let mut engine = match SurfaceEngine::new(gpu) {
                     Ok(engine) => engine,
                     Err(e) => {
-                        eprintln!("skipping {name} h={h} on hip: {e}");
-                        break;
+                        if refine == RefineMode::Exact {
+                            eprintln!("skipping {name} h={h} on {backend}: {e}");
+                        }
+                        continue;
                     }
                 };
                 let out = engine.compute(&spheres).expect("valid");
                 eprintln!(
-                    "{name} h={h} hip-{}: {} triangles, {} edges refined on the CPU, {:?}",
+                    "{name} h={h} {backend}-{}: {} triangles, {} edges refined on the CPU, {:?}",
                     refine.name(),
                     out.stats.triangles,
                     out.stats.refine_cpu_edges,
                     out.stats.timings
                 );
-                group.bench_function(format!("{name}/h{h}/hip-{}", refine.name()), |b| {
+                group.bench_function(format!("{name}/h{h}/{backend}-{}", refine.name()), |b| {
                     b.iter(|| black_box(engine.compute(&spheres).expect("valid")));
                 });
             }

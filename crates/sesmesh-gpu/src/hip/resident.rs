@@ -29,125 +29,12 @@ use std::time::Instant;
 
 use super::{Device, DeviceBuffer, HostBuffer};
 use crate::Result;
-
-/// Words per sub-block record: state, list base, then the sizes of the
-/// inside (spheres: near), S, C, V and (SES, with [`BatchParams::near`])
-/// near lists, stored in that order from the base.
-pub const REC_WORDS: usize = 7;
-/// Record state: the sub-block is sampled.
-pub const STATE_SAMPLE: u32 = 0;
-/// Record state: uniformly outside.
-pub const STATE_OUT: u32 = 1;
-/// Record state: uniformly inside.
-pub const STATE_IN: u32 = 2;
-
-/// Bit position of the feature kind in [`Batch::edge_features`]; the low
-/// bits hold the sphere, circle or vertex index.
-pub const FEATURE_SHIFT: u32 = 29;
-/// Feature kind: the point is probe-accessible.
-pub const FEATURE_SOLVENT: u32 = 0;
-/// Feature kind: nothing within the cutoff.
-pub const FEATURE_BEYOND: u32 = 1;
-/// Feature kind: a sphere (SES: its expanded sphere).
-pub const FEATURE_SPHERE: u32 = 2;
-/// Feature kind: a circle (SES).
-pub const FEATURE_CIRCLE: u32 = 3;
-/// Feature kind: a SAS vertex (SES).
-pub const FEATURE_VERTEX: u32 = 4;
-/// Flag in [`Batch::edge_evals`]: Newton / Illinois converged (else the
-/// edge was bisected).
-pub const EDGE_CONVERGED: u32 = 1 << 31;
+use crate::batch::{
+    ArrangementRef, BatchParams, BatchTimes, GridRef, REC_WORDS, RefineRef, RefineTimes,
+};
 
 /// Lanes per workgroup (`LANES` in the kernels).
 const BLOCK: u32 = 64;
-
-/// A cell grid: items of cell `c` are `items[starts[c]..starts[c + 1]]`,
-/// cells x-fastest, origin in frame-local coordinates.
-#[derive(Debug, Clone, Copy)]
-pub struct GridRef<'a> {
-    /// Origin (frame-local).
-    pub origin: [f32; 3],
-    /// Cell edge.
-    pub cell: f32,
-    /// Cells per axis.
-    pub dims: [u32; 3],
-    /// Cell starts (`dims` product + 1).
-    pub starts: &'a [u32],
-    /// Items, cell by cell.
-    pub items: &'a [u32],
-}
-
-/// The arrangement in frame-local f32, as the CPU kernels see it.
-#[derive(Debug, Clone, Copy)]
-pub struct ArrangementRef<'a> {
-    /// Spheres: x, y, z, radius, radius², (radius − tol)², vdW radius.
-    pub sphere: [&'a [f32]; 7],
-    /// Sphere status: 0 exposed, 1 buried, 2 contained.
-    pub status: &'a [u32],
-    /// Neighbour CSR (offsets, items) of the class-S blockers.
-    pub neighbors: (&'a [u32], &'a [u32]),
-    /// Circles: centre x, y, z, axis x, y, z, e1 x, y, z, radius.
-    pub circle: [&'a [f32]; 10],
-    /// Circle blocker CSR (offsets, items).
-    pub circle_blockers: (&'a [u32], &'a [u32]),
-    /// SAS vertices: x, y, z.
-    pub vertex: [&'a [f32]; 3],
-    /// Grid over sphere centres.
-    pub sphere_grid: GridRef<'a>,
-    /// Grid over circle centres.
-    pub circle_grid: GridRef<'a>,
-    /// Grid over vertices.
-    pub vertex_grid: GridRef<'a>,
-    /// Largest sphere radius.
-    pub max_expanded: f32,
-    /// Largest circle radius.
-    pub rho_max: f32,
-}
-
-/// Field and lattice parameters of a batch.
-#[derive(Debug, Clone, Copy)]
-pub struct BatchParams {
-    /// SES (else SAS/vdW, union of spheres).
-    pub ses: bool,
-    /// Probe radius.
-    pub probe: f32,
-    /// Band (clamp) of the sampled field.
-    pub band: f32,
-    /// SES: `(probe + band)²` as the CPU computes it.
-    pub cutoff2: f32,
-    /// Sub-block circumradius.
-    pub rho: f32,
-    /// Gather radius (SES `probe + band + rho`, spheres `band + rho`).
-    pub reach: f32,
-    /// Classification margin `rho + eps`.
-    pub margin: f32,
-    /// Slack on every f32 decision, above the f32 error.
-    pub slack: f32,
-    /// SES classification cutoff squared, `(probe + margin + eps)²`.
-    pub cutoffc2: f32,
-    /// Lattice spacing.
-    pub h: f32,
-    /// Brick edge in cells.
-    pub b: u32,
-    /// Sub-block edge in cells (`b / 2`).
-    pub sub: u32,
-    /// SES: also list the non-contained spheres within reach (the
-    /// refinement blockers' superset; S1 measurements only).
-    pub near: bool,
-}
-
-/// Wall times of one batch, in seconds.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct BatchTimes {
-    /// Count pass.
-    pub count: f64,
-    /// Host scan of the counts.
-    pub scan: f64,
-    /// Fill pass with the Lipschitz test.
-    pub fill: f64,
-    /// Sampling pass.
-    pub sample: f64,
-}
 
 #[repr(C)]
 struct GridParams {
@@ -163,7 +50,7 @@ struct GridParams {
     n_items: u32,
 }
 
-/// `ResidentParams` in `kernels/hip/sesmesh.hip`.
+/// `ResidentParams` in `kernels/sesmesh.cuh`.
 #[repr(C)]
 struct Params {
     sphere: [*const c_void; 7],
@@ -398,7 +285,7 @@ impl<'d> Batch<'d> {
     }
 
     /// Per refined edge: the feature of the last evaluation,
-    /// `kind << FEATURE_SHIFT | index` ([`FEATURE_SOLVENT`] …).
+    /// `kind << FEATURE_SHIFT | index` ([`crate::batch::FEATURE_SOLVENT`] …).
     #[must_use]
     pub fn edge_features(&self) -> &[u32] {
         &self.feat[..self.n_edges()]
@@ -411,7 +298,7 @@ impl<'d> Batch<'d> {
         &self.q[..3 * self.n_edges()]
     }
 
-    /// Per refined edge: field evaluations, with [`EDGE_CONVERGED`] set where
+    /// Per refined edge: field evaluations, with [`crate::batch::EDGE_CONVERGED`] set where
     /// Newton / Illinois converged.
     #[must_use]
     pub fn edge_evals(&self) -> &[u32] {
@@ -442,12 +329,6 @@ impl std::fmt::Debug for Resident<'_> {
     }
 }
 
-fn csr_rows(off: &[u32], items: &[u32]) -> bool {
-    off.first() == Some(&0)
-        && off.windows(2).all(|w| w[0] <= w[1])
-        && off.last().is_some_and(|&l| l as usize == items.len())
-}
-
 impl<'d> Resident<'d> {
     /// Uploads the arrangement.
     ///
@@ -460,21 +341,7 @@ impl<'d> Resident<'d> {
     /// If array lengths disagree or a CSR table is malformed (the kernels
     /// read rows `off[k]..off[k + 1]` of every candidate).
     pub fn new(device: &'d Device, a: &ArrangementRef<'_>) -> Result<Self> {
-        let n = a.sphere[0].len();
-        assert!(a.sphere.iter().all(|v| v.len() == n) && a.status.len() == n);
-        let nc = a.circle[0].len();
-        assert!(a.circle.iter().all(|v| v.len() == nc));
-        assert!(a.vertex.iter().all(|v| v.len() == a.vertex[0].len()));
-        assert!(a.neighbors.0.len() == n + 1 && csr_rows(a.neighbors.0, a.neighbors.1));
-        assert!(
-            a.circle_blockers.0.len() == nc + 1
-                && csr_rows(a.circle_blockers.0, a.circle_blockers.1)
-        );
-        for g in [&a.sphere_grid, &a.circle_grid, &a.vertex_grid] {
-            let cells = g.dims.iter().map(|&d| d as usize).product::<usize>();
-            assert!(g.dims.iter().all(|&d| d > 0) && g.starts.len() == cells + 1);
-            assert!(csr_rows(g.starts, g.items));
-        }
+        crate::batch::validate(a);
         let up = |v: &[f32]| device.upload(v);
         let sphere = a.sphere.iter().map(|v| up(v)).collect::<Result<Vec<_>>>()?;
         let circle = a.circle.iter().map(|v| up(v)).collect::<Result<Vec<_>>>()?;
@@ -484,17 +351,6 @@ impl<'d> Resident<'d> {
             GridBuf::new(device, &a.circle_grid)?,
             GridBuf::new(device, &a.vertex_grid)?,
         ];
-        let words = 8 * n
-            + 10 * nc
-            + 3 * a.vertex[0].len()
-            + a.neighbors.0.len()
-            + a.neighbors.1.len()
-            + a.circle_blockers.0.len()
-            + a.circle_blockers.1.len()
-            + [&a.sphere_grid, &a.circle_grid, &a.vertex_grid]
-                .iter()
-                .map(|g| g.starts.len() + g.items.len())
-                .sum::<usize>();
         Ok(Self {
             device,
             sphere,
@@ -509,7 +365,7 @@ impl<'d> Resident<'d> {
             grids,
             max_expanded: a.max_expanded,
             rho_max: a.rho_max,
-            resident_bytes: 4 * words,
+            resident_bytes: crate::batch::resident_bytes(a),
             refine: None,
         })
     }
@@ -828,41 +684,7 @@ impl<'d> Resident<'d> {
     }
 }
 
-/// Residuals of the frame-local `f32` positions (`f64` minus `f32`, as
-/// `f32`), the lattice spacing as an `f32` pair, and the iteration settings,
-/// for [`Resident::refine`].
-#[derive(Debug, Clone, Copy)]
-pub struct RefineRef<'a> {
-    /// Sphere centres: x, y, z residuals.
-    pub sphere_lo: [&'a [f32]; 3],
-    /// Circle centres: x, y, z residuals.
-    pub circle_lo: [&'a [f32]; 3],
-    /// SAS vertices: x, y, z residuals.
-    pub vertex_lo: [&'a [f32]; 3],
-    /// Lattice spacing, high part.
-    pub h_hi: f32,
-    /// Lattice spacing, low part (`h − h_hi`).
-    pub h_lo: f32,
-    /// Stop where `|F| ≤ tol`.
-    pub tol: f32,
-    /// Newton / Illinois evaluations per edge, at most.
-    pub max_iter: u32,
-    /// Bisection steps after an unconverged Newton / Illinois phase, at most.
-    pub max_bisect: u32,
-}
-
-/// Wall times of [`Resident::refine`], in seconds.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct RefineTimes {
-    /// Count pass.
-    pub count: f64,
-    /// Host scan of the counts.
-    pub scan: f64,
-    /// Refinement pass.
-    pub refine: f64,
-}
-
-/// `RefineParams` in `kernels/hip/sesmesh.hip`.
+/// `RefineParams` in `kernels/sesmesh.cuh`.
 #[repr(C)]
 struct RefineParams {
     sphere_lo: [*const c_void; 3],
@@ -883,3 +705,5 @@ struct RefineParams {
     tol: f32,
     pad: f32,
 }
+
+crate::batch::forward_batch_traits!("hip");

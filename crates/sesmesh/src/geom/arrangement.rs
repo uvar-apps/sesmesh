@@ -97,7 +97,7 @@ impl Csr {
     }
 
     /// Offsets and items (the GPU back end uploads them as they are).
-    #[cfg(feature = "hip")]
+    #[cfg(any(feature = "hip", feature = "cuda"))]
     pub(crate) fn parts(&self) -> (&[u32], &[u32]) {
         (&self.offsets, &self.items)
     }
