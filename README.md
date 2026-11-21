@@ -2,7 +2,6 @@
 
 [![crates.io](https://img.shields.io/crates/v/sesmesh.svg)](https://crates.io/crates/sesmesh)
 [![docs.rs](https://docs.rs/sesmesh/badge.svg)](https://docs.rs/sesmesh)
-[![CI](https://github.com/uvar-apps/sesmesh/actions/workflows/ci.yml/badge.svg)](https://github.com/uvar-apps/sesmesh/actions/workflows/ci.yml)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24238836.svg)](https://doi.org/10.5281/zenodo.24238836)
 
 Fast, accurate **Solvent Excluded Surface** (SES, also called the Connolly or
@@ -199,18 +198,18 @@ If you use sesmesh in published work, please cite it, giving the version you
 used. Each release is archived on Zenodo with its own DOI:
 
 > Varetto, U. (2026). *sesmesh: Solvent Excluded Surface meshes for
-> molecules* (Version 1.1.2) [Computer software]. Zenodo.
-> https://doi.org/10.5281/zenodo.24238837
+> molecules* (Version 1.3.1) [Computer software]. Zenodo.
+> https://doi.org/10.5281/zenodo.24412232
 
 ```bibtex
 @software{varetto_sesmesh,
   author    = {Varetto, Ugo},
   title     = {{sesmesh: Solvent Excluded Surface meshes for molecules}},
-  version   = {1.1.2},
+  version   = {1.3.1},
   year      = {2026},
   publisher = {Zenodo},
-  doi       = {10.5281/zenodo.24238837},
-  url       = {https://doi.org/10.5281/zenodo.24238837}
+  doi       = {10.5281/zenodo.24412232},
+  url       = {https://doi.org/10.5281/zenodo.24412232}
 }
 ```
 

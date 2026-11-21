@@ -82,6 +82,7 @@ Windows x86-64 are tested only on such a machine, when one is available.
 
 | Version | Date | Notes |
 |---|---|---|
+| 1.3.1 | 2026-11-21 | README without the CI badge (crates.io pages); cites version 1.3.1 (Zenodo doi:10.5281/zenodo.24412232). Code and output unchanged from 1.3.0. |
 | 1.3.0 | 2026-11-21 | GPU back end for NVIDIA GPUs (CUDA, feature `cuda`; same kernels and pipeline as HIP, batches in device memory; exact mode byte-identical to the CPU); `tools/gpu/gate.sh` can take its CPU references from another machine; default meshes unchanged. Binaries for macOS arm64 and Linux x86-64 only, without GPU features. |
 | 1.2.0 | 2026-11-21 | GPU back end for AMD GPUs (HIP, feature `hip`, crate `sesmesh-gpu`; exact mode byte-identical to the CPU) and opt-in fast mode (`--refine fast`); default meshes unchanged. First release built and uploaded locally (no workflow runs); binaries for macOS arm64 and Linux x86-64 only. |
 | 1.1.2 | 2026-11-15 | Extended XYZ: overflowing `Properties=` column counts are an input error instead of a panic (found by the 24 CPU-hour fuzzing campaign, #22); 1 000-entry robustness sweep (#23), `fuzz/campaign.sh`; default meshes unchanged. |

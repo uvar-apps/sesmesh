@@ -6,6 +6,18 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-11-21
+
+### Removed
+
+- The CI badge in the README (shown on the crates.io pages of `sesmesh`
+  and `sesmesh-cli`): nothing runs on GitHub.
+
+### Changed
+
+- Cite version 1.3.1 (Zenodo, doi:10.5281/zenodo.24412232) in `CITATION.cff`, the README
+  and the website. Code and output are unchanged from 1.3.0.
+
 ## [1.3.0] - 2026-11-21
 
 ### Added
@@ -587,7 +599,8 @@ listed in `docs/release.md` and GitHub issue #19).
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by
   fuzzing: a count of 377 777 773 requested 36 GB).
 
-[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/uvar-apps/sesmesh/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/uvar-apps/sesmesh/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/uvar-apps/sesmesh/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/uvar-apps/sesmesh/compare/v1.1.1...v1.1.2
