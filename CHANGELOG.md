@@ -35,8 +35,10 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   `DeviceResident` / `DeviceBatch` that both back ends implement; the HIP
   kernel source moved to `kernels/sesmesh.cuh`. `--gpu-device` applies to
   `--backend hip` and `cuda`; its usage error now says so.
-- `tools/gpu/compare.py` hashes with `sha256sum` and `grep` instead of
-  reading whole OBJ files into Python (tens of GB at 0.25 Å).
+- The GPU gate no longer uses Python: `tools/gpu/gate.sh` streams the OBJ
+  files through `sha256sum` and `grep` (they reach tens of GB at 0.25 Å,
+  which `compare.py` read whole) and compares the statistics with `jq`;
+  `summary.py` is now `summary.sh` (awk). Same CSV rows and totals.
 
 ## [1.2.0] - 2026-11-21
 

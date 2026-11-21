@@ -217,9 +217,10 @@ CPU is not the point of the test).
   the arrangement and three batches, not the mesh.
 * Run time: the references took 614 s (SES) and 34 s (SAS/vdW) on the
   Zen 5, the GPU side 5 456 s and 465 s on the laptop. Most of the SES
-  side is 3J3Q at 0.25 Å: its swap and, before the fix, `compare.py`
-  reading its OBJ files into Python to hash them (it now uses `sha256sum`
-  and `grep`).
+  side is 3J3Q at 0.25 Å: its swap and, before the fix, the gate reading
+  its OBJ files into Python to hash them (the gate now streams them through
+  `sha256sum` and `grep`, compares statistics with `jq`, and uses no
+  Python).
 
 The device tests (`tests/cuda.rs`; in `sesmesh` the device sampling
 values, exact meshes and fast meshes for every batch size, cancellation,

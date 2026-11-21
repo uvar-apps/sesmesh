@@ -34,8 +34,9 @@ minutes, most of it 3J3Q at 0.25 Å: 800 M triangles, a 72 GB OBJ per run,
 more than 62 GB of memory (it swapped). Leave it out of the list on
 smaller machines.
 
-`gate.sh` needs GNU `split` (Linux), and `compare.py` `grep` and
-`sha256sum`. `BIN`, `DATA` and `JOBS` override the
+`gate.sh` needs bash, GNU coreutils (`split`, `sha256sum`), `grep` and
+`jq`; it uses no Python. `summary.sh GATE_CSV...` prints the totals of
+existing CSV files again (for example after merging runs). `BIN`, `DATA` and `JOBS` override the
 binary, the input directory and the number of parallel shards; `SIMD`
 passes `--simd` to every run.
 

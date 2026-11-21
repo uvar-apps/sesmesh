@@ -161,7 +161,8 @@ any deviation from the plan.
   `docs/gpu-prior-art.md` §5.2) and S2 (`field/gpu_s2.rs`, `s2`, §5.4: fast vs exact vertices)
 - `tools/gpu/` GPU gate (T11.6′): `gate.sh` (CPU vs `--backend $BACKEND` exact bytes and stats,
   fast faces, repeatability, area/volume; GNU `split`; `MODE=cpu|gpu` + `REF` split the CPU
-  references and GPU runs over two machines), `compare.py`, `summary.py`, README;
+  references and GPU runs over two machines; no Python: OBJ files streamed through `grep` and
+  `sha256sum`, statistics compared with `jq`), `summary.sh` (awk), README;
   `cuda-build.Containerfile` (Rust + nvcc, for building without CUDA installed)
 - `par.rs` rayon facade (feature `parallel`) · `crates/sesmesh-testkit` brute-force oracle,
   analytic two-sphere references, cluster generators, minimal OBJ reader
