@@ -538,8 +538,9 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
 > f64) are dropped; the tasks that follow are those of
 > `docs/gpu-prior-art.md` §5.3 (S2, T11.5′, T11.6′).
 
-Every task's gate is checked on this machine. GitHub runners have no GPU,
-and the manual CI job only builds the feature in a ROCm container.
+Every task's gate is checked on this machine. Nothing runs on GitHub
+(`docs/release.md`); the CI workflow, kept for reference and run only by
+hand, would only build the feature in a ROCm container.
 
 | ID | Task | Gate |
 |---|---|---|
@@ -698,5 +699,6 @@ GTT used, sampled every 10 ms, above the idle level):
 * in fast mode the CPU cores mostly wait for the device during the mesh
   stage: splitting the edges between both, and the CPU stages around it
   (arrangement, measure, formatting), are the next levers;
-* release binaries are built without `hip` (no ROCm on the GitHub
-  runners): users build with `cargo install sesmesh-cli --features hip`.
+* release binaries are built without `hip`: users build with
+  `cargo install sesmesh-cli --features hip` (ROCm's `hipcc` at build
+  time).

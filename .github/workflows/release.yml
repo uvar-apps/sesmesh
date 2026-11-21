@@ -4,18 +4,17 @@
 
 # Release automation (Plan T10.4, docs/release.md).
 #
-# * Push a tag `vX.Y.Z` → build the `sesmesh` binary for the tier-1 targets
-#   with the `dist` profile, package it with the docs and licences, write
-#   SHA-256 checksums and create a draft GitHub release with the archives.
-# * Run manually (workflow_dispatch) → the same builds as a dry run (archives
-#   as workflow artifacts, no release); with `publish-crates` the crates are
-#   also published to crates.io (`sesmesh`, then `sesmesh-cli`) using the
-#   `CARGO_REGISTRY_TOKEN` secret.
+# Runs only by hand (workflow_dispatch): since 1.2.0 releases are built,
+# tested and uploaded from local machines and nothing runs on GitHub by
+# itself (docs/release.md, tools/release/package.sh). Kept for reference:
+# builds the `sesmesh` binary for the tier-1 targets with the `dist`
+# profile, packages it with the docs and licences, writes SHA-256 checksums
+# and uploads the archives as workflow artifacts; with `publish-crates` the
+# crates are also published to crates.io using the `CARGO_REGISTRY_TOKEN`
+# secret. The draft-release job ran only for tag pushes and no longer runs.
 name: release
 
 on:
-  push:
-    tags: ["v*"]
   workflow_dispatch:
     inputs:
       publish-crates:

@@ -46,8 +46,9 @@ Command-line tool (binary `sesmesh`):
 cargo install sesmesh-cli
 ```
 
-Prebuilt binaries for macOS arm64, Linux x86-64 / arm64 and Windows x86-64 are
-attached to the [GitHub releases](https://github.com/uvar-apps/sesmesh/releases).
+Prebuilt binaries for macOS arm64 and Linux x86-64 are attached to the
+[GitHub releases](https://github.com/uvar-apps/sesmesh/releases) (up to 1.1.2
+also Linux arm64 and Windows x86-64).
 
 Library:
 

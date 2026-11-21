@@ -51,8 +51,11 @@ any deviation from the plan.
   https://github.com/uvar-apps/sesmesh (public); push `main` and the phase branches.
 - Validate locally before every push (full list: `docs/release.md`, *Local validation*: fmt,
   both clippy commands, debug + release `--include-ignored` tests, examples, rustdoc, MSRV,
-  cargo-deny, publish dry run); never push and rely on GitHub CI, which is manual-only
-  (`workflow_dispatch`). Release tags only on a locally validated commit.
+  cargo-deny, publish dry run); never push and rely on GitHub CI. Never run anything on
+  GitHub (user, 2026-11-21): every workflow is `workflow_dispatch` only and is not started;
+  release binaries are built locally (`tools/release/package.sh`), the GitHub release is
+  created with `gh release create`, crates are published with `cargo publish --workspace`.
+  Release tags only on a locally validated commit.
 - Never commit `out/` (review meshes: prototype files plus `*-sesmesh.obj` from the real CLI).
 - `crates/sesmesh/data/atom-colors.json` (user-provided, 118 element colours,
   `{"format":"eigenvista-atom-colors","version":1,"colors":[{"z","symbol","color":"#rrggbb"}]}`)
@@ -60,18 +63,25 @@ any deviation from the plan.
   sync). The user's original root copy was removed on 2026-11-15 (identical to this one).
 - The user reviews meshes in a viewer; the crambin SES was confirmed "perfect" (T4.10).
 
-## Repository state at handoff (2026-11-15)
+## Repository state at handoff (2026-11-21)
 
-- Latest release **1.1.2** (2026-11-15; 1.1.1 and 1.1.0 on 2026-11-14; 1.0.0, 0.9.0 and
-  0.9.1 on 2026-11-13): tags `v0.9.0`, `v0.9.1`, `v1.0.0`, `v1.1.0`, `v1.1.1`, `v1.1.2`,
-  crates `sesmesh` and `sesmesh-cli` on crates.io (owner: the
-  user's crates.io account), GitHub releases with tier-1 binaries. `main` = `origin/main` = the
-  1.1.2 release commit (branch `release-1.1.2`). Semantic versioning from 1.0
+- Latest release **1.2.0** (2026-11-21, GPU back end; 1.1.2 on 2026-11-15; 1.1.1 and 1.1.0
+  on 2026-11-14; 1.0.0, 0.9.0 and 0.9.1 on 2026-11-13): tags `v0.9.0` … `v1.1.2`, `v1.2.0`,
+  crates `sesmesh-gpu` (first published with 1.2.0), `sesmesh` and `sesmesh-cli` on
+  crates.io (owner: the user's crates.io account), GitHub releases with binaries (up to
+  1.1.2 the four tier-1 targets from the release workflow; 1.2.0 built locally: macOS arm64
+  on the Mac, Linux x86-64 in the `localhost/sesmesh-compare` container (Ubuntu 24.04) on
+  the GPU host; no Linux arm64 or Windows machine). `origin/main` = the 1.2.0 release commit
+  (branch `phase-11-gpu-hip`); the main checkout's local `main` may lag behind it (it held
+  the user's uncommitted paper work at release time): `git merge --ff-only origin/main`
+  there. Semantic versioning from 1.0
   (`docs/api-review.md`); 1.x keeps default output byte-identical (new behaviour is opt-in),
   except correctness fixes that bring output to what the spec and design promise (user's
   decision, 2026-11-14): patch release, CHANGELOG names the meshes that change and by how much.
 - Website: https://uvar-apps.github.io/sesmesh/ (GitHub Pages, source "GitHub Actions",
-  deployed from `main` by `.github/workflows/pages.yml`; branch `website` holds its history).
+  deployed from `main` by `.github/workflows/pages.yml`, which since 1.2.0 runs only when the
+  user starts it; branch `website` holds its history). The deployed site still shows 1.1.2
+  until then.
 - The crates.io token lives in the user's `~/.cargo/credentials.toml` (never read or print it).
   Next releases follow `docs/release.md` (bump `[workspace.package] version` and the `sesmesh`
   and `sesmesh-gpu` (`=x.y.z`) workspace dependencies, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).
@@ -81,7 +91,8 @@ any deviation from the plan.
   (on crates.io from the next publish). Left to the user: social preview upload, Google
   Search Console / Bing verification, announcements. Zenodo: record created by hand
   for 1.1.2 (version DOI 10.5281/zenodo.24238837, all versions 10.5281/zenodo.24238836); new releases are added
-  there with *New version* (`docs/release.md` step 7), GitHub integration off.
+  there with *New version* (`docs/release.md` step 9), GitHub integration off. 1.2.0 not
+  yet added (its DOI then goes into `CITATION.cff`, README and `site/library.html`).
 - 1.0.0 contains the v1.0 development items (branch `v1-dev`): #1 decimation
   (`mesh/decimate.rs`, pure Rust), #3 `--auto-coarsen`, #15 gzip PLY/MSMS, #2
   `completions`/`man`, #12 Ctrl-C (exit 130, `ctrlc`), fuzz target `assembly` + assembly
@@ -115,7 +126,7 @@ any deviation from the plan.
   `export/` OBJ (colours, groups), binary PLY, MSMS `.vert`/`.face` writers + fixed-point
   formatter · `color/` palettes · density/memory estimate (`Resolution::Density`,
   `estimate_memory`) and Taubin smoothing + re-projection (`mesh/post.rs`)
-- `crates/sesmesh-gpu` (Phase 11, `docs/05-gpu-hip.md`, unpublished): GPU back ends, all the
+- `crates/sesmesh-gpu` (Phase 11, `docs/05-gpu-hip.md`, published from 1.2.0): GPU back ends, all the
   `unsafe`; feature `hip`: `hip/ffi.rs` (`libloading` of `libamdhip64`), `hip/mod.rs`
   (`Runtime`, `Device`, code-object selection), `memory.rs`, `stream.rs`, `selftest.rs`,
   `resident.rs` (`Resident`: arrangement uploaded once; `Batch`: pinned per-batch buffers;
@@ -150,8 +161,9 @@ any deviation from the plan.
   tutorial 04 on `site/tutorials.html`, figure `4hhb-chain-ao.webp` (`gallery-meshes.sh`).
   Interior cavities bake black (no outside viewpoint sees them).
 - Docs: `docs/cli.md` (CLI manual), `docs/api-review.md` (API checklist, semver policy),
-  `docs/release.md` (release process, v1.0 status), `.github/workflows/release.yml`
-- `crates/sesmesh/examples/` five runnable examples (run in CI)
+  `docs/release.md` (release process, v1.0 status), `tools/release/package.sh` (local
+  release archives), `.github/workflows/` (all manual-only, not run; kept for reference)
+- `crates/sesmesh/examples/` five runnable examples (run by the local validation)
 - `crates/sesmesh-cli/src/main.rs` CLI (`surface` default, `info`, `radii`; `--progress`,
   `--simd`, `-j`, `--timings`, `--cavities`, `--drop-fragments`, `--vertex-colors`, `--palette`, `--group-components`,
   `--face-normals`, `--vertex-data`, `--atom-areas`, `--stats`, `--density`, `--smooth`,
@@ -160,7 +172,7 @@ any deviation from the plan.
   `completions`, `man` subcommands), end-to-end tests in `crates/sesmesh-cli/tests/cli.rs`. Output formats:
   `docs/04-output-formats.md`. Testkit has minimal OBJ and binary PLY readers.
 - Tests: unit tests next to the code; `crates/sesmesh/tests/{surface,features,determinism,structures}.rs`;
-  data-dependent tests skip when `tests/data/cache` is missing (the nightly workflow fetches it)
+  data-dependent tests skip when `tests/data/cache` is missing (`cargo xtask fetch`)
 
 ## Status
 
@@ -196,14 +208,14 @@ any deviation from the plan.
   inputs (3J3Q 1 Å: 48.7 M triangles, 70 s, 5.3 GB). Open: cross-tool references (#5, #6), NFR-ACC
   decision (#4), NFR-PERF targets missed ≤ 2× on this machine, per-atom memory ≈ 600–800 B.
 
-- Phase 11 (GPU back end, HIP, #24; branch `phase-11-gpu-hip`, not merged or released yet):
+- Phase 11 (GPU back end, HIP, #24; branch `phase-11-gpu-hip`, released as 1.2.0 on 2026-11-21):
   T11.0–T11.2, S1, T11.3′ (exact device sampling, byte-identical), S2, T11.5′ (`--refine fast`,
   f32 refinement on the device), T11.6′ (benchmarks, batch tuning, docs, `tools/gpu/`, release
   checklist) done 2026-11-21. Zen 5 + Radeon 8060S, SES: exact 1.23–1.44×, fast 1.98–2.47× the
   16 cores (1AON 0.25 Å 3.40 / 2.37 / 1.41 s; 3J3Q 1 Å 28.9 / 23.6 / 12.3 s); results
   `docs/05-gpu-hip.md` §12. Fast mode is the "quick preview" mode; its speed vs accuracy was
-  reviewed by the user at the end of T11.5′ (kept as is: no accuracy given up). Planned
-  release: 1.2.0 (new opt-in feature, minor), first publish of `sesmesh-gpu`.
+  reviewed by the user at the end of T11.5′ (kept as is: no accuracy given up). Released as
+  1.2.0 (new opt-in feature, minor), first publish of `sesmesh-gpu`; binaries without `hip`.
 
 ## Next
 
@@ -241,7 +253,7 @@ tick them in #19. Summary:
    `~/projects/aomesh`): objserde 0.3.0 (keeps header comments, `o`, `g`) and aomesh 0.4.0
    (plain `map_Kd`, passes them through; AO values byte-identical to 0.3.1), both tagged
    with GitHub releases. Left open in #27: MeshLab check, optional gallery AO toggle.
-   GPU back ends: #24 HIP (Phase 11, done on its branch; open after it: GPU buffers in the
+   GPU back ends: #24 HIP (Phase 11, released in 1.2.0; open after it: GPU buffers in the
    memory estimate, discrete GPUs, CPU/GPU edge split in fast mode, `docs/05-gpu-hip.md`
    §12), #25 CUDA, #26 Metal (f32 plan in the issues).
 

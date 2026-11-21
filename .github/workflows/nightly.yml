@@ -5,11 +5,11 @@
 name: Nightly
 
 # Long-running checks that are too slow for every push: ignored tests (large
-# downloaded structures) and fuzz smoke runs (Plan T1.12).
+# downloaded structures) and fuzz smoke runs (Plan T1.12). Runs only by hand
+# since 1.2.0 (nothing runs on GitHub by itself; the same checks run
+# locally, docs/release.md).
 
 on:
-  schedule:
-    - cron: "17 3 * * *"
   workflow_dispatch:
 
 permissions:

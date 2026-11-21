@@ -20,7 +20,7 @@ default-members = [
 ]
 
 [workspace.package]
-version = "1.1.2"
+version = "1.2.0"
 edition = "2024"
 # Highest MSRV among planned dependencies (fearless_simd 1.2: 1.89).
 # See docs/03-implementation-plan.md §2. Checked by the `msrv` CI job.
@@ -29,13 +29,13 @@ license = "MIT OR Apache-2.0"
 authors = ["Ugo Varetto"]
 repository = "https://github.com/uvar-apps/sesmesh"
 homepage = "https://uvar-apps.github.io/sesmesh/"
-# Only `sesmesh` and `sesmesh-cli` are publishable (Plan T10.4); `cargo
-# publish` is run by hand or by the release workflow, never implicitly.
+# Only `sesmesh-gpu`, `sesmesh` and `sesmesh-cli` are publishable (Plan T10.4); `cargo
+# publish` is run by hand (docs/release.md), never implicitly.
 
 [workspace.dependencies]
-sesmesh = { path = "crates/sesmesh", version = "1.1.2" }
+sesmesh = { path = "crates/sesmesh", version = "1.2.0" }
 # Exact version: an implementation crate released with sesmesh.
-sesmesh-gpu = { path = "crates/sesmesh-gpu", version = "=1.1.2" }
+sesmesh-gpu = { path = "crates/sesmesh-gpu", version = "=1.2.0" }
 sesmesh-testkit = { path = "crates/sesmesh-testkit" }
 
 # Versions follow docs/03-implementation-plan.md §2; add entries when a phase

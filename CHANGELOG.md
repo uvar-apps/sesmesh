@@ -6,6 +6,8 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-21
+
 ### Added
 
 - GPU back end, HIP (Phase 11, #24): crate `sesmesh-gpu` (all the `unsafe`, HIP loaded at run time,
@@ -66,6 +68,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- Releases are built, tested and uploaded from local machines, and nothing
+  runs on GitHub: the `release`, `pages` and `nightly` workflows no longer
+  start on a tag, a push or a schedule (by hand only, like `ci`). Binaries
+  are built with `tools/release/package.sh` (`docs/release.md`); 1.2.0
+  ships macOS arm64 and Linux x86-64 archives (on Linux arm64 and Windows
+  x86-64: `cargo install sesmesh-cli`). The release binaries are built
+  without `hip`.
 - Paper, JMGM files and website: every statement of a time on the 10-core
   Apple M4 now also gives the time on the 16-core AMD Zen 5 machine of the
   comparison (sesmesh 1.1.0). The abstract, the highlight, the cover letter
@@ -544,7 +553,8 @@ listed in `docs/release.md` and GitHub issue #19).
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by
   fuzzing: a count of 377 777 773 requested 36 GB).
 
-[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/uvar-apps/sesmesh/compare/v1.1.2...v1.2.0
 [1.1.2]: https://github.com/uvar-apps/sesmesh/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/uvar-apps/sesmesh/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/uvar-apps/sesmesh/compare/v1.0.0...v1.1.0

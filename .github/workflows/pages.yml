@@ -7,13 +7,9 @@ name: pages
 # Publishes the website in site/ to GitHub Pages
 # (https://uvar-apps.github.io/sesmesh/). One-time setup: repository
 # Settings → Pages → Build and deployment → Source: "GitHub Actions".
+# Runs only by hand (since 1.2.0 nothing runs on GitHub by itself).
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "site/**"
-      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:

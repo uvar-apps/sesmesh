@@ -19,8 +19,9 @@ its name is still free on crates.io before its first release.
 
 ## Local validation
 
-Run before every push, not only releases; push only when all pass. The same
-steps as `.github/workflows/ci.yml`, which runs only by hand:
+Run before every push, not only releases; push only when all pass. Nothing
+runs on GitHub: the workflows in `.github/workflows/` start only by hand and
+are kept for reference (`ci.yml` lists the same steps):
 
 ```bash
 cargo fmt --all --check
@@ -60,18 +61,17 @@ device tests (exact device sampling equals the CPU's, fast meshes equal
 the exact triangles, batch sizes, cancellation) and the CLI's
 `--backend hip` / `--refine fast` tests. `tools/gpu/gate.sh` compares the
 CPU and HIP back ends on the test corpus (`tools/gpu/README.md`: inputs,
-checks, run time). The GPU build is not in the release binaries (no ROCm on
-the GitHub runners): users build it with `cargo install sesmesh-cli
---features hip`.
+checks, run time). The GPU build is not in the release binaries: users
+build it with `cargo install sesmesh-cli --features hip`.
 
-This covers the host only (macOS arm64 here). Linux x86-64, Linux arm64 and
-Windows are covered by running the CI workflow by hand, or by testing on
-such a machine.
+The Mac covers macOS arm64, the GPU host Linux x86-64. Linux arm64 and
+Windows x86-64 are tested only on such a machine, when one is available.
 
 ## Releases
 
 | Version | Date | Notes |
 |---|---|---|
+| 1.2.0 | 2026-11-21 | GPU back end for AMD GPUs (HIP, feature `hip`, crate `sesmesh-gpu`; exact mode byte-identical to the CPU) and opt-in fast mode (`--refine fast`); default meshes unchanged. First release built and uploaded locally (no workflow runs); binaries for macOS arm64 and Linux x86-64 only. |
 | 1.1.2 | 2026-11-15 | Extended XYZ: overflowing `Properties=` column counts are an input error instead of a panic (found by the 24 CPU-hour fuzzing campaign, #22); 1 000-entry robustness sweep (#23), `fuzz/campaign.sh`; default meshes unchanged. |
 | 1.1.1 | 2026-11-14 | Exact refinement bisects edges where Newton/Illinois stalled (rare vertices up to 0.22 Å off the SES in 1.1.0; all others bit-identical), cross-tool comparison (#5, #6) and stored references, paper draft, crate homepage/category, `CITATION.cff`. |
 | 1.1.0 | 2026-11-14 | Opt-in sub-grid fragment removal (`--drop-fragments`), memory guard fixed (estimate now an upper bound of the peak) and lower peak memory, CLI creates missing output directories, project website on GitHub Pages; default meshes unchanged. |
@@ -81,8 +81,12 @@ such a machine.
 
 ## Checklist
 
+Nothing in this list runs on GitHub: the binaries are built, tested and
+packaged locally, and pushes and tags start no workflow.
+
 1. Local validation passes on the commit to release, before anything is
-   pushed (GitHub CI is manual-only; see *Local validation* below).
+   pushed (*Local validation* above, and the *GPU host* steps when they
+   apply).
 2. Set the version in `Cargo.toml` (`[workspace.package] version` and the
    `sesmesh` and `sesmesh-gpu` (`=x.y.z`) entries of
    `[workspace.dependencies]`), run
@@ -90,35 +94,53 @@ such a machine.
    `CITATION.cff` and the version shown on the website
    (`grep -n 'X.Y.Z' site/*.html` with the old version: the header badges, the
    home page label and `softwareVersion` in its JSON-LD block).
-3. In `CHANGELOG.md`, rename *Unreleased* to `## [X.Y.Z] - YYYY-MM-DD` and
-   open a new *Unreleased* section.
-4. Dry runs:
-
-   ```bash
-   cargo publish --workspace --dry-run
-   ```
-
-   and the `release` workflow by hand (Actions → release → Run workflow,
-   `publish-crates` unticked): builds and packages the binaries for the four
-   tier-1 targets as artifacts.
-5. Commit, then tag and push:
+3. In `CHANGELOG.md`, rename *Unreleased* to `## [X.Y.Z] - YYYY-MM-DD`,
+   open a new *Unreleased* section and update the comparison links at the
+   end. Add a row to *Releases* above.
+4. Commit, run the local validation again (it includes
+   `cargo publish --workspace --dry-run --locked`), then tag:
 
    ```bash
    git tag -a vX.Y.Z -m "sesmesh X.Y.Z"
    ```
 
+5. Build and package the binaries, one archive per target, on a machine
+   of that kind (or a container with an older glibc for Linux, so that the
+   binary runs on older distributions):
+
+   ```bash
+   tools/release/package.sh aarch64-apple-darwin dist
+   ```
+
+   The script builds with the `dist` profile, smoke-tests the binary
+   (`--version`, 1CRN draft) and writes
+   `dist/sesmesh-X.Y.Z-<target>.tar.gz` (`.zip` for Windows), with the
+   binary, README, CHANGELOG, licences, `docs/cli.md`,
+   `docs/04-output-formats.md`, the man page and the shell completions,
+   and a `.sha256` file. Collect the archives in one directory and write
+   `SHA256SUMS` (`cat *.sha256 > SHA256SUMS`).
+6. Push the branch, `main` and the tag:
+
    ```bash
    git push origin main vX.Y.Z
    ```
 
-   The workflow creates a **draft** GitHub release with the archives
-   (`sesmesh-X.Y.Z-<target>.tar.gz|zip`, each with the binary, README,
-   CHANGELOG, licences and `docs/cli.md`) and `SHA256SUMS`. Review and
-   publish the draft.
-6. crates.io: add a `CARGO_REGISTRY_TOKEN` secret to the `crates-io`
-   environment (repository settings), then run the workflow by hand with
-   `publish-crates` ticked — or run `cargo publish --workspace` locally.
-7. Zenodo (by hand; keep Zenodo's GitHub integration off so that every
+7. crates.io (`sesmesh-gpu`, then `sesmesh`, then `sesmesh-cli`; the token
+   is in `~/.cargo/credentials.toml`):
+
+   ```bash
+   cargo publish --workspace --locked
+   ```
+
+8. GitHub release, created through the API (no workflow):
+
+   ```bash
+   gh release create vX.Y.Z --verify-tag --title "sesmesh X.Y.Z" \
+     --notes "See CHANGELOG.md for the changes in this release." \
+     dist/*.tar.gz dist/*.zip dist/SHA256SUMS
+   ```
+
+9. Zenodo (by hand; keep Zenodo's GitHub integration off so that every
    version stays under the one record): on https://doi.org/10.5281/zenodo.24238836 choose **New version**,
    upload the release's source archive (GitHub release → *Source code
    (tar.gz)*), set the version and date, publish. In the next commit, cite
@@ -126,6 +148,9 @@ such a machine.
    `identifiers` entry), the reference and BibTeX in `README.md` ("Citing
    sesmesh") and in `site/library.html` (`#cite`): version, year and version
    DOI. The all-versions DOI (10.5281/zenodo.24238836) stays.
+10. Website: the `pages` workflow deploys `site/` from `main` to GitHub
+    Pages. It starts only by hand (Actions → pages → Run workflow), at the
+    maintainer's decision.
 
 Binaries use the `dist` profile (fat LTO, one codegen unit, stripped) and
 runtime SIMD dispatch, so one x86-64 binary uses AVX-512/AVX2/SSE4.2 as
