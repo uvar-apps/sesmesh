@@ -6,6 +6,17 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- Faster mesh validation, with identical results: the edge uses are grouped by their
+  smaller vertex with a parallel counting sort (each vertex's few uses then sorted on
+  their own) instead of one global sort, duplicate triangles are found in the same groups
+  instead of by sorting a copy of every triangle, and the remaining checks run in
+  parallel. The measure stage takes half as long (16 Zen 5 cores: 1AON at 0.25 Å
+  0.39 → 0.19 s, 3J3Q at 1 Å 1.15 → 0.53 s), so `--backend hip --refine fast` runs are
+  14 % shorter for 1AON at 0.25 Å and 25 % for its vdW surface. Validation no longer
+  copies the triangles (peak memory about 5 % lower on these inputs). Output is byte-identical.
+
 ## [1.3.2] - 2026-11-21
 
 ### Fixed

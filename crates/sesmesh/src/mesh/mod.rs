@@ -13,7 +13,7 @@ mod tables;
 pub use decimate::{Decimation, DecimationStats, decimate};
 pub use post::atom_areas;
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
 use crate::par;
 
@@ -293,45 +293,156 @@ pub(crate) fn components_with(mesh: &Mesh, edges: &Edges) -> (Vec<u32>, Vec<Comp
     (id, comps)
 }
 
-/// The edges of all triangles as sorted keys `(min, max)` with the
-/// traversal direction, so the uses of each undirected edge are adjacent.
+/// The directed uses of all triangle edges, grouped so that the uses of each
+/// undirected edge `(min, max)` are adjacent, in increasing `(min, max)`
+/// order. The content does not depend on the thread count.
 pub(crate) enum Edges {
-    /// `min << 33 | max << 1 | forward` (fewer than 2³¹ vertices).
-    Packed(Vec<u64>),
-    /// `(min << 32 | max, forward)`.
+    /// Fewer than 2³¹ vertices: the uses bucketed by their smaller vertex,
+    /// bucket `v` at `ends[v - 1]..ends[v]` (`0..ends[0]` for `v = 0`), each
+    /// bucket sorted. A use is `max << 33 | forward << 32 | first << 31 |
+    /// third`: the larger vertex, the direction (`min → max`), whether it is
+    /// its triangle's representative for duplicate detection (the first use
+    /// of edge `(s0, s1)` with third vertex `s2`, for the sorted vertices
+    /// `s0 ≤ s1 ≤ s2`), and the triangle's third vertex. Built by a parallel
+    /// counting sort; atomics because the buckets are filled concurrently.
+    Buckets {
+        ends: Vec<usize>,
+        uses: Vec<AtomicU64>,
+    },
+    /// `(min << 32 | max, forward)`, sorted (2³¹ vertices or more).
     Wide(Vec<(u64, bool)>),
 }
 
 /// Uses of one undirected edge: `(min, max, forward uses, backward uses)`.
 type EdgeUses = (u32, u32, usize, usize);
 
+/// Bits of a vertex index in a bucketed use ([`Edges::Buckets`]).
+const VERTEX_MASK: u64 = (1 << 31) - 1;
+
 impl Edges {
     pub(crate) fn new(mesh: &Mesh) -> Self {
-        let tris = &mesh.triangles;
-        let each = |f: &mut dyn FnMut(u32, u32)| {
-            for t in tris {
+        if mesh.positions.len() < (1 << 31) {
+            Self::buckets(mesh)
+        } else {
+            let mut keys = Vec::with_capacity(3 * mesh.triangles.len());
+            for t in &mesh.triangles {
                 for k in 0..3 {
-                    f(t[k], t[(k + 1) % 3]);
+                    let (a, b) = (t[k], t[(k + 1) % 3]);
+                    keys.push(((u64::from(a.min(b)) << 32) | u64::from(a.max(b)), a < b));
                 }
             }
-        };
-        if mesh.positions.len() < (1 << 31) {
-            let mut keys = Vec::with_capacity(3 * tris.len());
-            each(&mut |a, b| {
-                keys.push(
-                    (u64::from(a.min(b)) << 33) | (u64::from(a.max(b)) << 1) | u64::from(a < b),
-                );
-            });
-            par::sort_unstable(&mut keys);
-            Self::Packed(keys)
-        } else {
-            let mut keys = Vec::with_capacity(3 * tris.len());
-            each(&mut |a, b| {
-                keys.push(((u64::from(a.min(b)) << 32) | u64::from(a.max(b)), a < b));
-            });
             par::sort_unstable(&mut keys);
             Self::Wide(keys)
         }
+    }
+
+    /// [`Edges::Buckets`]: count the uses per smaller vertex, scan, scatter,
+    /// sort each bucket (a few uses on average).
+    fn buckets(mesh: &Mesh) -> Self {
+        let n = mesh.positions.len();
+        let tris = &mesh.triangles;
+        let chunks = tris.len().div_ceil(SUM_CHUNK);
+        let each = |c: usize, f: &mut dyn FnMut(usize, u64)| {
+            let end = ((c + 1) * SUM_CHUNK).min(tris.len());
+            for t in &tris[c * SUM_CHUNK..end] {
+                let first = representative(*t);
+                for k in 0..3 {
+                    let (a, b, third) = (t[k], t[(k + 1) % 3], t[(k + 2) % 3]);
+                    let use_ = (u64::from(a.max(b)) << 33)
+                        | (u64::from(a < b) << 32)
+                        | (u64::from(k == first) << 31)
+                        | u64::from(third);
+                    f(a.min(b) as usize, use_);
+                }
+            }
+        };
+        // `next[v]`: uses counted for vertex v, then (after the scan) the
+        // start of bucket v, then (after the scatter) its end.
+        let next: Vec<AtomicUsize> = par::map(n, |_| AtomicUsize::new(0));
+        par::map(chunks, |c| {
+            each(c, &mut |v, _| {
+                next[v].fetch_add(1, Ordering::Relaxed);
+            });
+        });
+        let blocks = n.div_ceil(SUM_CHUNK);
+        let block = |b: usize| b * SUM_CHUNK..((b + 1) * SUM_CHUNK).min(n);
+        let sums = par::map(blocks, |b| {
+            block(b)
+                .map(|v| next[v].load(Ordering::Relaxed))
+                .sum::<usize>()
+        });
+        let mut starts = Vec::with_capacity(blocks);
+        let mut total = 0;
+        for s in sums {
+            starts.push(total);
+            total += s;
+        }
+        par::map(blocks, |b| {
+            let mut at = starts[b];
+            for v in block(b) {
+                let count = next[v].load(Ordering::Relaxed);
+                next[v].store(at, Ordering::Relaxed);
+                at += count;
+            }
+        });
+        let uses: Vec<AtomicU64> = par::map(total, |_| AtomicU64::new(0));
+        par::map(chunks, |c| {
+            each(c, &mut |v, use_| {
+                uses[next[v].fetch_add(1, Ordering::Relaxed)].store(use_, Ordering::Relaxed);
+            });
+        });
+        let ends: Vec<usize> = par::map(n, |v| next[v].load(Ordering::Relaxed));
+        drop(next);
+        par::map_init(blocks, Vec::new, |scratch: &mut Vec<u64>, b| {
+            let mut start = if block(b).start == 0 {
+                0
+            } else {
+                ends[block(b).start - 1]
+            };
+            for v in block(b) {
+                let bucket = &uses[start..ends[v]];
+                start = ends[v];
+                if bucket.len() > 1 {
+                    scratch.clear();
+                    scratch.extend(bucket.iter().map(|u| u.load(Ordering::Relaxed)));
+                    scratch.sort_unstable();
+                    for (u, &s) in bucket.iter().zip(scratch.iter()) {
+                        u.store(s, Ordering::Relaxed);
+                    }
+                }
+            }
+        });
+        Self::Buckets { ends, uses }
+    }
+
+    /// Calls `f(acc, v, bucket)` for every vertex `v` with the loaded uses of
+    /// its bucket, in parallel fixed chunks of vertices; returns the
+    /// per-chunk accumulators in order ([`Edges::Buckets`] only).
+    fn par_buckets<A, I, F>(ends: &[usize], uses: &[AtomicU64], init: I, f: F) -> Vec<A>
+    where
+        A: Send,
+        I: Fn() -> A + Sync + Send,
+        F: Fn(&mut A, u32, &[u64]) + Sync + Send,
+    {
+        let n = ends.len();
+        par::map(n.div_ceil(SUM_CHUNK), |c| {
+            let mut acc = init();
+            let mut bucket = Vec::new();
+            let first = c * SUM_CHUNK;
+            let mut start = if first == 0 { 0 } else { ends[first - 1] };
+            for (v, &end) in ends
+                .iter()
+                .enumerate()
+                .take(n.min(first + SUM_CHUNK))
+                .skip(first)
+            {
+                bucket.clear();
+                bucket.extend(uses[start..end].iter().map(|u| u.load(Ordering::Relaxed)));
+                start = end;
+                f(&mut acc, v as u32, &bucket);
+            }
+            acc
+        })
     }
 
     /// Calls `f(acc, uses)` for every undirected edge, in parallel fixed
@@ -343,14 +454,24 @@ impl Edges {
         F: Fn(&mut A, EdgeUses) + Sync + Send,
     {
         match self {
-            Self::Packed(k) => runs(
-                k,
-                |x| x >> 1,
-                |x| x & 1 == 1,
-                |g| ((g >> 32) as u32, g as u32),
-                init,
-                f,
-            ),
+            Self::Buckets { ends, uses } => {
+                Self::par_buckets(ends, uses, init, |acc, v, bucket| {
+                    let mut i = 0;
+                    while i < bucket.len() {
+                        let max = bucket[i] >> 33;
+                        let (mut fwd, mut bwd) = (0, 0);
+                        while i < bucket.len() && bucket[i] >> 33 == max {
+                            if (bucket[i] >> 32) & 1 == 1 {
+                                fwd += 1;
+                            } else {
+                                bwd += 1;
+                            }
+                            i += 1;
+                        }
+                        f(acc, (v, max as u32, fwd, bwd));
+                    }
+                })
+            }
             Self::Wide(k) => runs(
                 k,
                 |x| x.0,
@@ -361,6 +482,65 @@ impl Edges {
             ),
         }
     }
+
+    /// Triangles with the same vertex set as an earlier one, from the
+    /// representatives of [`Edges::Buckets`]: a triangle with sorted vertices
+    /// `s0 ≤ s1 ≤ s2` has one, in bucket `s0` with `max = s1` and `third =
+    /// s2`, so equal vertex sets meet in one bucket. `None` for
+    /// [`Edges::Wide`].
+    fn duplicate_triangles(&self) -> Option<usize> {
+        let Self::Buckets { ends, uses } = self else {
+            return None;
+        };
+        let parts = Self::par_buckets(
+            ends,
+            uses,
+            || (0usize, Vec::new()),
+            |(count, keys): &mut (usize, Vec<u64>), _, bucket| {
+                keys.clear();
+                keys.extend(
+                    bucket
+                        .iter()
+                        .filter(|&&u| (u >> 31) & 1 == 1)
+                        .map(|&u| ((u >> 33) << 31) | (u & VERTEX_MASK)),
+                );
+                if keys.len() > 1 {
+                    keys.sort_unstable();
+                    *count += keys.windows(2).filter(|w| w[0] == w[1]).count();
+                }
+            },
+        );
+        Some(parts.iter().map(|p| p.0).sum())
+    }
+}
+
+/// The corner `k` of `t` whose edge `t[k] → t[k + 1]` joins the two smallest
+/// vertices with the largest as third vertex (the first such corner when
+/// vertices repeat).
+fn representative(t: [u32; 3]) -> usize {
+    let mut s = t;
+    s.sort_unstable();
+    (0..3)
+        .find(|&k| {
+            let (a, b) = (t[k], t[(k + 1) % 3]);
+            (a.min(b), a.max(b), t[(k + 2) % 3]) == (s[0], s[1], s[2])
+        })
+        .expect("two of three corners are adjacent")
+}
+
+/// Triangles with the same vertex set as an earlier one, by sorting the
+/// triangles' sorted vertex triples ([`Edges::Wide`] meshes).
+fn duplicates_by_sort(tris: &[[u32; 3]]) -> usize {
+    let mut sorted: Vec<[u32; 3]> = tris
+        .iter()
+        .map(|t| {
+            let mut s = *t;
+            s.sort_unstable();
+            s
+        })
+        .collect();
+    par::sort_unstable(&mut sorted);
+    sorted.windows(2).filter(|w| w[0] == w[1]).count()
 }
 
 /// Groups equal `group(x)` runs of the sorted `keys` in parallel chunks
@@ -433,41 +613,43 @@ impl Validation {
     }
 }
 
+/// Items of `items` for which `pred` holds, counted in parallel chunks.
+fn par_count<T, P>(items: &[T], pred: P) -> usize
+where
+    T: Sync,
+    P: Fn(&T) -> bool + Sync + Send,
+{
+    par::map(items.len().div_ceil(SUM_CHUNK), |c| {
+        let end = ((c + 1) * SUM_CHUNK).min(items.len());
+        items[c * SUM_CHUNK..end].iter().filter(|x| pred(x)).count()
+    })
+    .iter()
+    .sum()
+}
+
 /// Checks a mesh for the invariants of Spec FR-MESH-2 and FR-MESH-5
 /// (Design §9.3).
 pub fn validate(mesh: &Mesh) -> Validation {
     validate_with(mesh, None).0
 }
 
-/// [`validate`], returning the sorted directed edges for reuse (`None` when
+/// [`validate`], returning the grouped edge uses for reuse (`None` when
 /// indices are invalid).
 pub(crate) fn validate_with(mesh: &Mesh, edges: Option<Edges>) -> (Validation, Option<Edges>) {
     let n = mesh.positions.len();
     // Normals are optional (empty); when present there is one unit normal
     // per vertex.
-    let bad_positions = mesh
-        .positions
-        .iter()
-        .filter(|p| !p.iter().all(|c| c.is_finite()))
-        .count();
+    let bad_positions = par_count(&mesh.positions, |p| !p.iter().all(|c| c.is_finite()));
     let bad_normals = if mesh.normals.is_empty() {
         0
     } else {
-        mesh.normals
-            .iter()
-            .filter(|q| {
-                let len2: f32 = q.iter().map(|c| c * c).sum();
-                !(q.iter().all(|c| c.is_finite()) && (len2 - 1.0).abs() < 1e-3)
-            })
-            .count()
-            + n.abs_diff(mesh.normals.len())
+        par_count(&mesh.normals, |q| {
+            let len2: f32 = q.iter().map(|c| c * c).sum();
+            !(q.iter().all(|c| c.is_finite()) && (len2 - 1.0).abs() < 1e-3)
+        }) + n.abs_diff(mesh.normals.len())
     };
     let bad_vertices = bad_positions + bad_normals;
-    let invalid_indices = mesh
-        .triangles
-        .iter()
-        .filter(|t| t.iter().any(|&i| i as usize >= n))
-        .count();
+    let invalid_indices = par_count(&mesh.triangles, |t| t.iter().any(|&i| i as usize >= n));
     let mut v = Validation {
         bad_vertices,
         invalid_indices,
@@ -495,18 +677,10 @@ pub(crate) fn validate_with(mesh: &Mesh, edges: Option<Edges>) -> (Validation, O
     })
     .iter()
     .sum();
-    let mut sorted: Vec<[u32; 3]> = mesh
-        .triangles
-        .iter()
-        .map(|t| {
-            let mut s = *t;
-            s.sort_unstable();
-            s
-        })
-        .collect();
-    par::sort_unstable(&mut sorted);
-    v.duplicate_triangles = sorted.windows(2).filter(|w| w[0] == w[1]).count();
     let edges = edges.unwrap_or_else(|| Edges::new(mesh));
+    v.duplicate_triangles = edges
+        .duplicate_triangles()
+        .unwrap_or_else(|| duplicates_by_sort(tris));
     for [boundary, non_manifold, misoriented] in edges.par_runs(
         || [0usize; 3],
         |acc, (a, b, fwd, bwd)| {

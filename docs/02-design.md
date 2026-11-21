@@ -953,6 +953,18 @@ duplicate triangles; finite coordinates; optional distance-to-SES check
 ($\lvert F(\mathbf v)\rvert \le$ tol via point queries) and normal check
 (angle to $\nabla F$).
 
+*As built (after 1.3.2):* the edge uses are not sorted globally but
+bucketed by their smaller vertex (`mesh::Edges::Buckets`): a parallel
+counting sort (atomic counts per vertex, blocked scan, atomic scatter), then
+each bucket (≈ 6 uses) sorted on its own, so the content does not depend on
+the schedule. A use packs `max << 33 | forward << 32 | first << 31 | third`;
+`first` marks one use per triangle (edge `(s0, s1)` with third vertex `s2`
+for its sorted vertices), so triangles with equal vertex sets meet in
+bucket `s0` and duplicates are counted there, without the sorted copy of
+all triangles. Meshes with 2³¹ vertices or more keep the sorted keys. On
+16 Zen 5 cores the measure stage halved (1AON at 0.25 Å 0.39 → 0.19 s,
+3J3Q at 1 Å 1.15 → 0.53 s; validation was 0.31 and 0.91 s of these).
+
 ### 9.4 Smoothing with exact re-projection (FR-LOD-5)
 
 Taubin λ|μ (λ = 0.5, μ = −0.53, uniform umbrella Laplacian over a CSR
@@ -1105,7 +1117,8 @@ f 1//1 2//2 3//3
   smallest-vertex labelling are schedule-independent); validation and
   component edge counts share one parallel sort of packed undirected edge
   keys (`min << 33 | max << 1 | forward`). Measure stage on 1AON at 0.5 Å:
-  0.30 s → 0.16 s (10 threads). `SurfaceEngine` keeps the per-thread
+  0.30 s → 0.16 s (10 threads). After 1.3.2 the keys are bucketed by
+  their smaller vertex instead (§9.3). `SurfaceEngine` keeps the per-thread
   sampling buffers in a pool between calls (FR-LIB-3).
 * *After 1.1 (Phase 11, GPU back end):* in the mesh stage one extra thread
   (outside the rayon pool) drives the device: it fills a ring of three

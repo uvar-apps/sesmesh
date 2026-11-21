@@ -697,7 +697,17 @@ GTT used, sampled every 10 ms, above the idle level):
 * data-centre GPUs (MI250X, MI300; decision 2 of §11);
 * in fast mode the CPU cores mostly wait for the device during the mesh
   stage: splitting the edges between both, and the CPU stages around it
-  (arrangement, measure, formatting), are the next levers;
+  (arrangement, measure, formatting), are the next levers. Profile
+  (2026-11-21, timers in the device thread and the meshing threads): in
+  fast mode the device thread is busy 95–99 % of the SES mesh stage
+  (kernels; host scans 4–5 %) and the meshing threads 12–38 %, and 4
+  threads mesh as fast as 16 (1AON at 0.25 Å 548 vs 530 ms, 3J3Q at 1 Å
+  4.57 vs 4.68 s); in exact mode the threads are busy 98–99 % and the
+  device 14–46 %. All 16 cores on the CPU path are ≈ 5× slower than the
+  device, so giving them bricks would shorten fast runs by about 3–6 %.
+  Validation was the largest CPU stage after the arrangement (21 % of a
+  fast 1AON run at 0.25 Å, 37 % for vdW, on ≈ 7 cores); after 1.3.2 the
+  measure stage takes half as long (Design §9.3);
 * release binaries are built without `hip`: users build with
   `cargo install sesmesh-cli --features hip` (ROCm's `hipcc` at build
   time).

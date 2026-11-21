@@ -126,7 +126,7 @@ any deviation from the plan.
   `gather_local`/`eval_local` with locally restricted blockers, used by refinement), lattice +
   brick/sub-block classification (`lattice.rs`), gathering + `fearless_simd` kernels +
   `Engine::map_bricks_with` + `ScratchPool` + SIMD level selection (`kernel.rs`), tests
-- `mesh/` `Mesh`, `validate`, parallel `components` (lock-free union–find), packed edge keys
+- `mesh/` `Mesh`, `validate`, parallel `components` (lock-free union–find), edge uses bucketed by smaller vertex
   (`mod.rs`); generated MC table (`mc_table.rs`, generator + exhaustive tests in `tables.rs`);
   per-brick MC, exact refinement, ulp-aware `edge_clamp`, parallel assembly (`extract.rs`)
 - `mesh/decimate.rs` QEM half-edge decimation (pass-based, deterministic)
