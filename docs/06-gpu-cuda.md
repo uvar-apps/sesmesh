@@ -1,10 +1,11 @@
 # GPU back end (CUDA)
 
-Phase 12, issue #25, 2026-11-21, branch `phase-12-gpu-cuda`. The CUDA back
-end reuses the design of the HIP back end (`docs/05-gpu-hip.md`,
-`docs/gpu-prior-art.md` §5): the same kernels, the same batch descriptions
-and the same mesh pipeline in `sesmesh`. This document records what differs
-for CUDA and the results on the first NVIDIA GPU tested.
+Phase 12, issue #25, 2026-11-21, branch `phase-12-gpu-cuda`, released in
+1.3.0. The CUDA back end reuses the design of the HIP back end
+(`docs/05-gpu-hip.md`, `docs/gpu-prior-art.md` §5): the same kernels, the
+same batch descriptions and the same mesh pipeline in `sesmesh`. This
+document records what differs for CUDA and the results on the first NVIDIA
+GPU tested.
 
 ## 1. Summary
 

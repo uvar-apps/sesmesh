@@ -24,8 +24,9 @@ molecular surface) meshing for molecular structures, written in Rust.
   grid automatically.
 * Multi-threaded (rayon) and SIMD-accelerated with runtime CPU dispatch
   (AVX-512 / AVX2 / SSE4.2 / NEON); output identical for any thread count.
-* Optional GPU back end for AMD GPUs (HIP / ROCm, feature `hip`): the same
-  files as the CPU, or a faster preview mode.
+* Optional GPU back ends for AMD GPUs (HIP / ROCm, feature `hip`) and NVIDIA
+  GPUs (CUDA, feature `cuda`): the same files as the CPU, or a faster
+  preview mode.
 * Ships as a reusable library crate ([`sesmesh`](https://crates.io/crates/sesmesh))
   plus a command-line tool ([`sesmesh-cli`](https://crates.io/crates/sesmesh-cli)).
 
@@ -98,17 +99,18 @@ fn main() -> sesmesh::Result<()> {
 }
 ```
 
-## GPU back end (AMD, HIP)
+## GPU back ends (AMD HIP, NVIDIA CUDA)
 
-Built with the feature `hip`, sesmesh runs the mesh stage on an AMD GPU
-through ROCm: the device classifies the grid, gathers candidates and
-samples the field while the CPU threads mesh, so the two overlap. Building
-needs ROCm's `hipcc`; the binary loads the HIP runtime when it starts and
-still runs (on the CPU) where ROCm is missing.
+Built with the feature `hip` or `cuda`, sesmesh runs the mesh stage on an
+AMD GPU through ROCm or on an NVIDIA GPU through CUDA: the device classifies
+the grid, gathers candidates and samples the field while the CPU threads
+mesh, so the two overlap. Both use the same kernels. Building needs ROCm's
+`hipcc` or CUDA's `nvcc`; the binary loads the GPU driver when it starts
+and still runs (on the CPU) where it is missing.
 
 ```bash
-cargo install sesmesh-cli --features hip
-sesmesh 1aon.cif.gz -q high --backend hip                # same files as the CPU
+cargo install sesmesh-cli --features hip                 # or --features cuda
+sesmesh 1aon.cif.gz -q high --backend hip                # same files as the CPU (or --backend cuda)
 sesmesh 1aon.cif.gz -q high --backend hip --refine fast  # preview: f32 refinement on the GPU
 sesmesh 1aon.cif.gz -q high --backend auto --timings     # GPU if one works, else CPU
 ```
@@ -122,14 +124,19 @@ sesmesh 1aon.cif.gz -q high --backend auto --timings     # GPU if one works, els
   takes 3.40 s on the CPU, 2.37 s exact on the GPU and 1.41 s fast; 3J3Q at
   1 Å (2.4 M atoms) takes 28.9 s, 23.6 s and 12.3 s (the 10-core M4's CPU:
   5.6 s and 47.6 s).
-* Built and tested on that integrated RDNA 3.5 GPU (gfx1151). Code objects
-  are built for ROCm's generic RDNA 2, 3 and 4 targets; data-centre GPUs
-  (MI250X, MI300) are not supported yet. CUDA and Metal back ends are
-  planned.
+* HIP: built and tested on that integrated RDNA 3.5 GPU (gfx1151). Code
+  objects are built for ROCm's generic RDNA 2, 3 and 4 targets; data-centre
+  GPUs (MI250X, MI300) are not supported yet.
+* CUDA: a fat binary for compute capability 7.5 (Turing) to 12.0, tested on
+  a laptop GeForce RTX 2070 Max-Q (sm_75) with a 6-core i7-9750H. There 1AON
+  at 0.5 Å takes 5.48 s on the CPU, 3.04 s exact and 1.70 s fast; the
+  laptop's CPU bounds both modes.
+* A Metal back end is planned.
 
 The library takes the same choice in `SurfaceParams::with_backend`
-(`Backend::{Cpu, Auto, Hip}`) and `with_refine(RefineMode::Fast)`.
-Details: [docs/05-gpu-hip.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/05-gpu-hip.md).
+(`Backend::{Cpu, Auto, Hip, Cuda}`) and `with_refine(RefineMode::Fast)`.
+Details: [docs/05-gpu-hip.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/05-gpu-hip.md),
+[docs/06-gpu-cuda.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/06-gpu-cuda.md).
 
 ## Documentation
 

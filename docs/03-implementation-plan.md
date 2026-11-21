@@ -539,7 +539,7 @@ descriptions and mesh pipeline; device code f32 and integer only.
 >   Laptop (i7-9750H, 6 cores): exact 1.50–1.81×, fast 2.08–3.22× its CPU,
 >   bounded by that CPU (`docs/06-gpu-cuda.md` §5). Open: fast mode slower
 >   than exact on SAS/vdW, GPU vs CPU bound of fast mode, async copies
->   (§6). Not released.
+>   (§6). Released as 1.3.0 (2026-11-21).
 
 ---
 

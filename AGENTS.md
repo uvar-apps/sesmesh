@@ -67,16 +67,20 @@ any deviation from the plan.
 
 ## Repository state at handoff (2026-11-21)
 
-- Latest release **1.2.0** (2026-11-21, GPU back end; 1.1.2 on 2026-11-15; 1.1.1 and 1.1.0
-  on 2026-11-14; 1.0.0, 0.9.0 and 0.9.1 on 2026-11-13): tags `v0.9.0` … `v1.1.2`, `v1.2.0`,
-  crates `sesmesh-gpu` (first published with 1.2.0), `sesmesh` and `sesmesh-cli` on
-  crates.io (owner: the user's crates.io account), GitHub releases with binaries (up to
-  1.1.2 the four tier-1 targets from the release workflow; 1.2.0 built locally: macOS arm64
-  on the Mac, Linux x86-64 in the `localhost/sesmesh-compare` container (Ubuntu 24.04) on
-  the GPU host; no Linux arm64 or Windows machine). `origin/main` = the 1.2.0 release commit
-  (branch `phase-11-gpu-hip`); the main checkout's local `main` may lag behind it (it held
-  the user's uncommitted paper work at release time): `git merge --ff-only origin/main`
-  there. Semantic versioning from 1.0
+- Latest release **1.3.0** (2026-11-21, CUDA back end; 1.2.0 the same day, HIP back end;
+  1.1.2 on 2026-11-15; 1.1.1 and 1.1.0 on 2026-11-14; 1.0.0, 0.9.0 and 0.9.1 on
+  2026-11-13): tags `v0.9.0` … `v1.1.2`, `v1.2.0`, `v1.3.0`, crates `sesmesh-gpu` (first
+  published with 1.2.0), `sesmesh` and `sesmesh-cli` on crates.io (owner: the user's
+  crates.io account), GitHub releases with binaries (up to 1.1.2 the four tier-1 targets
+  from the release workflow; from 1.2.0 built locally: macOS arm64 on the Mac, Linux x86-64
+  in the `localhost/sesmesh-compare` container (Ubuntu 24.04) on the GPU host; no Linux
+  arm64 or Windows machine; no GPU features in the binaries). `origin/main` = the 1.3.0
+  release commit (branch `release-1.3.0`). The main checkout holds the user's uncommitted
+  paper work (CHANGELOG entry included): to move its `main`, save the diff, restore
+  `CHANGELOG.md`, `git merge --ff-only`, and put the entry back under *Unreleased*.
+  The workspace version stays at the last release between releases (bumped only when one
+  is cut), so `cargo publish --dry-run` on `main` fails once the API has grown: check
+  packaging with the next version in a throwaway worktree. Semantic versioning from 1.0
   (`docs/api-review.md`); 1.x keeps default output byte-identical (new behaviour is opt-in),
   except correctness fixes that bring output to what the spec and design promise (user's
   decision, 2026-11-14): patch release, CHANGELOG names the meshes that change and by how much.
@@ -93,8 +97,8 @@ any deviation from the plan.
   (on crates.io from the next publish). Left to the user: social preview upload, Google
   Search Console / Bing verification, announcements. Zenodo: record created by hand
   for 1.1.2 (version DOI 10.5281/zenodo.24238837, all versions 10.5281/zenodo.24238836); new releases are added
-  there with *New version* (`docs/release.md` step 9), GitHub integration off. 1.2.0 not
-  yet added (its DOI then goes into `CITATION.cff`, README and `site/library.html`).
+  there with *New version* (`docs/release.md` step 9), GitHub integration off. 1.2.0 and
+  1.3.0 not yet added (its DOI then goes into `CITATION.cff`, README and `site/library.html`).
 - 1.0.0 contains the v1.0 development items (branch `v1-dev`): #1 decimation
   (`mesh/decimate.rs`, pure Rust), #3 `--auto-coarsen`, #15 gzip PLY/MSMS, #2
   `completions`/`man`, #12 Ctrl-C (exit 130, `ctrlc`), fuzz target `assembly` + assembly
@@ -229,7 +233,7 @@ any deviation from the plan.
   `docs/05-gpu-hip.md` §12. Fast mode is the "quick preview" mode; its speed vs accuracy was
   reviewed by the user at the end of T11.5′ (kept as is: no accuracy given up). Released as
   1.2.0 (new opt-in feature, minor), first publish of `sesmesh-gpu`; binaries without `hip`.
-- Phase 12 (GPU back end, CUDA, #25; branch `phase-12-gpu-cuda`, not released): T12.1–T12.4
+- Phase 12 (GPU back end, CUDA, #25; branch `phase-12-gpu-cuda`, released as 1.3.0): T12.1–T12.4
   done 2026-11-21 (`docs/06-gpu-cuda.md`): `--backend cuda`, shared kernels and pipeline,
   batches in device memory. Gate on an RTX 2070 Max-Q laptop vs Zen 5 CPU references: no
   difference in 774 SES + 212 SAS/vdW cases. Laptop (i7-9750H): exact 1.50–1.81×, fast
@@ -274,8 +278,8 @@ tick them in #19. Summary:
    with GitHub releases. Left open in #27: MeshLab check, optional gallery AO toggle.
    GPU back ends: #24 HIP (Phase 11, released in 1.2.0; open after it: GPU buffers in the
    memory estimate, discrete GPUs, CPU/GPU edge split in fast mode, `docs/05-gpu-hip.md`
-   §12), #25 CUDA (Phase 12, branch `phase-12-gpu-cuda`, not released yet;
-   `docs/06-gpu-cuda.md`), #26 Metal (f32 plan in the issues).
+   §12), #25 CUDA (Phase 12, released in 1.3.0; open after it:
+   `docs/06-gpu-cuda.md` §6; #24 and #25 closed 2026-11-21), #26 Metal (f32 plan in the issues).
 
 ## Gotchas learned
 

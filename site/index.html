@@ -33,7 +33,7 @@
   "applicationCategory": "ScientificApplication",
   "applicationSubCategory": "Structural biology",
   "operatingSystem": "Linux, macOS, Windows",
-  "softwareVersion": "1.2.0",
+  "softwareVersion": "1.3.0",
   "identifier": "https://doi.org/10.5281/zenodo.24238836",
   "license": ["https://spdx.org/licenses/MIT.html", "https://spdx.org/licenses/Apache-2.0.html"],
   "author": { "@type": "Person", "name": "Ugo Varetto" },
@@ -61,7 +61,7 @@
 <body>
 
 <header class="top">
-  <a class="brand" href="./">sesmesh <small>1.2.0</small></a>
+  <a class="brand" href="./">sesmesh <small>1.3.0</small></a>
   <ul class="nav">
     <li><a href="./" aria-current="page">Home</a></li>
     <li><a href="cli.html">CLI</a></li>
@@ -80,7 +80,7 @@
 <section class="hero">
   <div class="hero-text">
     <div>
-      <span class="label">Rust library + CLI · v1.2.0</span>
+      <span class="label">Rust library + CLI · v1.3.0</span>
       <h1 style="margin-top:22px">
         <span>Solvent</span>
         <span class="knock">Excluded</span>
@@ -127,8 +127,8 @@
 </section>
 
 <div class="ticker" aria-hidden="true"><div>
-  <span>PDB</span><span>PDBx/mmCIF</span><span>XYZ</span><span>PQR</span><span>gzip</span><span>biological assemblies</span><span>SES · SAS · vdW</span><span>OBJ</span><span>PLY</span><span>MSMS</span><span>NEON</span><span>AVX-512</span><span>AVX2</span><span>SSE4.2</span><span>AMD GPU (HIP)</span><span>deterministic</span><span>MIT / Apache-2.0</span>
-  <span>PDB</span><span>PDBx/mmCIF</span><span>XYZ</span><span>PQR</span><span>gzip</span><span>biological assemblies</span><span>SES · SAS · vdW</span><span>OBJ</span><span>PLY</span><span>MSMS</span><span>NEON</span><span>AVX-512</span><span>AVX2</span><span>SSE4.2</span><span>AMD GPU (HIP)</span><span>deterministic</span><span>MIT / Apache-2.0</span>
+  <span>PDB</span><span>PDBx/mmCIF</span><span>XYZ</span><span>PQR</span><span>gzip</span><span>biological assemblies</span><span>SES · SAS · vdW</span><span>OBJ</span><span>PLY</span><span>MSMS</span><span>NEON</span><span>AVX-512</span><span>AVX2</span><span>SSE4.2</span><span>AMD GPU (HIP)</span><span>NVIDIA GPU (CUDA)</span><span>deterministic</span><span>MIT / Apache-2.0</span>
+  <span>PDB</span><span>PDBx/mmCIF</span><span>XYZ</span><span>PQR</span><span>gzip</span><span>biological assemblies</span><span>SES · SAS · vdW</span><span>OBJ</span><span>PLY</span><span>MSMS</span><span>NEON</span><span>AVX-512</span><span>AVX2</span><span>SSE4.2</span><span>AMD GPU (HIP)</span><span>NVIDIA GPU (CUDA)</span><span>deterministic</span><span>MIT / Apache-2.0</span>
 </div></div>
 
 <div class="stats">
@@ -154,7 +154,7 @@
       <div class="cell"><i class="swatch" style="background:var(--el-n)"></i>
         <span class="num">03 / FAST</span>
         <h3>Sparse + SIMD</h3>
-        <p>Only bricks near the surface are sampled. The field kernel dispatches at run time to AVX-512, AVX2, SSE4.2 or NEON; rayon spreads bricks over every core. An optional back end samples on AMD GPUs through HIP.</p></div>
+        <p>Only bricks near the surface are sampled. The field kernel dispatches at run time to AVX-512, AVX2, SSE4.2 or NEON; rayon spreads bricks over every core. Optional back ends sample on AMD GPUs through HIP and on NVIDIA GPUs through CUDA.</p></div>
       <div class="cell"><i class="swatch" style="background:var(--el-s)"></i>
         <span class="num">04 / REPRODUCIBLE</span>
         <h3>Same bytes</h3>

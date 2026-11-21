@@ -28,7 +28,7 @@
 <body>
 
 <header class="top">
-  <a class="brand" href="./">sesmesh <small>1.2.0</small></a>
+  <a class="brand" href="./">sesmesh <small>1.3.0</small></a>
   <ul class="nav">
     <li><a href="./">Home</a></li>
     <li><a href="cli.html" aria-current="page">CLI</a></li>
@@ -259,12 +259,13 @@ sesmesh: wrote 1crn.obj in 0.02 s</code></pre></div>
       <span class="label">10</span>
       <h2>GPU</h2>
       <p>A binary built with the feature <code>hip</code> (ROCm's <code>hipcc</code> at build time)
-        runs the mesh stage on an AMD GPU: the device samples the field while the CPU threads mesh.
+        or <code>cuda</code> (CUDA's <code>nvcc</code>) runs the mesh stage on an AMD or NVIDIA GPU:
+        the device samples the field while the CPU threads mesh.
         The default <code>--refine exact</code> writes the same files as the CPU;
         <code>--refine fast</code> also refines the vertices on the GPU, in f32, for previews (same
         triangles, vertices as close to the surface, last bits different).</p>
       <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
-<pre><code><span class="p">$ </span>cargo install sesmesh-cli --features hip
+<pre><code><span class="p">$ </span>cargo install sesmesh-cli --features hip                  <span class="c"># or cuda</span>
 <span class="p">$ </span>sesmesh 1aon.cif.gz -q high --backend hip                 <span class="c"># same files as the CPU</span>
 <span class="p">$ </span>sesmesh 1aon.cif.gz -q high --backend hip --refine fast   <span class="c"># preview</span>
 <span class="p">$ </span>sesmesh 1aon.cif.gz -q high --backend auto --timings      <span class="c"># GPU if one works</span></code></pre></div>
@@ -277,8 +278,10 @@ sesmesh: wrote 1crn.obj in 0.02 s</code></pre></div>
       </table></div>
       <p>Complete runs on a Ryzen AI Max+ 395 with its integrated Radeon 8060S (SES, OBJ written;
         on the 10-core M4's CPU the same runs take 0.38, 2.14, 5.62 and 47.6 s).
-        <code>--backend hip</code> fails if the GPU cannot be used; <code>--backend auto</code> falls
-        back to the CPU. <code>--gpu-device N</code> picks a GPU; <code>--timings</code> names the
+        On a laptop GeForce RTX 2070 Max-Q, whose 6-core i7 bounds both modes, 1AON at 0.5 Å takes
+        5.48 s on the CPU, 3.04 s exact and 1.70 s fast with <code>--backend cuda</code>.
+        <code>--backend hip</code> and <code>cuda</code> fail if the GPU cannot be used;
+        <code>--backend auto</code> tries HIP, then CUDA, then falls back to the CPU. <code>--gpu-device N</code> picks a GPU; <code>--timings</code> names the
         device used.</p>
     </section>
 
