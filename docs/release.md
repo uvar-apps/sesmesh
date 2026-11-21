@@ -38,10 +38,11 @@ python3 -m unittest discover -s tools/ao
 ```
 
 `SESMESH_GPU_NO_KERNELS=1` lets `--all-features` build `sesmesh-gpu`'s `hip`
-feature without ROCm (no kernels are compiled; docs/05-gpu-hip.md §9). The
-GPU tests skip without a device unless `SESMESH_GPU_REQUIRE=1`.
+and `cuda` features without ROCm or CUDA (no kernels are compiled;
+docs/05-gpu-hip.md §9). The GPU tests skip without a device unless
+`SESMESH_GPU_REQUIRE=1`.
 
-### GPU host
+### GPU hosts
 
 Before a release that changes `sesmesh-gpu`, the field, meshing or the
 GPU path, also run on a machine with an AMD GPU and ROCm (tested: Radeon
@@ -49,22 +50,32 @@ GPU path, also run on a machine with an AMD GPU and ROCm (tested: Radeon
 
 ```bash
 export PATH=$HOME/.cargo/bin:/opt/rocm/bin:$PATH
-cargo +stable clippy --workspace --all-targets --all-features --locked -- -D warnings
-SESMESH_GPU_REQUIRE=1 cargo +stable test --workspace --release --all-features --locked -- --include-ignored
+F=sesmesh-cli/hip,sesmesh-gpu/hip
+cargo +stable clippy --workspace --all-targets --features $F --locked -- -D warnings
+SESMESH_GPU_REQUIRE=1 cargo +stable test --workspace --release --features $F --locked -- --include-ignored
 cargo +stable build --release -p sesmesh-cli --features hip --locked
 tools/gpu/gate.sh /tmp/gate /tmp/gate-inputs.txt
 tools/gpu/gate.sh /tmp/gate-sv /tmp/gate-inputs.txt sas:1 sas:0.5 vdw:1 vdw:0.5
 ```
 
-The clippy run compiles the kernels with `hipcc`. The tests include the
-device tests (exact device sampling equals the CPU's, fast meshes equal
-the exact triangles, batch sizes, cancellation) and the CLI's
-`--backend hip` / `--refine fast` tests. `tools/gpu/gate.sh` compares the
-CPU and HIP back ends on the test corpus (`tools/gpu/README.md`: inputs,
-checks, run time). The GPU build is not in the release binaries: users
-build it with `cargo install sesmesh-cli --features hip`.
+and on a machine with an NVIDIA GPU (tested: GeForce RTX 2070 Max-Q,
+sm_75, driver for CUDA 13.4), with `F=sesmesh-cli/cuda,sesmesh-gpu/cuda`,
+the same clippy and test commands, a build with `--features cuda`, and
+the gate with `BACKEND=cuda` (`docs/06-gpu-cuda.md` §3–§4: the build can
+run in `tools/gpu/cuda-build.Containerfile` on another machine, and the
+gate's CPU references too, with `MODE=cpu` / `MODE=gpu`). A host with
+both toolkits can use `--all-features`.
 
-The Mac covers macOS arm64, the GPU host Linux x86-64. Linux arm64 and
+The clippy runs compile the kernels with `hipcc` or `nvcc`. The tests
+include the device tests (exact device sampling equals the CPU's, fast
+meshes equal the exact triangles, batch sizes, cancellation) and the CLI's
+`--backend hip|cuda` / `--refine fast` tests. `tools/gpu/gate.sh` compares
+the CPU and GPU back ends on the test corpus (`tools/gpu/README.md`:
+inputs, checks, run time). The GPU builds are not in the release binaries:
+users build them with `cargo install sesmesh-cli --features hip` or
+`--features cuda`.
+
+The Mac covers macOS arm64, the GPU hosts Linux x86-64. Linux arm64 and
 Windows x86-64 are tested only on such a machine, when one is available.
 
 ## Releases
@@ -85,7 +96,7 @@ Nothing in this list runs on GitHub: the binaries are built, tested and
 packaged locally, and pushes and tags start no workflow.
 
 1. Local validation passes on the commit to release, before anything is
-   pushed (*Local validation* above, and the *GPU host* steps when they
+   pushed (*Local validation* above, and the *GPU hosts* steps when they
    apply).
 2. Set the version in `Cargo.toml` (`[workspace.package] version` and the
    `sesmesh` and `sesmesh-gpu` (`=x.y.z`) entries of

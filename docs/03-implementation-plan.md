@@ -510,6 +510,37 @@ Shared design for the CUDA (#25) and Metal (#26) back ends in §9.
 >   release checklist. Zen 5 + Radeon 8060S, SES: exact 1.23–1.44×, fast
 >   1.98–2.47× the 16 cores. Release 1.2.0 on request.
 
+### Phase 12 — GPU back end, CUDA (after 1.2; #25) — `docs/06-gpu-cuda.md`
+
+The HIP back end's design on NVIDIA GPUs: same kernels, batch
+descriptions and mesh pipeline; device code f32 and integer only.
+
+* T12.1: `sesmesh-gpu` feature `cuda`: driver API loaded at run time,
+  device and pinned buffers, streams, events, the self-test; kernels
+  shared with HIP (`kernels/sesmesh.cuh`) and compiled by `nvcc` into a fat
+  binary with the exactness flags.
+* T12.2: `cuda::Resident` / `cuda::Batch`: batches in device memory with
+  pinned host copies (a discrete GPU), fast-mode refinement.
+* T12.3: `Backend::Cuda`, `Auto` (HIP, then CUDA), `--backend cuda`; one
+  mesh pipeline generic over the back ends; tests on every back end that
+  opens.
+* T12.4: gate (exact bytes, fast faces) on the corpus; benchmarks; docs.
+
+> Status (2026-11-21, branch `phase-12-gpu-cuda`): T12.1–T12.3 done
+> (`docs/06-gpu-cuda.md` §2). Built in a container with `nvcc` 13.3 on a
+> machine without an NVIDIA GPU (`tools/gpu/cuda-build.Containerfile`),
+> tested on a GeForce RTX 2070 Max-Q (sm_75); the gate's CPU references
+> come from another machine (`gate.sh` `MODE=cpu|gpu`). Deviations: the
+> shared batch module and the traits `DeviceResident` / `DeviceBatch` in
+> `sesmesh-gpu` (the design planned a macro header for the kernel
+> differences; none was needed).
+> * T12.4 done (2026-11-21): gate on the RTX 2070 against CPU references
+>   from the Zen 5: no difference in 774 SES and 212 SAS/vdW cases.
+>   Laptop (i7-9750H, 6 cores): exact 1.50–1.81×, fast 2.08–3.22× its CPU,
+>   bounded by that CPU (`docs/06-gpu-cuda.md` §5). Open: fast mode slower
+>   than exact on SAS/vdW, GPU vs CPU bound of fast mode, async copies
+>   (§6). Not released.
+
 ---
 
 ## 4. Test data plan

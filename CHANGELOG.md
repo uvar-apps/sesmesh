@@ -6,6 +6,36 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- GPU back end, CUDA (Phase 12, #25): `Backend::Cuda(CudaOptions)` and
+  `--backend cuda` (feature `cuda` of `sesmesh-gpu`, `sesmesh` and
+  `sesmesh-cli`; `nvcc` at build time, only the NVIDIA driver at run time,
+  loaded when a device is opened). Same kernels as HIP
+  (`kernels/sesmesh.cuh`, compiled with `-fmad=false -prec-div=true
+  -prec-sqrt=true -ftz=false` into a fat binary for sm_75 to sm_120 plus
+  PTX), same exact and fast modes: exact mode writes the CPU back end's
+  files byte for byte. Batches live in device memory with pinned host
+  copies (discrete GPUs). `Backend::Auto` tries HIP, then CUDA, then the
+  CPU. `tools/gpu/cuda-build.Containerfile` builds it on a machine without
+  CUDA; `tools/gpu/gate.sh` takes `BACKEND=cuda` and can take its CPU
+  references from another machine (`MODE=cpu|gpu`). Tested on a GeForce
+  RTX 2070 Max-Q (sm_75) in a laptop with a 6-core i7-9750H: the gate found
+  no difference in 774 SES and 212 SAS/vdW cases (3J3Q at 0.25 Å
+  included); runs take 0.55–0.67× of the laptop CPU's time in exact mode
+  and 0.31–0.48× in fast mode, bounded by that CPU
+  (`docs/06-gpu-cuda.md` §5).
+
+### Changed
+
+- `sesmesh-gpu`: the batch descriptions, encodings and self-test moved to
+  the shared module `batch` (still re-exported by `hip`), with traits
+  `DeviceResident` / `DeviceBatch` that both back ends implement; the HIP
+  kernel source moved to `kernels/sesmesh.cuh`. `--gpu-device` applies to
+  `--backend hip` and `cuda`; its usage error now says so.
+- `tools/gpu/compare.py` hashes with `sha256sum` and `grep` instead of
+  reading whole OBJ files into Python (tens of GB at 0.25 Å).
+
 ## [1.2.0] - 2026-11-21
 
 ### Added

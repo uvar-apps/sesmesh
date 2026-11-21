@@ -165,8 +165,8 @@ single input the parent directories of `-o` and of the side files (not for
 |---|---|---|
 | `-j, --threads N` | all logical cores | Worker threads (output is identical for any N) |
 | `--simd auto\|scalar\|sse4.2\|avx2\|avx512\|neon` | `auto` | Field kernel instruction set; x86 levels are capped at what the CPU supports |
-| `--backend cpu\|auto\|hip` | `cpu` | Compute back end. `hip`: an AMD GPU through ROCm (a build with `--features hip`); fails (exit code 1) if the device cannot be used. `auto`: the GPU when one opens and passes its self-test, else the CPU. The output files are the same on every back end |
-| `--gpu-device N` | 0 | GPU index for `--backend hip` (as HIP counts devices, e.g. under `HIP_VISIBLE_DEVICES`) |
+| `--backend cpu\|auto\|hip\|cuda` | `cpu` | Compute back end. `hip`: an AMD GPU through ROCm (a build with `--features hip`); `cuda`: an NVIDIA GPU (a build with `--features cuda`); both fail (exit code 1) if the device cannot be used. `auto`: the first GPU that opens and passes its self-test (HIP, then CUDA), else the CPU. The output files are the same on every back end |
+| `--gpu-device N` | 0 | GPU index for `--backend hip` or `cuda` (as the runtime counts devices, e.g. under `HIP_VISIBLE_DEVICES` or `CUDA_VISIBLE_DEVICES`) |
 | `--max-memory BYTES` | | Refuse inputs whose *estimated* peak memory exceeds the limit (`8G`, `512M`; binary units); exit code 4 |
 | `--auto-coarsen` | off | With `--max-memory`: grow the grid spacing until the estimate fits instead of refusing (the spacing used is reported) |
 | `--quiet` | off | Print errors only |
@@ -192,8 +192,9 @@ prints the estimate; the statistics JSON records it
 (`engine.estimated_memory`). Inputs whose atoms alone exceed the limit are
 refused before any work.
 
-`--backend hip` in a binary built without the feature is a usage error
-(exit code 2). A binary built with it still runs where ROCm is missing:
+`--backend hip` or `cuda` in a binary built without the feature is a usage
+error (exit code 2). A binary built with it still runs where ROCm or the
+NVIDIA driver is missing:
 `--backend auto` then computes on the CPU, and warns only when a GPU runtime
 is installed but its device cannot be used (no code for the architecture,
 failed self-test). Opening the device (runtime, kernels, self-test) takes
@@ -212,7 +213,7 @@ ROCm's generic RDNA 2, 3 and 4 targets, and data-centre GPUs (MI250X,
 MI300) are not yet supported. `--max-memory` estimates the CPU back end's
 host memory; the GPU's batch buffers are not part of the estimate.
 
-`--refine fast` with `--backend hip` (or `auto` on a GPU) also refines the
+`--refine fast` with `--backend hip` or `cuda` (or `auto` on a GPU) also refines the
 vertices on the device, in f32 (fast mode, for previews). The triangles are
 those of `--refine exact` and the vertices as close to the surface (the same
 largest |F| on every input measured), but the files are not the exact

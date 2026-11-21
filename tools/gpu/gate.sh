@@ -3,8 +3,8 @@
 # Copyright (c) 2026 Ugo Varetto
 # SPDX-License-Identifier: MIT OR Apache-2.0
 #
-# GPU gate (Phase 11, docs/release.md "GPU host"): meshes each input on the
-# CPU and on the HIP back end and compares them.
+# GPU gate (Phase 11, 12; docs/release.md "GPU host"): meshes each input on
+# the CPU and on a GPU back end and compares them.
 #
 #   gate.sh OUT_DIR LIST [SURFACE:SPACING ...]
 #
@@ -23,10 +23,18 @@
 #
 # Then `summary.py` prints the totals and exits non-zero on any difference.
 #
-# Environment: BIN (default target/release/sesmesh, built with
-# `--features hip`), DATA (default tests/data/cache), JOBS (parallel shards,
-# default 4; each run uses every core, so more shards mostly overlap the
-# serial parts).
+# Environment: BIN (default target/release/sesmesh, built with the back
+# end's feature), BACKEND (`hip`, default, or `cuda`), DATA (default
+# tests/data/cache), JOBS (parallel shards, default 4; each run uses every
+# core, so more shards mostly overlap the serial parts), SIMD (passed as
+# `--simd` to every run when set).
+#
+# CPU references from another machine (a slow host CPU, or a GPU host
+# without the time): MODE=cpu runs only the CPU and writes one reference
+# record per case to OUT_DIR/ref (digests and statistics, see compare.py);
+# MODE=gpu with REF=that directory runs only the GPU and compares with the
+# records. Both machines need the same binary and inputs (and SIMD level:
+# set SIMD to one both support).
 set -euo pipefail
 
 if [ $# -lt 2 ]; then
@@ -41,12 +49,21 @@ shift 2
 cases=("$@")
 [ ${#cases[@]} -gt 0 ] || cases=(ses:1 ses:0.5 ses:0.25)
 BIN=${BIN:-$root/target/release/sesmesh}
+BACKEND=${BACKEND:-hip}
 DATA=${DATA:-$root/tests/data/cache}
 JOBS=${JOBS:-4}
+MODE=${MODE:-all}
+SIMD=${SIMD:-}
+case $MODE in
+  all | cpu) ;;
+  gpu) [ -n "${REF:-}" ] || { echo "gate.sh: MODE=gpu needs REF" >&2; exit 2; } ;;
+  *) echo "gate.sh: MODE is all, cpu or gpu" >&2; exit 2 ;;
+esac
 
 "$BIN" surface --help | grep -q -- '--backend <' || { echo "gate.sh: $BIN has no --backend" >&2; exit 2; }
 mkdir -p "$out"
 rm -f "$out"/gate-*.csv "$out"/shard-*
+[ "$MODE" != cpu ] || { rm -rf "$out/ref"; mkdir -p "$out/ref"; }
 
 # One shard: every case of every input in $1, rows to $2.
 shard() {
@@ -57,12 +74,24 @@ shard() {
     for c in "${cases[@]}"; do
       surf=${c%%:*}
       h=${c#*:}
-      local args=("$DATA/$f" --surface "$surf" -s "$h" --quiet)
-      local rc rce rcf
-      "$BIN" "${args[@]}" --backend cpu -o "$w/cpu.obj" --stats "$w/cpu.json" 2>/dev/null && rc=0 || rc=$?
-      "$BIN" "${args[@]}" --backend hip -o "$w/exact.obj" --stats "$w/exact.json" 2>/dev/null && rce=0 || rce=$?
-      "$BIN" "${args[@]}" --backend hip --refine fast -o "$w/f1.obj" --stats "$w/f1.json" 2>/dev/null && rcf=0 || rcf=$?
-      "$BIN" "${args[@]}" --backend hip --refine fast -o "$w/f2.obj" 2>/dev/null || true
+      local args=("$DATA/$f" --surface "$surf" -s "$h" --quiet ${SIMD:+--simd "$SIMD"})
+      local key rc rce rcf
+      key=$(printf '%s-%s-%s' "$f" "$surf" "$h" | tr '/' '_')
+      if [ "$MODE" = gpu ]; then
+        rc=$(cat "$REF/$key.rc" 2>/dev/null || echo missing)
+        cp "$REF/$key.json" "$w/cpu.ref" 2>/dev/null || true
+      else
+        "$BIN" "${args[@]}" --backend cpu -o "$w/cpu.obj" --stats "$w/cpu.json" 2>/dev/null && rc=0 || rc=$?
+      fi
+      if [ "$MODE" = cpu ]; then
+        echo "$rc" > "$out/ref/$key.rc"
+        python3 -I "$here/compare.py" --reference "$w" > "$out/ref/$key.json"
+        rm -f "$w"/*
+        continue
+      fi
+      "$BIN" "${args[@]}" --backend "$BACKEND" -o "$w/exact.obj" --stats "$w/exact.json" 2>/dev/null && rce=0 || rce=$?
+      "$BIN" "${args[@]}" --backend "$BACKEND" --refine fast -o "$w/f1.obj" --stats "$w/f1.json" 2>/dev/null && rcf=0 || rcf=$?
+      "$BIN" "${args[@]}" --backend "$BACKEND" --refine fast -o "$w/f2.obj" 2>/dev/null || true
       local row
       row=$(python3 -I "$here/compare.py" "$w")
       echo "$f,$surf,$h,$rc,$rce,$rcf,$row" >> "$csv"
@@ -80,4 +109,8 @@ for s in "$out"/shard-*; do
 done
 for p in "${pids[@]}"; do wait "$p"; done
 rm -f "$out"/shard-*
+if [ "$MODE" = cpu ]; then
+  echo "$(find "$out/ref" -name '*.rc' | wc -l) CPU reference record(s) in $out/ref"
+  exit 0
+fi
 python3 -I "$here/summary.py" "$out"/gate-*.csv

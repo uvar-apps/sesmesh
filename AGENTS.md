@@ -22,9 +22,11 @@ cargo run --release -p xtask -- validate   # accuracy study → docs/validation/
 cargo run --release -p xtask -- sweep      # robustness sweep → docs/validation/sweep.csv (~2 min)
 SESMESH_BLESS=1 cargo test -p sesmesh mc_table   # regenerate mesh/mc_table.rs (then rerun tests)
 SESMESH_GPU_REQUIRE=1 cargo +stable test -p sesmesh-gpu --features hip   # on a ROCm machine (gfx1151)
-SESMESH_GPU_REQUIRE=1 cargo +stable test --workspace --release --all-features -- --include-ignored  # ROCm: all + GPU
-cargo +stable bench -p sesmesh --features hip --bench surface   # ROCm: adds …/hip-exact, …/hip-fast
+SESMESH_GPU_REQUIRE=1 cargo +stable test --workspace --release --features sesmesh-cli/hip,sesmesh-gpu/hip -- --include-ignored  # ROCm: all + GPU
+cargo +stable bench -p sesmesh --features hip --bench surface   # ROCm: adds …/hip-exact, …/hip-fast (cuda: …/cuda-*)
 tools/gpu/gate.sh /tmp/gate inputs.txt     # ROCm: CPU vs HIP exact/fast on a corpus (README there)
+SESMESH_GPU_REQUIRE=1 cargo test -p sesmesh-gpu --features cuda   # on an NVIDIA machine (sm_75 tested)
+BACKEND=cuda MODE=gpu REF=… tools/gpu/gate.sh …   # CUDA gate vs CPU references made elsewhere (MODE=cpu)
 python3 -m unittest discover -s tools/ao   # ses_ao.py (end-to-end tests need aomesh >= 0.4.0)
 target/release/sesmesh data/1crn.cif -q high --timings   # CLI smoke run (writes 1crn.obj)
 ```
@@ -36,7 +38,7 @@ it, see `CONTRIBUTING.md`). Author everywhere: Ugo Varetto (Cargo `authors`, lic
 site footer).
 
 MSRV 1.89, edition 2024, `unsafe_code = "forbid"` (except `crates/sesmesh-gpu`, the GPU FFI:
-`deny`, allowed in its `hip` module, `// SAFETY:` on every block), `missing_docs = "deny"`, the library never
+`deny`, allowed in its `hip` and `cuda` modules, `// SAFETY:` on every block), `missing_docs = "deny"`, the library never
 prints, output must not depend on thread count (byte-identical OBJ is tested), no third-party
 types in the public API, public option structs are `#[non_exhaustive]` (outside the crate build
 them with `Default` + field assignment). Keep docs, plan status boxes and CHANGELOG in sync with
@@ -120,7 +122,8 @@ any deviation from the plan.
 - `mesh/decimate.rs` QEM half-edge decimation (pass-based, deterministic)
 - `mesh/post.rs` grouping by component, sub-grid fragments (`fragments`), cavity filtering +
   enclosure (ray parity), vertex compaction, face-averaged normals, `atom_areas`
-- `backend.rs` `Backend::{Cpu, Auto, Hip}` (Phase 11), device cache, CPU fallback
+- `backend.rs` `Backend::{Cpu, Auto, Hip, Cuda}` (Phase 11, 12), device cache per back end
+  (`open::hip`/`open::cuda`), `Auto` = HIP, then CUDA, then CPU fallback
 - `surface.rs` `SurfaceParams` (incl. `CavityMode`, `NormalMode`, filters),
   `compute_surface[_with]`, `SurfaceEngine`, stats · `control.rs` `Control`/`Progress`/`Stage` ·
   `export/` OBJ (colours, groups), binary PLY, MSMS `.vert`/`.face` writers + fixed-point
@@ -132,20 +135,30 @@ any deviation from the plan.
   `resident.rs` (`Resident`: arrangement uploaded once; `Batch`: pinned per-batch buffers;
   count → host scan → fill → sample passes; fast mode: `set_refinement` (f32 residuals of the
   frame-local copies) and `refine`: edge count → host scan → f32 refinement, each sub-block
-  listing its crossing edges in the CPU's order); kernels in `kernels/hip/sesmesh.hip`, compiled by
-  `build.rs` (README there). In `sesmesh`: `field/gpu.rs` (feature `hip`, Plan T11.3′:
-  `Engine::resident`, `batch_params` (f32 radii + slack), `fold_brick_chunks_hip`: a device
+  listing its crossing edges in the CPU's order); feature `cuda` (Phase 12, `docs/06-gpu-cuda.md`):
+  `cuda/ffi.rs` (driver API, `libcuda`), `cuda/mod.rs` (primary context in an `Arc<Context>` held
+  by device, buffers, streams, events; fat binary), `cuda/resident.rs` (batches in device memory
+  with pinned host mirrors, explicit copies). Shared: `batch.rs` (descriptors, encodings,
+  validation, traits `DeviceResident`/`DeviceBatch` + `forward_batch_traits!`), `selftest.rs`,
+  `copy.rs` (`DeviceCopy`). Kernels in `kernels/sesmesh.cuh` (included by
+  `kernels/hip/sesmesh.hip` and `kernels/cuda/sesmesh.cu`), compiled by `build.rs` with `hipcc`
+  / `nvcc` (README there). In `sesmesh`: `field/gpu.rs` (features `hip`/`cuda`, Plan T11.3′:
+  `Engine::resident(_for)` (takes the back end's `Resident::new`), `batch_params` (f32 radii +
+  slack), `fold_brick_chunks_gpu(GpuDevice, …)` → generic `fold_resident`: a device
   thread fills a ring of 3 `Batch` buffers (one ≤ 64-brick chunk per pool thread each; in fast
   mode ≥ 8 192 bricks, `Batching::mesh`, tuned in T11.6′), the
   pool takes chunks in order and meshes each once its batch is ready, no per-batch barrier;
   `Batching`), called from `surface::mesh_stage` when
-  the back end is a HIP device and `Engine::device_ok` (f32 kernels, 8 sub-blocks per brick).
+  the back end is a GPU device and `Engine::device_ok` (f32 kernels, 8 sub-blocks per brick).
+  Device tests in `field/gpu.rs` loop over every compiled back end that opens.
   `RefineMode::Fast` (T11.5′): the device also refines; `DeviceEdges` views a refined batch,
   `extract::mesh_brick_device` places vertices from it and refines unconverged edges in f64
   (`refine_cpu_edges`). Spikes S1 (`field/gpu_s1.rs`, ignored test `s1`,
   `docs/gpu-prior-art.md` §5.2) and S2 (`field/gpu_s2.rs`, `s2`, §5.4: fast vs exact vertices)
-- `tools/gpu/` GPU gate (T11.6′): `gate.sh` (CPU vs `--backend hip` exact bytes and stats, fast
-  faces, repeatability, area/volume; GNU `split`), `compare.py`, `summary.py`, README
+- `tools/gpu/` GPU gate (T11.6′): `gate.sh` (CPU vs `--backend $BACKEND` exact bytes and stats,
+  fast faces, repeatability, area/volume; GNU `split`; `MODE=cpu|gpu` + `REF` split the CPU
+  references and GPU runs over two machines), `compare.py`, `summary.py`, README;
+  `cuda-build.Containerfile` (Rust + nvcc, for building without CUDA installed)
 - `par.rs` rayon facade (feature `parallel`) · `crates/sesmesh-testkit` brute-force oracle,
   analytic two-sphere references, cluster generators, minimal OBJ reader
 - Website: `site/` (static HTML/CSS/JS, brutalist style, deployed by `.github/workflows/pages.yml`
@@ -216,6 +229,12 @@ any deviation from the plan.
   `docs/05-gpu-hip.md` §12. Fast mode is the "quick preview" mode; its speed vs accuracy was
   reviewed by the user at the end of T11.5′ (kept as is: no accuracy given up). Released as
   1.2.0 (new opt-in feature, minor), first publish of `sesmesh-gpu`; binaries without `hip`.
+- Phase 12 (GPU back end, CUDA, #25; branch `phase-12-gpu-cuda`, not released): T12.1–T12.4
+  done 2026-11-21 (`docs/06-gpu-cuda.md`): `--backend cuda`, shared kernels and pipeline,
+  batches in device memory. Gate on an RTX 2070 Max-Q laptop vs Zen 5 CPU references: no
+  difference in 774 SES + 212 SAS/vdW cases. Laptop (i7-9750H): exact 1.50–1.81×, fast
+  2.08–3.22× its CPU, CPU-bound; open items in §6 there.
+
 
 ## Next
 
@@ -255,7 +274,8 @@ tick them in #19. Summary:
    with GitHub releases. Left open in #27: MeshLab check, optional gallery AO toggle.
    GPU back ends: #24 HIP (Phase 11, released in 1.2.0; open after it: GPU buffers in the
    memory estimate, discrete GPUs, CPU/GPU edge split in fast mode, `docs/05-gpu-hip.md`
-   §12), #25 CUDA, #26 Metal (f32 plan in the issues).
+   §12), #25 CUDA (Phase 12, branch `phase-12-gpu-cuda`, not released yet;
+   `docs/06-gpu-cuda.md`), #26 Metal (f32 plan in the issues).
 
 ## Gotchas learned
 
@@ -277,6 +297,13 @@ tick them in #19. Summary:
   writes a clang offload bundle, not an ELF: inspect it with `/opt/rocm/lib/llvm/bin/
   clang-offload-bundler --unbundle --type=o --targets=hipv4-amdgcn-amd-amdhsa--<target>`, then
   `llvm-readelf --notes` (`.wavefront_size`). Check GPU load (`gpu_busy_percent`) before timing.
+- GPU (Phase 12): the CUDA test machine is a laptop with a slow 6-core CPU: build elsewhere in
+  the `cuda-build` container (checkout at the same absolute path on both machines, since test
+  binaries embed `CARGO_MANIFEST_DIR`), run only GPU work there, make the gate's CPU
+  references on a fast machine (`MODE=cpu SIMD=avx2`; CPU output is SIMD-independent, the
+  stats name the level). `--all-features` needs both `hipcc` and `nvcc` (or
+  `SESMESH_GPU_NO_KERNELS=1`): on a GPU host name the features (`sesmesh-cli/hip,sesmesh-gpu/hip`).
+  Check `nvidia-smi` utilisation before timing; keep the laptop on mains power.
 - Timing on this machine is noisy (Defender and other apps; load average often 10–25): write
   outputs to `/dev/null`, check `uptime`, compare with criterion baselines
   (`--save-baseline` / `--baseline`), repeat runs. Single-thread runs are steadier.
