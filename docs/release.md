@@ -161,9 +161,16 @@ packaged locally, and pushes and tags start no workflow.
    `identifiers` entry), the reference and BibTeX in `README.md` ("Citing
    sesmesh") and in `site/library.html` (`#cite`): version, year and version
    DOI. The all-versions DOI (10.5281/zenodo.24238836) stays.
-10. Website: the `pages` workflow deploys `site/` from `main` to GitHub
-    Pages. It starts only by hand (Actions → pages → Run workflow), at the
-    maintainer's decision.
+10. Website: run the `pages` workflow, which deploys `site/` from `main`
+    to GitHub Pages (the release changed the site's version labels), and
+    check the live site:
+
+    ```bash
+    gh workflow run pages.yml --repo uvar-apps/sesmesh --ref main
+    ```
+
+    It is the only workflow; nothing else runs on GitHub. Run it after
+    any push that changes `site/`.
 
 Binaries use the `dist` profile (fat LTO, one codegen unit, stripped) and
 runtime SIMD dispatch, so one x86-64 binary uses AVX-512/AVX2/SSE4.2 as

@@ -53,8 +53,9 @@ any deviation from the plan.
   https://github.com/uvar-apps/sesmesh (public); push `main` and the phase branches.
 - Validate locally before every push (full list: `docs/release.md`, *Local validation*: fmt,
   both clippy commands, debug + release `--include-ignored` tests, examples, rustdoc, MSRV,
-  cargo-deny, publish dry run). Never run anything on GitHub (user, 2026-11-21): the only
-  workflow is `pages.yml` (website, started by hand by the user);
+  cargo-deny, publish dry run). No CI or CD on GitHub (user, 2026-11-21); the only
+  workflow is `pages.yml` (website), and it must run whenever `site/` changes reach `main`
+  (every release: it shows the version): `gh workflow run pages.yml --repo uvar-apps/sesmesh --ref main`, then check the live site;
   release binaries are built locally (`tools/release/package.sh`), the GitHub release is
   created with `gh release create`, crates are published with `cargo publish --workspace`.
   Release tags only on a locally validated commit.
@@ -87,9 +88,9 @@ any deviation from the plan.
   except correctness fixes that bring output to what the spec and design promise (user's
   decision, 2026-11-14): patch release, CHANGELOG names the meshes that change and by how much.
 - Website: https://uvar-apps.github.io/sesmesh/ (GitHub Pages, source "GitHub Actions",
-  deployed from `main` by `.github/workflows/pages.yml`, which since 1.2.0 runs only when the
-  user starts it; branch `website` holds its history). The deployed site still shows 1.1.2
-  until then.
+  deployed from `main` by `.github/workflows/pages.yml`, started with `gh workflow run`
+  after every push that changes `site/`; branch `website` holds its history). Deployed
+  2026-11-21 with 1.3.2. "Fetching artifact metadata failed" is a GitHub glitch: `gh run rerun`.
 - The crates.io token lives in the user's `~/.cargo/credentials.toml` (never read or print it).
   Next releases follow `docs/release.md` (bump `[workspace.package] version` and the `sesmesh`
   and `sesmesh-gpu` (`=x.y.z`) workspace dependencies, cut the changelog, `cargo publish --workspace --dry-run`, tag, publish).
@@ -185,8 +186,8 @@ any deviation from the plan.
   Interior cavities bake black (no outside viewpoint sees them).
 - Docs: `docs/cli.md` (CLI manual), `docs/api-review.md` (API checklist, semver policy),
   `docs/release.md` (release process, v1.0 status), `tools/release/package.sh` (local
-  release archives), `.github/workflows/pages.yml` (website deploy, started by hand; the ci, nightly and
-  release workflows were deleted on 2026-11-21)
+  release archives), `.github/workflows/pages.yml` (website deploy, run after `site/` changes; the ci,
+  nightly and release workflows were deleted on 2026-11-21)
 - `crates/sesmesh/examples/` five runnable examples (run by the local validation)
 - `crates/sesmesh-cli/src/main.rs` CLI (`surface` default, `info`, `radii`; `--progress`,
   `--simd`, `-j`, `--timings`, `--cavities`, `--drop-fragments`, `--vertex-colors`, `--palette`, `--group-components`,
