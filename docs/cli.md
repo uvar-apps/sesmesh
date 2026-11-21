@@ -197,16 +197,20 @@ refused before any work.
 `--backend auto` then computes on the CPU, and warns only when a GPU runtime
 is installed but its device cannot be used (no code for the architecture,
 failed self-test). Opening the device (runtime, kernels, self-test) takes
-about 50 ms once per run. GPU support is being built (Phase 11,
-`docs/05-gpu-hip.md`): the mesh stages move to the device step by step. So
-far the device classifies the lattice, gathers candidates and samples the
-field, overlapped with the CPU's meshing; vertex refinement and the other
+about 50 ms once per run. On the GPU the device classifies the lattice,
+gathers candidates and samples the field, overlapped with the CPU's
+meshing; with the default `--refine exact` vertex refinement and the other
 stages stay on the CPU, and the output is the CPU back end's byte for
 byte. On a Ryzen AI Max+ 395 (16 Zen 5 cores, Radeon 8060S) runs take
-0.70–0.82 of the `cpu` time (1AON at 0.25 Å: 2.36 s instead of 3.41 s).
-Inputs that need the f64 sampling path (lattice points more than 2 000 Å
-from the structure's centre) and brick sizes that are odd or below 4 are
-sampled on the CPU.
+0.70–0.82 of the `cpu` time (1AON at 0.25 Å: 2.37 s instead of 3.40 s;
+`docs/05-gpu-hip.md` §12); very small inputs (crambin, 327 atoms) are
+faster on the CPU in exact mode. Inputs that need the f64 sampling path (lattice
+points more than 2 000 Å from the structure's centre) and brick sizes that
+are odd or below 4 are sampled on the CPU. The GPU back end is built and
+tested on an integrated RDNA 3.5 GPU (gfx1151); code objects are built for
+ROCm's generic RDNA 2, 3 and 4 targets, and data-centre GPUs (MI250X,
+MI300) are not yet supported. `--max-memory` estimates the CPU back end's
+host memory; the GPU's batch buffers are not part of the estimate.
 
 `--refine fast` with `--backend hip` (or `auto` on a GPU) also refines the
 vertices on the device, in f32 (fast mode, for previews). The triangles are

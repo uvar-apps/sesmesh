@@ -57,17 +57,45 @@ pub(crate) fn device_chunk(bricks: usize) -> usize {
     par::chunk_len(bricks).min(DEVICE_CHUNK)
 }
 
+/// Bricks per batch in fast mode.
+///
+/// With refinement the device bounds the mesh stage, and it runs larger
+/// launches better than it gains from overlapping a short first batch
+/// (fast mode, 16 threads, mesh stage with batches of 1 024 → 8 192
+/// bricks: 1AON at 0.25 Å 595 → 526 ms, 3J3Q at 1 Å 5.21 → 4.72 s; batches
+/// doubling from 1 024 to 8 192 bricks were 0.5–10 % slower than 8 192
+/// throughout; `docs/05-gpu-hip.md` §12).
+const FAST_BATCH_BRICKS: usize = 8192;
+
 /// Chunks per batch.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Batching {
     pub(crate) chunks: usize,
 }
 
+impl Batching {
+    /// The batching of the mesh stage for chunks of `chunk` bricks, with
+    /// (`refine`) or without device refinement: one chunk per thread
+    /// ([`Batching::default`]), or with refinement at least
+    /// [`FAST_BATCH_BRICKS`] bricks.
+    pub(crate) fn mesh(refine: bool, chunk: usize) -> Self {
+        let threads = par::threads();
+        Self {
+            chunks: if refine {
+                threads.max(FAST_BATCH_BRICKS / chunk.max(1))
+            } else {
+                threads
+            },
+        }
+    }
+}
+
 impl Default for Batching {
-    /// One chunk per thread: small batches keep the device's first batch
-    /// (which no meshing overlaps) short, and the pipeline has no per-batch
-    /// barrier (1AON at 0.25 Å, 16 threads: 1.46 s mesh stage; 1.48 s with
-    /// 4 chunks per thread, 1.51 s with 16).
+    /// One chunk per thread: without device refinement the CPU bounds the
+    /// mesh stage, small batches keep the device's first batch (which no
+    /// meshing overlaps) short, and the pipeline has no per-batch barrier
+    /// (1AON at 0.25 Å, 16 threads: 1.46 s mesh stage; 1.48 s with 4 chunks
+    /// per thread, 1.51 s with 16).
     fn default() -> Self {
         Self {
             chunks: par::threads(),
@@ -678,6 +706,17 @@ mod tests {
         Batching { chunks: 2 },
         Batching { chunks: usize::MAX },
     ];
+
+    #[test]
+    fn fast_mode_has_larger_batches() {
+        let threads = par::threads();
+        assert_eq!(Batching::mesh(false, 64).chunks, threads);
+        assert_eq!(Batching::mesh(true, 64).chunks, threads.max(128));
+        assert_eq!(
+            Batching::mesh(true, 0).chunks,
+            threads.max(FAST_BATCH_BRICKS)
+        );
+    }
 
     /// Per-brick sample values, chunk by chunk.
     fn collect(acc: &mut Vec<Vec<f32>>, _: [i32; 3], v: &[f32]) {

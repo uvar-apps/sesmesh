@@ -127,8 +127,8 @@
 </section>
 
 <div class="ticker" aria-hidden="true"><div>
-  <span>PDB</span><span>PDBx/mmCIF</span><span>XYZ</span><span>PQR</span><span>gzip</span><span>biological assemblies</span><span>SES · SAS · vdW</span><span>OBJ</span><span>PLY</span><span>MSMS</span><span>NEON</span><span>AVX-512</span><span>AVX2</span><span>SSE4.2</span><span>deterministic</span><span>MIT / Apache-2.0</span>
-  <span>PDB</span><span>PDBx/mmCIF</span><span>XYZ</span><span>PQR</span><span>gzip</span><span>biological assemblies</span><span>SES · SAS · vdW</span><span>OBJ</span><span>PLY</span><span>MSMS</span><span>NEON</span><span>AVX-512</span><span>AVX2</span><span>SSE4.2</span><span>deterministic</span><span>MIT / Apache-2.0</span>
+  <span>PDB</span><span>PDBx/mmCIF</span><span>XYZ</span><span>PQR</span><span>gzip</span><span>biological assemblies</span><span>SES · SAS · vdW</span><span>OBJ</span><span>PLY</span><span>MSMS</span><span>NEON</span><span>AVX-512</span><span>AVX2</span><span>SSE4.2</span><span>AMD GPU (HIP)</span><span>deterministic</span><span>MIT / Apache-2.0</span>
+  <span>PDB</span><span>PDBx/mmCIF</span><span>XYZ</span><span>PQR</span><span>gzip</span><span>biological assemblies</span><span>SES · SAS · vdW</span><span>OBJ</span><span>PLY</span><span>MSMS</span><span>NEON</span><span>AVX-512</span><span>AVX2</span><span>SSE4.2</span><span>AMD GPU (HIP)</span><span>deterministic</span><span>MIT / Apache-2.0</span>
 </div></div>
 
 <div class="stats">
@@ -154,11 +154,11 @@
       <div class="cell"><i class="swatch" style="background:var(--el-n)"></i>
         <span class="num">03 / FAST</span>
         <h3>Sparse + SIMD</h3>
-        <p>Only bricks near the surface are sampled. The field kernel dispatches at run time to AVX-512, AVX2, SSE4.2 or NEON; rayon spreads bricks over every core.</p></div>
+        <p>Only bricks near the surface are sampled. The field kernel dispatches at run time to AVX-512, AVX2, SSE4.2 or NEON; rayon spreads bricks over every core. An optional back end samples on AMD GPUs through HIP.</p></div>
       <div class="cell"><i class="swatch" style="background:var(--el-s)"></i>
         <span class="num">04 / REPRODUCIBLE</span>
         <h3>Same bytes</h3>
-        <p>Output does not depend on the number of threads or on scheduling. Re-run a figure in a year and diff the OBJ files.</p></div>
+        <p>Output does not depend on the number of threads or on scheduling, nor on CPU or GPU in exact mode. Re-run a figure in a year and diff the OBJ files.</p></div>
       <div class="cell"><i class="swatch" style="background:var(--el-p)"></i>
         <span class="num">05 / LEVEL OF DETAIL</span>
         <h3>You set the budget</h3>

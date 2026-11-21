@@ -62,6 +62,7 @@
       <li><a href="#engine">Engines</a></li>
       <li><a href="#field">Field queries</a></li>
       <li><a href="#threads">Threads</a></li>
+      <li><a href="#gpu">GPU</a></li>
       <li><a href="#errors">Errors</a></li>
       <li><a href="#cite">Cite</a></li>
     </ol>
@@ -83,6 +84,7 @@ sesmesh = "1"
         <tr><td><code>parallel</code></td><td>on</td><td>rayon: bricks and stages on every core of the current pool</td></tr>
         <tr><td><code>gzip</code></td><td>on</td><td>gzip-compressed input and output (<code>.gz</code>)</td></tr>
         <tr><td><code>radii-file</code></td><td>on</td><td>radius rules from TOML files</td></tr>
+        <tr><td><code>hip</code></td><td>off</td><td>GPU back end for AMD GPUs through HIP: building needs ROCm's <code>hipcc</code>; the program still runs where ROCm is missing (<a href="#gpu">GPU</a>)</td></tr>
       </table></div>
       <p>MSRV 1.89. Semantic versioning from 1.0; option structs are <code>#[non_exhaustive]</code>:
         build them from their constructors or <code>Default</code> and assign fields.</p>
@@ -167,6 +169,7 @@ assert_eq!(out.stats.components, <span class="n">1</span>);</code></pre></div>
         <tr><td><code>with_max_memory(bytes)</code>, <code>with_auto_coarsen(true)</code></td><td>Memory guard: refuse, or coarsen until the estimate fits</td></tr>
         <tr><td><code>with_normals(NormalMode::…)</code></td><td><code>Analytic</code>, <code>FaceAverage</code>, <code>None</code></td></tr>
         <tr><td><code>with_refine</code>, <code>with_simd</code>, <code>with_brick_size</code></td><td>Vertex placement, kernel instruction set, brick edge</td></tr>
+        <tr><td><code>with_backend(Backend::…)</code></td><td><code>Cpu</code> (default), <code>Auto</code>, <code>Backend::hip(device)</code>: where the mesh stage runs (<a href="#gpu">GPU</a>)</td></tr>
       </table></div>
     </section>
 
@@ -303,8 +306,36 @@ assert!(mesh::validate(&amp;out.mesh).is_ok());</code></pre></div>
 println!(<span class="s">"{} triangles"</span>, out.stats.triangles);</code></pre></div>
     </section>
 
-    <section id="errors">
+    <section id="gpu">
       <span class="label">09</span>
+      <h2>GPU back end</h2>
+
+      <p>With the feature <code>hip</code>, the mesh stage can run on an AMD GPU through ROCm. The
+        device classifies the grid, gathers candidates and samples the field while the CPU threads
+        mesh. With the default exact refinement the output is the CPU back end's, byte for byte.
+        <code>RefineMode::Fast</code> also refines the vertices on the GPU, in f32, for previews:
+        same triangles, vertices as close to the surface, last bits different. Open the device once
+        with a <code>SurfaceEngine</code> (about 50 ms).</p>
+      <div class="code"><div class="code-head"><span>Rust</span><button type="button">Copy</button></div>
+<pre><code><span class="k">use</span> sesmesh::{Backend, RefineMode, Sphere, SurfaceEngine, SurfaceParams};
+
+<span class="k">let</span> spheres = [Sphere::new([<span class="n">0.0</span>; <span class="n">3</span>], <span class="n">1.7</span>), Sphere::new([<span class="n">3.0</span>, <span class="n">0.0</span>, <span class="n">0.0</span>], <span class="n">1.7</span>)];
+<span class="k">let</span> params = SurfaceParams::ses(<span class="n">1.4</span>)
+    .with_spacing(<span class="n">0.25</span>)
+    .with_backend(Backend::Auto)          <span class="c">// the GPU if one opens, else the CPU</span>
+    .with_refine(RefineMode::Fast);       <span class="c">// preview; Exact on the CPU</span>
+<span class="k">let</span> <span class="k">mut</span> engine = SurfaceEngine::new(params)?;
+<span class="k">let</span> out = engine.compute(&amp;spheres)?;
+println!(<span class="s">"{} triangles on {}"</span>, out.stats.triangles, out.stats.device.as_deref().unwrap_or(<span class="s">"the CPU"</span>));</code></pre></div>
+      <p><code>Backend::Auto</code> never fails for lack of a GPU; a <code>GpuFallback</code> warning
+        says why when a GPU runtime is installed but its device cannot be used.
+        <code>Backend::hip(i)</code> fails instead (<code>Error::Backend</code>). The GPU code is f32
+        and integer only. Tested on an integrated RDNA 3.5 GPU (Radeon 8060S); code objects cover
+        ROCm's generic RDNA 2, 3 and 4 targets.</p>
+    </section>
+
+    <section id="errors">
+      <span class="label">10</span>
       <h2>Errors &amp; warnings</h2>
 
       <p>Every fallible call returns <code>sesmesh::Result</code>. <code>Error</code> separates I/O,
@@ -327,7 +358,7 @@ println!(<span class="s">"{} triangles"</span>, out.stats.triangles);</code></pr
     </section>
 
     <section id="cite">
-      <span class="label">10</span>
+      <span class="label">11</span>
       <h2>Cite</h2>
 
       <p>If sesmesh helps your work, please cite it, giving the version you used. Each release is archived on Zenodo with its own DOI:</p>

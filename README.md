@@ -24,6 +24,8 @@ molecular surface) meshing for molecular structures, written in Rust.
   grid automatically.
 * Multi-threaded (rayon) and SIMD-accelerated with runtime CPU dispatch
   (AVX-512 / AVX2 / SSE4.2 / NEON); output identical for any thread count.
+* Optional GPU back end for AMD GPUs (HIP / ROCm, feature `hip`): the same
+  files as the CPU, or a faster preview mode.
 * Ships as a reusable library crate ([`sesmesh`](https://crates.io/crates/sesmesh))
   plus a command-line tool ([`sesmesh-cli`](https://crates.io/crates/sesmesh-cli)).
 
@@ -95,6 +97,39 @@ fn main() -> sesmesh::Result<()> {
 }
 ```
 
+## GPU back end (AMD, HIP)
+
+Built with the feature `hip`, sesmesh runs the mesh stage on an AMD GPU
+through ROCm: the device classifies the grid, gathers candidates and
+samples the field while the CPU threads mesh, so the two overlap. Building
+needs ROCm's `hipcc`; the binary loads the HIP runtime when it starts and
+still runs (on the CPU) where ROCm is missing.
+
+```bash
+cargo install sesmesh-cli --features hip
+sesmesh 1aon.cif.gz -q high --backend hip                # same files as the CPU
+sesmesh 1aon.cif.gz -q high --backend hip --refine fast  # preview: f32 refinement on the GPU
+sesmesh 1aon.cif.gz -q high --backend auto --timings     # GPU if one works, else CPU
+```
+
+* **Exact (default):** the files are the CPU back end's, byte for byte.
+* **`--refine fast`:** the GPU also refines the vertices, in f32. Same
+  triangles, vertices as close to the surface, area and volume within
+  4·10⁻⁷ (relative) of exact mode; positions differ in the last bits.
+* The GPU runs f32 and integer code only.
+* On a Ryzen AI Max+ 395 (16 Zen 5 cores, Radeon 8060S), 1AON at 0.25 Å
+  takes 3.40 s on the CPU, 2.37 s exact on the GPU and 1.41 s fast; 3J3Q at
+  1 Å (2.4 M atoms) takes 28.9 s, 23.6 s and 12.3 s (the 10-core M4's CPU:
+  5.6 s and 47.6 s).
+* Built and tested on that integrated RDNA 3.5 GPU (gfx1151). Code objects
+  are built for ROCm's generic RDNA 2, 3 and 4 targets; data-centre GPUs
+  (MI250X, MI300) are not supported yet. CUDA and Metal back ends are
+  planned.
+
+The library takes the same choice in `SurfaceParams::with_backend`
+(`Backend::{Cpu, Auto, Hip}`) and `with_refine(RefineMode::Fast)`.
+Details: [docs/05-gpu-hip.md](https://github.com/uvar-apps/sesmesh/blob/main/docs/05-gpu-hip.md).
+
 ## Documentation
 
 * **Website: <https://uvar-apps.github.io/sesmesh/>** — CLI and library
@@ -109,6 +144,8 @@ fn main() -> sesmesh::Result<()> {
 * [Validation report](https://github.com/uvar-apps/sesmesh/blob/main/docs/validation-report.md): accuracy, robustness,
   large inputs, performance
 * [CLI manual](https://github.com/uvar-apps/sesmesh/blob/main/docs/cli.md): every option, examples, exit codes
+* [GPU back end](https://github.com/uvar-apps/sesmesh/blob/main/docs/05-gpu-hip.md): design, measurements, plan
+  ([prior art and revised plan](https://github.com/uvar-apps/sesmesh/blob/main/docs/gpu-prior-art.md))
 * [Ambient occlusion](https://github.com/uvar-apps/sesmesh/blob/main/tools/ao/README.md): shaded surfaces by
   post-processing with [aomesh](https://github.com/uvar-apps/aomesh)
 * Library: crate documentation (`cargo doc --open -p sesmesh`) and
@@ -122,6 +159,7 @@ fn main() -> sesmesh::Result<()> {
 |---|---|
 | `crates/sesmesh` | Library crate |
 | `crates/sesmesh-cli` | `sesmesh` command-line tool |
+| `crates/sesmesh-gpu` | GPU back ends (HIP FFI and kernels; an implementation detail of `sesmesh`) |
 | `crates/sesmesh-testkit` | Test oracles and analytic references (development only) |
 | `xtask` | Development automation (`cargo xtask ...`) |
 | `tests/data` | Test fixtures, download sets and checksums ([README](https://github.com/uvar-apps/sesmesh/blob/main/tests/data/README.md)) |

@@ -67,6 +67,7 @@
       <li><a href="#output">Output</a></li>
       <li><a href="#cavities">Cavities</a></li>
       <li><a href="#big">Large structures</a></li>
+      <li><a href="#gpu">GPU</a></li>
       <li><a href="#batch">Batch mode</a></li>
       <li><a href="#exit">Exit codes</a></li>
     </ol>
@@ -254,8 +255,35 @@ sesmesh: wrote 1crn.obj in 0.02 s</code></pre></div>
         supports).</p>
     </section>
 
-    <section id="batch">
+    <section id="gpu">
       <span class="label">10</span>
+      <h2>GPU</h2>
+      <p>A binary built with the feature <code>hip</code> (ROCm's <code>hipcc</code> at build time)
+        runs the mesh stage on an AMD GPU: the device samples the field while the CPU threads mesh.
+        The default <code>--refine exact</code> writes the same files as the CPU;
+        <code>--refine fast</code> also refines the vertices on the GPU, in f32, for previews (same
+        triangles, vertices as close to the surface, last bits different).</p>
+      <div class="code"><div class="code-head"><span>Shell</span><button type="button">Copy</button></div>
+<pre><code><span class="p">$ </span>cargo install sesmesh-cli --features hip
+<span class="p">$ </span>sesmesh 1aon.cif.gz -q high --backend hip                 <span class="c"># same files as the CPU</span>
+<span class="p">$ </span>sesmesh 1aon.cif.gz -q high --backend hip --refine fast   <span class="c"># preview</span>
+<span class="p">$ </span>sesmesh 1aon.cif.gz -q high --backend auto --timings      <span class="c"># GPU if one works</span></code></pre></div>
+      <div class="table-wrap"><table>
+        <tr><th>Input</th><th>CPU, 16 Zen 5 cores</th><th>GPU exact</th><th>GPU fast</th></tr>
+        <tr><td>4HHB, 0.25 Å</td><td>0.24 s</td><td>0.19 s</td><td>0.12 s</td></tr>
+        <tr><td>1AON, 0.5 Å</td><td>1.38 s</td><td>1.02 s</td><td>0.56 s</td></tr>
+        <tr><td>1AON, 0.25 Å</td><td>3.40 s</td><td>2.37 s</td><td>1.41 s</td></tr>
+        <tr><td>3J3Q, 1 Å (2.4 M atoms)</td><td>28.9 s</td><td>23.6 s</td><td>12.3 s</td></tr>
+      </table></div>
+      <p>Complete runs on a Ryzen AI Max+ 395 with its integrated Radeon 8060S (SES, OBJ written;
+        on the 10-core M4's CPU the same runs take 0.38, 2.14, 5.62 and 47.6 s).
+        <code>--backend hip</code> fails if the GPU cannot be used; <code>--backend auto</code> falls
+        back to the CPU. <code>--gpu-device N</code> picks a GPU; <code>--timings</code> names the
+        device used.</p>
+    </section>
+
+    <section id="batch">
+      <span class="label">11</span>
       <h2>Batch mode</h2>
       <p>Several inputs write <code>&lt;stem&gt;.&lt;ext&gt;</code> into <code>--output-dir</code>;
         side files go to directories of the same name.</p>
@@ -268,7 +296,7 @@ sesmesh: wrote 1crn.obj in 0.02 s</code></pre></div>
     </section>
 
     <section id="exit">
-      <span class="label">11</span>
+      <span class="label">12</span>
       <h2>Exit codes</h2>
       <div class="table-wrap"><table>
         <tr><th>Code</th><th>Meaning</th></tr>

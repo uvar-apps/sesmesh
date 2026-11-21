@@ -489,6 +489,26 @@ Shared design for the CUDA (#25) and Metal (#26) back ends in §9.
 >   publishable now (`publish = false` removed; `sesmesh` requires
 >   `=x.y.z`), first in the publish order. `GpuRefine` and `--gpu-refine`
 >   come with fast mode (T11.7).
+>
+> Status (2026-11-21): device f64 dropped (no f64 on the GPU); the plan
+> continues in `docs/gpu-prior-art.md` §5 (prior-art review, revised tasks):
+> * Spike S1 (§5.2): device-side classification and gathering; device
+>   refinement-gather lists measured not worth their memory (T11.4′ not
+>   planned).
+> * T11.3′ done (§5.3): exact device classification, gathering and sampling
+>   from an arrangement uploaded once, batches in a ring overlapped with the
+>   CPU's meshing; byte-identical to the CPU back end on 2 170 runs;
+>   1.23–1.45× end to end. The first T11.3 (CPU-gathered jobs) was slower
+>   than the CPU and was replaced.
+> * Spike S2 (§5.4) and T11.5′ done (§5.5): `RefineMode::Fast` /
+>   `--refine fast` (instead of `GpuRefine` / `--gpu-refine`): f32
+>   refinement on the device in brick-local double-float coordinates, f64 on
+>   the CPU for unconverged edges; same triangles as exact mode, vertices as
+>   close to the surface, area and volume within 3.5·10⁻⁷ on 980 gate runs.
+> * T11.6′ done (§5.6, `docs/05-gpu-hip.md` §12): GPU benchmark variants,
+>   fast-mode batches of ≥ 8 192 bricks, `tools/gpu/` gate, docs and
+>   release checklist. Zen 5 + Radeon 8060S, SES: exact 1.23–1.44×, fast
+>   1.98–2.47× the 16 cores. Release 1.2.0 on request.
 
 ---
 

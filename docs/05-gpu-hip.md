@@ -12,6 +12,7 @@ The decisions taken are listed in §11.
 > prior-art review and revised plan in `docs/gpu-prior-art.md` (§5), which
 > Phase 11 now follows: spike S1, then T11.3′ (exact device sampling), S2,
 > T11.5′ (opt-in f32 refinement), T11.6′ (benchmarks, docs, release).
+> All done by 2026-11-21; results in §12.
 
 ## 1. Summary
 
@@ -434,6 +435,9 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
     (`Backend::hip(index)`, `name()`, `is_compiled()`).
     `HipOptions { device }` is `#[non_exhaustive]` and defaults to device 0;
     `refine: GpuRefine` (default `Exact`) is added with fast mode (T11.7).
+    *As built (T11.5′):* no `GpuRefine`; fast mode is a value of the
+    existing vertex placement option, `RefineMode::Fast`
+    (`SurfaceParams::refine`), which is `Exact` where the CPU samples.
   * Default `Cpu`: default output stays byte-identical.
   * `Auto` uses device 0 when it opens and passes its self-test, else the
     CPU. It warns (`WarningKind::GpuFallback`) only when a GPU runtime is
@@ -448,15 +452,18 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
     `SurfaceStats::device: Option<String>` (`"AMD Radeon 8060S Graphics
     (gfx1151, gfx11-generic)"`), `Timings::device` (time to open the
     device, ≈ 45 ms on gfx1151, mostly HIP initialisation), plus the
-    flagged-edge count in fast mode.
+    flagged-edge count in fast mode (*as built:*
+    `SurfaceStats::refine_cpu_edges`).
 * **CLI:**
   * `--backend cpu|auto|hip`, `--gpu-device N` (with `--backend hip`
-    only), `--gpu-refine exact|fast` (T11.7);
+    only), `--gpu-refine exact|fast` (T11.7; *as built:* `--refine
+    fast`);
   * `--timings` names the back end, device and device-open time; the CPU
     line is unchanged;
   * JSON stats gain `parameters.backend`, `parameters.gpu_device`,
     `engine.backend`, `engine.device`, `timings_ms.device`, later
-    `engine.flagged_edges`;
+    `engine.flagged_edges` (*as built:* `engine.refine_cpu_edges`, in fast
+    mode only);
   * OBJ/PLY/MSMS headers do not name the back end, so the files are the
     same on every back end;
   * a usage error (exit 2) when the binary lacks the feature; an unusable
@@ -523,7 +530,9 @@ The estimates below extrapolate the measured kernel speeds (§2.4):
 > (`docs/gpu-prior-art.md` §5.2); T11.3′, exact device classification,
 > gathering and sampling (`docs/gpu-prior-art.md` §5.3); spike S2, f32
 > refinement on the device (`docs/gpu-prior-art.md` §5.4); T11.5′, opt-in
-> fast mode `RefineMode::Fast` (`docs/gpu-prior-art.md` §5.5). Deviations: the
+> fast mode `RefineMode::Fast` (`docs/gpu-prior-art.md` §5.5); T11.6′,
+> benchmarks (batch size tuned for fast mode), documentation, the GPU
+> gate `tools/gpu/` and the release checklist (§12). Deviations: the
 > first T11.3 (CPU-gathered jobs staged for the device) was measured
 > 2–27 % slower than the CPU and replaced by T11.3′; T11.4–T11.7 (device
 > f64) are dropped; the tasks that follow are those of
@@ -570,7 +579,10 @@ Related CPU work, not in this phase:
    every GPU (byte-identical to the CPU back end, ≈ 1.6× here); `fast`
    (≈ 2.5–3×, positions within the refinement bound) is opt-in with
    `--gpu-refine fast` / `GpuRefine::Fast`. `Backend::Auto` therefore never
-   changes output.
+   changes output. *As built:* `--refine fast` / `RefineMode::Fast`;
+   measured on gfx1151 (§12), exact is 1.23–1.44× and fast 1.97–2.47× the
+   16 Zen 5 cores (SES), and fast mode's vertices are as close to the
+   surface as exact mode's (`docs/gpu-prior-art.md` §5.4).
 2. **Data-centre GPUs.** *Decided 2026-11-20:* not now. Phase 11 targets
    consumer RDNA and is tested on gfx1151. MI250X (gfx90a) and MI300
    (gfx942) code objects, validation and benchmarks come later.
@@ -581,3 +593,110 @@ Related CPU work, not in this phase:
    build time for ROCm's generic targets, plus a self-test when a device
    opens. hiprtc only later, if a GPU outside the generic targets is needed
    (§9).
+
+## 12. Results (T11.6′, 2026-11-21)
+
+Complete CLI runs (`--timings`, OBJ written to `/dev/null`), best of 5:
+
+* **GPU host:** 16 Zen 5 cores (SMT off) with the integrated Radeon 8060S,
+  idle (load ≈ 0, GPU activity 0 % before each series). Device opening,
+  ≈ 45 ms per process, is excluded.
+* **M4:** the 10-core M4 for reference, CPU only, under its usual
+  background load (load average 2–20, partly from the runs themselves).
+
+Total time, with the mesh stage in brackets:
+
+| Input | M4 CPU | Zen 5 CPU | GPU exact | GPU fast | Exact vs Zen 5 | Fast vs Zen 5 |
+|---|---|---|---|---|---|---|
+| 4HHB 0.25 Å | 378 (298) ms | 243 (169) ms | 190 (108) ms | 123 (50) ms | 1.28× | 1.98× |
+| 1AON 0.5 Å | 2 142 (1 779) ms | 1 382 (1 036) ms | 1 024 (671) ms | 560 (226) ms | 1.35× | 2.47× |
+| 1AON 0.25 Å | 5 619 (4 482) ms | 3 403 (2 504) ms | 2 366 (1 463) ms | 1 411 (534) ms | 1.44× | 2.41× |
+| 3J3Q 1 Å | 47.6 (39.2) s | 28.9 (21.4) s | 23.6 (16.0) s | 12.3 (4.7) s | 1.23× | 2.34× |
+| 1AON SAS 0.25 Å | 1 208 (410) ms | 932 (256) ms | 852 (160) ms | 809 (128) ms | 1.09× | 1.15× |
+| 1AON vdW 0.25 Å | 2 284 (552) ms | 1 758 (356) ms | 1 674 (264) ms | 1 603 (192) ms | 1.05× | 1.10× |
+
+* Exact mode writes the CPU's files and fast mode the same triangles,
+  with vertices as close to the surface as exact mode's
+  (`docs/gpu-prior-art.md` §5.4, §5.5). Gate on the final code
+  (`tools/gpu/gate.sh`, `docs/gpu-prior-art.md` §5.6): no difference in
+  768 SES and 212 SAS/vdW cases.
+* In fast mode the SES mesh stage is 2.2–3.4× shorter than in exact mode
+  on the GPU, and 3.4–4.7× shorter than on the 16 cores. What is left of
+  a fast run is mostly outside the mesh stage (62 % for 1AON at 0.25 Å
+  and 3J3Q): arrangement, assembly, measure (validation, components, area
+  and volume) and OBJ formatting, all on the CPU.
+* SAS and vdW runs spend 70–90 % of their time outside the mesh stage,
+  hence the small gains.
+
+**Library benchmark** (`cargo bench -p sesmesh --features hip --bench
+surface`, criterion mean of 10, `compute_surface` / `SurfaceEngine::compute`
+without reading or writing files, same host):
+
+| Case | CPU (16 cores) | GPU exact | GPU fast |
+|---|---|---|---|
+| 1CRN 0.5 Å | 9.4 ms | 16.4 ms | 8.3 ms |
+| 1CRN 0.25 Å | 21.0 ms | 24.1 ms | 13.5 ms |
+| 4HHB 0.5 Å | 101 ms | 86 ms | 48 ms |
+| 4HHB 0.25 Å | 233 ms | 166 ms | 105 ms |
+| 1AON 0.5 Å | 1.33 s | 0.94 s | 0.50 s |
+
+Small inputs are slower on the GPU in exact mode (1CRN, 327 atoms): the arrangement upload, the launches and the device thread cost
+a few milliseconds per surface, more than the CPU spends sampling. Fast
+mode still gains there.
+
+**Batch size (tuning).** Chunk length (32, 64, 128 bricks) × chunks per
+batch (16–256), three runs each, mesh stage:
+
+* Exact mode is fastest with one chunk per thread (the default since
+  T11.3′); batches of 16 384 bricks are 2–11 % slower (1AON 0.5 Å:
+  645–663 ms with 512–2 048 bricks per batch, 695–736 ms with 16 384),
+  because the CPU bounds the stage and waits for the first batch.
+* Fast mode gains from larger batches up to ≈ 8 192 bricks, whatever the
+  chunk length: the device bounds the stage and runs larger launches
+  better. Mesh stage at 1 024 → 8 192 bricks per batch (64-brick
+  chunks): 4HHB 0.25 Å 65 → 53 ms, 1AON 0.5 Å 257 → 224 ms, 1AON 0.25 Å
+  595 → 526 ms, 3J3Q 5.21 → 4.72 s. Batches doubling from 1 024 to 8 192
+  bricks (to overlap a short first batch) were 0.5–10 % slower than 8 192
+  from the start (five runs each).
+* So fast mode now uses batches of at least 8 192 bricks
+  (`FAST_BATCH_BRICKS`, 128 chunks of 64 bricks); exact mode is unchanged.
+  The fast-mode times above include this.
+* Not tuned: LDS staging, wave size and sample order (old T11.8). The
+  kernels are not the bound of exact mode, and fast mode's remaining
+  time is mostly on the CPU.
+
+**Memory** (same runs; peak RSS from `wait4`, GPU-mapped memory as VRAM +
+GTT used, sampled every 10 ms, above the idle level):
+
+| Input | RSS CPU | RSS GPU exact | RSS GPU fast | GPU-mapped peak, exact / fast |
+|---|---|---|---|---|
+| 4HHB 0.25 Å | 143 MB | 275 MB | 261 MB | 148 / 148 MB |
+| 1AON 0.5 Å | 490 MB | 622 MB | 612 MB | 170 / 174 MB |
+| 1AON 0.25 Å | 1 248 MB | 1 695 MB | 1 707 MB | 170 / 175 MB |
+| 3J3Q 1 Å | 4 169 MB | 4 909 MB | 4 898 MB | 1 149 / 1 293 MB |
+
+* The GPU back end adds ≈ 120–130 MB for the HIP runtime and code
+  objects, plus the resident arrangement and the batch buffers (pinned
+  host memory on this APU, so they count in both columns): 0.45 GB more
+  for 1AON at 0.25 Å, 0.74 GB for 3J3Q.
+* The memory guard (`--max-memory`) estimates the CPU back end's memory
+  and does not include this: +18 % for 3J3Q, +27–36 % for 1AON, +83–92 %
+  for 4HHB. Its estimate was 1.15–1.7× the measured CPU peak (validation
+  report §5), so that margin does not always cover the GPU's share.
+
+**Open after Phase 11** (not needed for its exit):
+
+* `Backend::Auto` and `hip` use the GPU whatever the input size; for
+  inputs as small as 1CRN the CPU is faster in exact mode (library
+  benchmark above);
+
+* the GPU's buffers in the memory estimate;
+* discrete GPUs: the batch buffers are pinned host memory read by the
+  device over the bus, which is fast on this APU only (§7 plans device
+  copies); only gfx1151 is tested;
+* data-centre GPUs (MI250X, MI300; decision 2 of §11);
+* in fast mode the CPU cores mostly wait for the device during the mesh
+  stage: splitting the edges between both, and the CPU stages around it
+  (arrangement, measure, formatting), are the next levers;
+* release binaries are built without `hip` (no ROCm on the GitHub
+  runners): users build with `cargo install sesmesh-cli --features hip`.

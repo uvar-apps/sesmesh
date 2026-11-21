@@ -7,6 +7,11 @@
 //! refinement, assembly and validation. Inputs from
 //! `tests/data/{fixtures,cache}` (`cargo xtask fetch --set small --set
 //! bench`); missing files are skipped. Probe 1.4 Å, Bondi radii.
+//!
+//! Built with `--features hip` on a machine with a usable AMD GPU, each case
+//! is also measured on the HIP back end in exact and fast refinement
+//! (`…/hip-exact`, `…/hip-fast`; Phase 11 T11.6′). The device is opened once
+//! per case ([`SurfaceEngine`]), so its opening time is not measured.
 
 use std::hint::black_box;
 use std::path::PathBuf;
@@ -15,7 +20,10 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use sesmesh::export::obj::{ObjOptions, write_obj};
 use sesmesh::io::{ReadOptions, read_path};
 use sesmesh::radii::{RadiusOptions, assign};
-use sesmesh::{Diagnostics, Selection, Sphere, SurfaceParams, compute_surface};
+use sesmesh::{
+    Backend, Diagnostics, RefineMode, Selection, Sphere, SurfaceEngine, SurfaceParams,
+    compute_surface,
+};
 
 fn spheres(rel: &str) -> Option<Vec<Sphere>> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -54,6 +62,30 @@ fn surface(c: &mut Criterion) {
             group.bench_function(format!("{name}/h{h}"), |b| {
                 b.iter(|| black_box(compute_surface(&spheres, &params).expect("valid")));
             });
+            for refine in [RefineMode::Exact, RefineMode::Fast] {
+                let gpu = params
+                    .clone()
+                    .with_backend(Backend::hip(0))
+                    .with_refine(refine);
+                let mut engine = match SurfaceEngine::new(gpu) {
+                    Ok(engine) => engine,
+                    Err(e) => {
+                        eprintln!("skipping {name} h={h} on hip: {e}");
+                        break;
+                    }
+                };
+                let out = engine.compute(&spheres).expect("valid");
+                eprintln!(
+                    "{name} h={h} hip-{}: {} triangles, {} edges refined on the CPU, {:?}",
+                    refine.name(),
+                    out.stats.triangles,
+                    out.stats.refine_cpu_edges,
+                    out.stats.timings
+                );
+                group.bench_function(format!("{name}/h{h}/hip-{}", refine.name()), |b| {
+                    b.iter(|| black_box(engine.compute(&spheres).expect("valid")));
+                });
+            }
             if name == "4HHB" && h == 0.25 {
                 let mut buf = Vec::with_capacity(128 << 20);
                 group.bench_function("obj/4HHB/h0.25", |b| {

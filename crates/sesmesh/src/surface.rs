@@ -968,7 +968,7 @@ fn mesh_stage(
         let chunk = crate::field::device_chunk(bricks.len());
         let parts = engine.fold_brick_chunks_hip(
             device,
-            crate::field::Batching::default(),
+            crate::field::Batching::mesh(refine == RefineMode::Fast, chunk),
             refine == RefineMode::Fast,
             bricks,
             chunk,

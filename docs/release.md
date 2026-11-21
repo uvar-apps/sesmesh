@@ -38,9 +38,31 @@ python3 -m unittest discover -s tools/ao
 
 `SESMESH_GPU_NO_KERNELS=1` lets `--all-features` build `sesmesh-gpu`'s `hip`
 feature without ROCm (no kernels are compiled; docs/05-gpu-hip.md §9). The
-HIP tests themselves run on a ROCm machine:
-`SESMESH_GPU_REQUIRE=1 cargo test -p sesmesh-gpu --features hip` (they skip
-without a device unless `SESMESH_GPU_REQUIRE=1`).
+GPU tests skip without a device unless `SESMESH_GPU_REQUIRE=1`.
+
+### GPU host
+
+Before a release that changes `sesmesh-gpu`, the field, meshing or the
+GPU path, also run on a machine with an AMD GPU and ROCm (tested: Radeon
+8060S, gfx1151, ROCm 7.16):
+
+```bash
+export PATH=$HOME/.cargo/bin:/opt/rocm/bin:$PATH
+cargo +stable clippy --workspace --all-targets --all-features --locked -- -D warnings
+SESMESH_GPU_REQUIRE=1 cargo +stable test --workspace --release --all-features --locked -- --include-ignored
+cargo +stable build --release -p sesmesh-cli --features hip --locked
+tools/gpu/gate.sh /tmp/gate /tmp/gate-inputs.txt
+tools/gpu/gate.sh /tmp/gate-sv /tmp/gate-inputs.txt sas:1 sas:0.5 vdw:1 vdw:0.5
+```
+
+The clippy run compiles the kernels with `hipcc`. The tests include the
+device tests (exact device sampling equals the CPU's, fast meshes equal
+the exact triangles, batch sizes, cancellation) and the CLI's
+`--backend hip` / `--refine fast` tests. `tools/gpu/gate.sh` compares the
+CPU and HIP back ends on the test corpus (`tools/gpu/README.md`: inputs,
+checks, run time). The GPU build is not in the release binaries (no ROCm on
+the GitHub runners): users build it with `cargo install sesmesh-cli
+--features hip`.
 
 This covers the host only (macOS arm64 here). Linux x86-64, Linux arm64 and
 Windows are covered by running the CI workflow by hand, or by testing on

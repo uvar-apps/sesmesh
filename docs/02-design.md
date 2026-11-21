@@ -574,6 +574,16 @@ give the same minimum as the global sets.
   difference shows on x86 (AVX2 8 lanes vs SSE2 autovectorization).
 * **References**: the brute-force oracle in `sesmesh-testkit` and the exact
   `f64` point evaluator (`SesField`), itself checked against the oracle.
+* *After 1.1 (Phase 11, `docs/05-gpu-hip.md`, `docs/gpu-prior-art.md`
+  §5.3):* the same kernel runs on a GPU in HIP (lanes = samples, one
+  workgroup per sub-block), with classification and gathering on the
+  device from an arrangement uploaded once. Built with `-ffp-contract=off`,
+  the device's f32 `+ − × ÷ √` give the CPU's bits, and each lane takes the
+  minimum over its valid candidates, which does not depend on their order;
+  the device's lists and uniform sub-blocks come from tests with an f32
+  slack, so its lists contain the CPU's and its uniform sub-blocks are a
+  subset. The sampled values, hence the meshes, are the CPU's byte for
+  byte.
 
 ### 7.6 Point queries
 
@@ -636,6 +646,23 @@ validity tests, gathering and `f64` refinement do not use the explicit
 kernels (next lever: #13). Remaining levers:
 fewer validity tests per candidate (tighter per-candidate blocker sets,
 blocker ordering), reuse of the sampling gather for refinement (≈ 5 %).
+
+*GPU back end (after 1.1, Phase 11; `docs/05-gpu-hip.md` §12):* complete
+CLI runs (OBJ to `/dev/null`, best of 5, SES) on the 16-core Zen 5 with its
+integrated Radeon 8060S, with the 10-core M4's CPU times beside them:
+
+| Structure | Spacing | M4 CPU | Zen 5 CPU | GPU exact | GPU fast |
+|---|---|---|---|---|---|
+| 4HHB | 0.25 Å | 0.38 s | 0.24 s | 0.19 s | 0.12 s |
+| 1AON | 0.5 Å | 2.14 s | 1.38 s | 1.02 s | 0.56 s |
+| 1AON | 0.25 Å | 5.62 s | 3.40 s | 2.37 s | 1.41 s |
+| 3J3Q | 1 Å | 47.6 s | 28.9 s | 23.6 s | 12.3 s |
+
+Exact mode writes the CPU's bytes; fast mode refines the vertices on the
+device in f32 (§8.2, `RefineMode::Fast`). In fast mode the
+mesh stage is 3.4–4.7× shorter than on the 16 cores, and the CPU stages
+around it (arrangement, assembly, measure, formatting) take 62 % of the
+1AON (0.25 Å) and 3J3Q runs.
 
 ---
 
@@ -1080,6 +1107,15 @@ f 1//1 2//2 3//3
   keys (`min << 33 | max << 1 | forward`). Measure stage on 1AON at 0.5 Å:
   0.30 s → 0.16 s (10 threads). `SurfaceEngine` keeps the per-thread
   sampling buffers in a pool between calls (FR-LIB-3).
+* *After 1.1 (Phase 11, GPU back end):* in the mesh stage one extra thread
+  (outside the rayon pool) drives the device: it fills a ring of three
+  batch buffers in brick order, a batch being one 64-brick chunk per pool
+  thread, and the pool's threads take the chunks in order and mesh each as
+  soon as its batch is ready; a buffer is reused once all its chunks are
+  meshed. The meshes are concatenated in chunk order as on the CPU, so the
+  output does not depend on the batch size or thread count (tested with
+  batches of 1, 2 and all chunks). Cancellation is checked by both sides
+  per batch, per chunk and per brick (< 100 ms, `cancellation_is_prompt`).
 
 Measured scaling (Phase 5, Apple M-series with 4 performance + 6 efficiency
 cores; `benches/scaling.rs` and `sesmesh --timings -j N`):
@@ -1203,6 +1239,15 @@ plus the triangle-dependent part. Reductions (meshes byte-identical):
   the mesh, must not depend on it); far more threads than 10 add about
   4 B per sphere each. Estimate ÷ measured peak on the guard's test runs
   (validation report §5): 1.15–1.7.
+
+*GPU back end (after 1.1, Phase 11):* device buffers are sized from counts
+(the arrangement once per surface; per batch, the lists and results its
+bricks need, grown on demand), not from a fixed budget. A failed device
+allocation is an `Error::Backend`. The memory guard estimates the host
+memory of the CPU back end; the device's batch buffers are pinned host
+memory on top of it (`docs/05-gpu-hip.md` §12: RSS +0.13 GB for small inputs, mostly the
+HIP runtime, +0.45 GB for 1AON at 0.25 Å, +0.74 GB for 3J3Q at 1 Å; not
+yet in the estimate).
 
 ---
 
@@ -1345,13 +1390,14 @@ sesmesh ligand.xyz --radii alvarez --probe 1.2 -s 0.1 -o ligand.obj
 | Grid-to-grid narrow-band distances (Hermosilla [R15]) | Distances approximate (nearest *grid point* outside), error ~ $h$; we keep the brick idea but use exact feature distances. |
 | Analytic patches + template triangulation (MSMS [R9], Quan–Stamm meshing [R7]) | Best triangle quality and analytic area, but complex and historically fragile with singularities; possible future `--mesher analytic`. |
 | Analytic patches + ray casting (NanoShaper [R13]) | Needs full patch trimming and quartic torus–ray solving (CGAL-grade robustness); our root-finding on the implicit $F$ yields the same exact edge intersections without explicit patches. |
-| GPU compute | Out of scope v1; the brick/SoA kernel design maps directly to compute shaders (`wgpu`) later. |
+| GPU compute | Out of scope v1; the brick/SoA kernel design maps directly to compute shaders (`wgpu`) later. *After 1.1:* built for AMD GPUs through HIP (Phase 11, #24, `docs/05-gpu-hip.md`), with code objects compiled by `hipcc` and loaded at run time; CUDA (#25) and Metal (#26) are planned. |
 
 ---
 
 ## 18. Future extensions
 
-GPU backend; MC33 and dual meshers; adaptive (octree) resolution; analytic SES
+GPU backend (*after 1.1:* HIP built in Phase 11; CUDA #25 and Metal #26
+to follow, sharing its kernels and batch layout); MC33 and dual meshers; adaptive (octree) resolution; analytic SES
 area/volume (Quan–Stamm / sesa style [R6, R21]); Gaussian and skin surfaces
 as additional field kinds; trajectory readers; BinaryCIF [R42]; Python
 bindings (PyO3) and WASM build; region-restricted surfaces (FR-SURF-8);

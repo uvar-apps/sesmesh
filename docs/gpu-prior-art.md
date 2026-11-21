@@ -469,7 +469,7 @@ run S2 (the f32 refinement that the remaining time is mostly spent in).
 | T11.3′ | Exact device sampling. Arrangement uploaded once (f32 copies the CPU computes). Device element grid, classification, gathering, K2, per batch of bricks. CPU refinement overlapped. Allocation from counts and the device's reported memory, no fixed budgets. | Byte-identical output on the existing gate (1 536 SES, 424 SAS/vdW, 210 option-set runs, test suite); identical under thread counts and batch sizes; cancel < 100 ms; times for 4HHB, 1AON and 3J3Q on 16 cores vs device. |
 | T11.4′ | Refinement-gather lists from the device. S1: exact, but ≤ 0.05× for 31–43 % more list memory; not planned. | Byte-identical as in T11.3′. |
 | T11.5′ | Opt-in fast mode: f32 refinement on the device, f64 CPU fallback for flagged edges. S2 (§5.4): vertices as close to the surface as the CPU's; SES mesh stage ≈ 3.2–3.7× faster than T11.3′ (projected). Done (§5.5). | Same connectivity; vertex bound from S2; the Phase 9 accuracy study repeated; area and volume against the exact output; repeat runs identical. |
-| T11.6′ | Benchmarks, docs, release (old T11.8–T11.9). | Local validation list plus GPU tests. |
+| T11.6′ | Benchmarks, docs, release (old T11.8–T11.9). Done (§5.6). | Local validation list plus GPU tests. |
 
 **T11.3′ status (2026-11-21): done.** `sesmesh::field::gpu` with
 `sesmesh_gpu::hip::{Resident, Batch}`:
@@ -683,6 +683,36 @@ than the exact mode's worst plus 10⁻⁵ Å (`fast_meshes_match_exact_meshes`);
 with no converged edge, fast meshing gives the exact bricks
 (`unconverged_edges_are_refined_exactly`); cancellation stays below 100 ms
 in fast mode (`cancellation_is_prompt`).
+
+### 5.6 T11.6′ status (2026-11-21): done
+
+* **Benchmarks.** `benches/surface.rs` measures each case also on the HIP
+  back end, exact and fast (`…/hip-exact`, `…/hip-fast`), with the device
+  opened once. Complete CLI runs on both machines, memory and the batch
+  size sweep are in `docs/05-gpu-hip.md` §12.
+* **Tuning.** Fast mode now samples batches of at least 8 192 bricks
+  instead of one 64-brick chunk per thread: the device bounds its mesh
+  stage, and larger launches run better than a short, overlapped first
+  batch helps (mesh stage 1AON 0.25 Å 598 → 534 ms, 3J3Q 5.16 → 4.68 s,
+  §5.5 → final run). Exact mode keeps one chunk per thread. Fast-mode
+  times: 1AON 0.25 Å 1.41 s (2.41× the 16 cores), 3J3Q 1 Å 12.3 s (2.34×).
+* **Validation.** `tools/gpu/gate.sh` replaces the scratch scripts of the
+  T11.3′ and T11.5′ gates: per input, CPU, exact and two fast runs; exit
+  codes, exact bytes and statistics, fast faces, repeat, area and volume.
+  `docs/release.md` lists the GPU host's steps (clippy with kernels, the
+  whole test suite with `SESMESH_GPU_REQUIRE=1`, the gate). Run on the
+  final code: clippy and the release test suite (`--include-ignored`, test
+  data present) pass; the gate finds no difference in 768 SES cases (256
+  inputs at 1, 0.5, 0.25 Å) and 212 SAS/vdW cases (53 inputs at 1 and
+  0.5 Å): exact mode's files and statistics are the CPU's, fast mode's
+  faces are the CPU's and repeat, area and volume within 3.5·10⁻⁷. Fast
+  mode refines the same 17 972 + 15 019 edges on the CPU as in §5.5, so
+  the batch size changes nothing in the output.
+* **Docs.** Spec §3.2, FR-LIB-7/8/9, NFR-DET, NFR-PERF note; Design §7.5,
+  §7.7, §11.1, §11.3, §17, §18; `docs/cli.md`; README; website (CLI and
+  library guides, home page); CHANGELOG.
+* **Release.** 1.2.0 (new opt-in feature: minor) with the first publish
+  of `sesmesh-gpu`, when the user asks for it (`docs/release.md`).
 
 ## 6. Sources
 

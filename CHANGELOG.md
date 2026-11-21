@@ -8,8 +8,7 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- GPU back end, HIP (Phase 11, #24; branch `phase-11-gpu-hip`, in
-  progress): crate `sesmesh-gpu` (all the `unsafe`, HIP loaded at run time,
+- GPU back end, HIP (Phase 11, #24): crate `sesmesh-gpu` (all the `unsafe`, HIP loaded at run time,
   kernels compiled by `hipcc` for generic AMD targets), `Backend::{Cpu,
   Auto, Hip}` in `SurfaceParams` and `--backend` / `--gpu-device` in the
   CLI (feature `hip`; default `Cpu`, output unchanged). With a HIP device
@@ -19,9 +18,12 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   only; its tests carry a slack above the f32 error, so the meshes equal
   the CPU back end's byte for byte (`docs/gpu-prior-art.md` §3.2, §5).
   On a Ryzen AI Max+ 395 (16 Zen 5 cores, Radeon 8060S) 1AON at 0.25 Å
-  takes 2.36 s instead of 3.41 s, 3J3Q at 1 Å 23.6 s instead of 29.0 s.
-  The first device sampling design (CPU-gathered jobs staged for the
-  device) was slower than the CPU and was replaced before release.
+  takes 2.37 s instead of 3.40 s, 3J3Q at 1 Å 23.6 s instead of 28.9 s
+  (1.23–1.44× on SES; `docs/05-gpu-hip.md` §12). The first device
+  sampling design (CPU-gathered jobs staged for the device) was slower than
+  the CPU and was replaced before release. Built and tested on gfx1151;
+  code objects for ROCm's generic RDNA 2, 3 and 4 targets; release
+  binaries are built without the feature.
 - Fast mode for previews (Phase 11, T11.5′): `RefineMode::Fast` and
   `--refine fast`. On a GPU back end the device also refines the crossing
   edges, in f32 in brick-local double-float coordinates (no f64 on the
@@ -33,9 +35,22 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   input of spike S2, `docs/gpu-prior-art.md` §5.4), but not bit-identical:
   positions differ in the last bits, and at ties the normal, patch kind or
   nearest atom. On the CPU back end `fast` is `exact`. Opt-in; the default
-  output is unchanged. On the Ryzen AI Max+ 395 1AON at 0.25 Å takes 1.46 s
-  (2.32 s exact on the GPU, 3.35 s on the CPU), 3J3Q at 1 Å 12.7 s (23.5 s,
-  28.9 s).
+  output is unchanged. Fast mode samples batches of at least 8 192 bricks
+  (exact mode keeps one 64-brick chunk per thread), measured best for each.
+  On the Ryzen AI Max+ 395 1AON at 0.25 Å takes 1.41 s (2.37 s exact on the
+  GPU, 3.40 s on the CPU), 3J3Q at 1 Å 12.3 s (23.6 s, 28.9 s): 1.98–2.47×
+  the 16 cores on SES.
+- GPU benchmarks and validation (Phase 11, T11.6′): `benches/surface.rs`
+  also measures `…/hip-exact` and `…/hip-fast` when built with `hip` on a
+  machine with a usable GPU; `tools/gpu/gate.sh` compares the CPU and HIP
+  back ends on the test corpus (exit codes, exact mode's bytes, fast
+  mode's faces, repeatability, area and volume), and `docs/release.md`
+  lists the GPU host's validation steps. GPU section in the README, the
+  CLI manual and the website (CLI and library guides); Spec §3.2 (GPU no
+  longer a non-goal), FR-LIB-7/8/9, NFR-DET; Design §7.5, §7.7, §11.1,
+  §11.3, §17, §18. Memory measured: the GPU back end adds 0.13–0.74 GB of
+  RSS (HIP runtime, resident arrangement, pinned batch buffers), not yet in
+  the `--max-memory` estimate.
 - Ambient occlusion by post-processing with aomesh (#27):
   `tools/ao/ses_ao.py` runs sesmesh to OBJ and then aomesh 0.4.0 or later,
   which writes per-vertex AO as texture coordinates over a grey ramp

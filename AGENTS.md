@@ -22,6 +22,9 @@ cargo run --release -p xtask -- validate   # accuracy study → docs/validation/
 cargo run --release -p xtask -- sweep      # robustness sweep → docs/validation/sweep.csv (~2 min)
 SESMESH_BLESS=1 cargo test -p sesmesh mc_table   # regenerate mesh/mc_table.rs (then rerun tests)
 SESMESH_GPU_REQUIRE=1 cargo +stable test -p sesmesh-gpu --features hip   # on a ROCm machine (gfx1151)
+SESMESH_GPU_REQUIRE=1 cargo +stable test --workspace --release --all-features -- --include-ignored  # ROCm: all + GPU
+cargo +stable bench -p sesmesh --features hip --bench surface   # ROCm: adds …/hip-exact, …/hip-fast
+tools/gpu/gate.sh /tmp/gate inputs.txt     # ROCm: CPU vs HIP exact/fast on a corpus (README there)
 python3 -m unittest discover -s tools/ao   # ses_ao.py (end-to-end tests need aomesh >= 0.4.0)
 target/release/sesmesh data/1crn.cif -q high --timings   # CLI smoke run (writes 1crn.obj)
 ```
@@ -121,7 +124,8 @@ any deviation from the plan.
   listing its crossing edges in the CPU's order); kernels in `kernels/hip/sesmesh.hip`, compiled by
   `build.rs` (README there). In `sesmesh`: `field/gpu.rs` (feature `hip`, Plan T11.3′:
   `Engine::resident`, `batch_params` (f32 radii + slack), `fold_brick_chunks_hip`: a device
-  thread fills a ring of 3 `Batch` buffers (one ≤ 64-brick chunk per pool thread each), the
+  thread fills a ring of 3 `Batch` buffers (one ≤ 64-brick chunk per pool thread each; in fast
+  mode ≥ 8 192 bricks, `Batching::mesh`, tuned in T11.6′), the
   pool takes chunks in order and meshes each once its batch is ready, no per-batch barrier;
   `Batching`), called from `surface::mesh_stage` when
   the back end is a HIP device and `Engine::device_ok` (f32 kernels, 8 sub-blocks per brick).
@@ -129,6 +133,8 @@ any deviation from the plan.
   `extract::mesh_brick_device` places vertices from it and refines unconverged edges in f64
   (`refine_cpu_edges`). Spikes S1 (`field/gpu_s1.rs`, ignored test `s1`,
   `docs/gpu-prior-art.md` §5.2) and S2 (`field/gpu_s2.rs`, `s2`, §5.4: fast vs exact vertices)
+- `tools/gpu/` GPU gate (T11.6′): `gate.sh` (CPU vs `--backend hip` exact bytes and stats, fast
+  faces, repeatability, area/volume; GNU `split`), `compare.py`, `summary.py`, README
 - `par.rs` rayon facade (feature `parallel`) · `crates/sesmesh-testkit` brute-force oracle,
   analytic two-sphere references, cluster generators, minimal OBJ reader
 - Website: `site/` (static HTML/CSS/JS, brutalist style, deployed by `.github/workflows/pages.yml`
@@ -190,6 +196,15 @@ any deviation from the plan.
   inputs (3J3Q 1 Å: 48.7 M triangles, 70 s, 5.3 GB). Open: cross-tool references (#5, #6), NFR-ACC
   decision (#4), NFR-PERF targets missed ≤ 2× on this machine, per-atom memory ≈ 600–800 B.
 
+- Phase 11 (GPU back end, HIP, #24; branch `phase-11-gpu-hip`, not merged or released yet):
+  T11.0–T11.2, S1, T11.3′ (exact device sampling, byte-identical), S2, T11.5′ (`--refine fast`,
+  f32 refinement on the device), T11.6′ (benchmarks, batch tuning, docs, `tools/gpu/`, release
+  checklist) done 2026-11-21. Zen 5 + Radeon 8060S, SES: exact 1.23–1.44×, fast 1.98–2.47× the
+  16 cores (1AON 0.25 Å 3.40 / 2.37 / 1.41 s; 3J3Q 1 Å 28.9 / 23.6 / 12.3 s); results
+  `docs/05-gpu-hip.md` §12. Fast mode is the "quick preview" mode; its speed vs accuracy was
+  reviewed by the user at the end of T11.5′ (kept as is: no accuracy given up). Planned
+  release: 1.2.0 (new opt-in feature, minor), first publish of `sesmesh-gpu`.
+
 ## Next
 
 Work after 1.0 is collected in the tracking issue #19 ("Roadmap after v1.0"). Labels: `type:`
@@ -226,7 +241,9 @@ tick them in #19. Summary:
    `~/projects/aomesh`): objserde 0.3.0 (keeps header comments, `o`, `g`) and aomesh 0.4.0
    (plain `map_Kd`, passes them through; AO values byte-identical to 0.3.1), both tagged
    with GitHub releases. Left open in #27: MeshLab check, optional gallery AO toggle.
-   GPU back ends: #24 HIP, #25 CUDA, #26 Metal (f32 plan in the issues).
+   GPU back ends: #24 HIP (Phase 11, done on its branch; open after it: GPU buffers in the
+   memory estimate, discrete GPUs, CPU/GPU edge split in fast mode, `docs/05-gpu-hip.md`
+   §12), #25 CUDA, #26 Metal (f32 plan in the issues).
 
 ## Gotchas learned
 

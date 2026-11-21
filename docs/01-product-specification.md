@@ -128,7 +128,10 @@ the area compute SASA numerically (e.g. `rust-sasa`, `powersasa`) [R54].
 ### 3.2 Non-goals (v1)
 
 * GPU computation (may be revisited; the design keeps the field kernel
-  portable).
+  portable). *Revisited after 1.1 (Phase 11, #24):* an opt-in GPU back end
+  for AMD GPUs through HIP (FR-LIB-9, `docs/05-gpu-hip.md`,
+  `docs/gpu-prior-art.md`); CUDA and Metal back ends are planned (#25,
+  #26).
 * Real-time rendering / a viewer.
 * Gaussian, skin, ligand-excluded or minimal molecular surfaces (the design
   leaves room for additional implicit surface kinds).
@@ -266,8 +269,9 @@ Priority uses MoSCoW: **M**ust, **S**hould, **C**ould, **W**on't (this release).
 | FR-LIB-4 | Caller-controlled parallelism: runs inside the caller's rayon thread pool if installed; optional single-threaded build (feature flag). | M |
 | FR-LIB-5 | Progress callback and cooperative cancellation. | S |
 | FR-LIB-6 | No third-party types in the public API (arrays/slices/own types only), so dependency upgrades do not break users. | M |
-| FR-LIB-7 | Cargo features to trim dependencies: I/O formats, gzip, decimation, JSON, parallelism. | M |
-| FR-LIB-8 | `#![forbid(unsafe_code)]` in all crates; SIMD goes through a safe abstraction crate (Design §11.2). | M |
+| FR-LIB-7 | Cargo features to trim dependencies: I/O formats, gzip, decimation, JSON, parallelism. *After 1.1:* `hip` adds the GPU back end (FR-LIB-9). | M |
+| FR-LIB-8 | `#![forbid(unsafe_code)]` in all crates; SIMD goes through a safe abstraction crate (Design §11.2). *After 1.1:* except the crate `sesmesh-gpu`, which holds the GPU runtime's FFI in one module with a `// SAFETY:` comment on every `unsafe` block, behind a safe API (`docs/05-gpu-hip.md` §9); `sesmesh` and `sesmesh-cli` keep `forbid`. | M |
+| FR-LIB-9 | *Added after 1.1 (Phase 11):* optional GPU back end (`Backend::{Cpu, Auto, Hip}` in the surface parameters, `--backend`), off by default. The default `Cpu` and the exact refinement give the CPU back end's output byte for byte; `Auto` falls back to the CPU. A fast refinement mode (`RefineMode::Fast`, `--refine fast`) for previews is opt-in: same triangles, vertices as close to the surface, last bits may differ. Device code is f32 and integer only. | C |
 
 ### 4.10 Diagnostics (FR-DIAG)
 
@@ -320,6 +324,12 @@ Additional targets:
   NEON (lanes = 8 resp. 4 × f32).
 * Parsing ≥ 200 MB/s for mmCIF and PDB per core on uncompressed input.
 * OBJ writing ≥ 300 MB/s (parallel formatting).
+
+*GPU back end (after 1.1, Phase 11; `docs/gpu-prior-art.md` §5.5,
+`docs/05-gpu-hip.md` §12):* not a target. On (B) with its integrated
+Radeon 8060S (Ryzen AI Max+ 395), exact refinement is 1.23–1.44× faster
+than the 16 cores on the CPU back end and fast refinement 1.98–2.47× (SES;
+1AON at 0.25 Å: 3.40 s, 2.37 s, 1.41 s).
 
 *Phase 9 measurement (10-core Apple Silicon under background load,
 `docs/validation-report.md` §6):* 1CRN meets its target; the others are
@@ -400,6 +410,10 @@ measured after 1.0 (#8, #10).
   level, independent of thread count and scheduling.
 * Results from different SIMD levels (or scalar) agree within 10⁻⁵ Å per
   vertex; topology may only differ in exactly degenerate ties.
+* *After 1.1 (FR-LIB-9):* the GPU back end in exact refinement writes the
+  CPU back end's bytes, for any batch size and thread count. Fast
+  refinement gives the same bytes on repeated runs with the same binary
+  and device.
 
 ### 5.6 Portability (NFR-PORT)
 
