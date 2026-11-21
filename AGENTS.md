@@ -67,16 +67,17 @@ any deviation from the plan.
 
 ## Repository state at handoff (2026-11-21)
 
-- Latest release **1.3.1** (2026-11-21: README without the CI badge, Zenodo DOI; 1.3.0 the
+- Latest release **1.3.2** (2026-11-21: correct Zenodo DOI; 1.3.1 the same day, README
+  without the CI badge, wrong DOI; 1.3.0 the
   same day, CUDA back end; 1.2.0 the same day, HIP back end;
   1.1.2 on 2026-11-15; 1.1.1 and 1.1.0 on 2026-11-14; 1.0.0, 0.9.0 and 0.9.1 on
-  2026-11-13): tags `v0.9.0` … `v1.1.2`, `v1.2.0`, `v1.3.0`, `v1.3.1`, crates `sesmesh-gpu` (first
+  2026-11-13): tags `v0.9.0` … `v1.1.2`, `v1.2.0`, `v1.3.0`, `v1.3.1`, `v1.3.2`, crates `sesmesh-gpu` (first
   published with 1.2.0), `sesmesh` and `sesmesh-cli` on crates.io (owner: the user's
   crates.io account), GitHub releases with binaries (up to 1.1.2 the four tier-1 targets
   from the release workflow; from 1.2.0 built locally: macOS arm64 on the Mac, Linux x86-64
   in the `localhost/sesmesh-compare` container (Ubuntu 24.04) on the GPU host; no Linux
-  arm64 or Windows machine; no GPU features in the binaries). `origin/main` = the 1.3.1
-  release commit (branch `release-1.3.1`). The main checkout holds the user's uncommitted
+  arm64 or Windows machine; no GPU features in the binaries). `origin/main` = the 1.3.2
+  release commit (branch `release-1.3.2`). The main checkout holds the user's uncommitted
   paper work (CHANGELOG entry included): to move its `main`, save the diff, restore
   `CHANGELOG.md`, `git merge --ff-only`, and put the entry back under *Unreleased*.
   The workspace version stays at the last release between releases (bumped only when one
@@ -98,9 +99,9 @@ any deviation from the plan.
   (on crates.io from the next publish). Left to the user: social preview upload, Google
   Search Console / Bing verification, announcements. Zenodo: record created by hand
   for 1.1.2 (version DOI 10.5281/zenodo.24238837, all versions 10.5281/zenodo.24238836); new releases are added
-  there with *New version* (`docs/release.md` step 9), GitHub integration off. 1.3.1:
-  version DOI 10.5281/zenodo.24412232 (created by the user before the release; cited in `CITATION.cff`,
-  README and `site/library.html`). 1.2.0 and 1.3.0 have no Zenodo version. No badge for
+  there with *New version* (`docs/release.md` step 9), GitHub integration off. 1.3.2:
+  version DOI 10.5281/zenodo.24412360 (given by the user before the release; cited in `CITATION.cff`,
+  README and `site/library.html`). 1.3.1 cited a wrong DOI (10.5281/zenodo.24412232). 1.2.0 and 1.3.0 have no Zenodo version. No badge for
   GitHub workflows anywhere (user, 2026-11-21: nothing runs on GitHub; a CI badge in the
   README reached the crates.io pages of 1.3.0 and forced 1.3.1).
 - 1.0.0 contains the v1.0 development items (branch `v1-dev`): #1 decimation

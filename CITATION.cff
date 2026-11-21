@@ -20,12 +20,12 @@ authors:
   - given-names: Ugo
     family-names: Varetto
     orcid: "https://orcid.org/0000-0002-7696-0345"
-version: 1.3.1
+version: 1.3.2
 date-released: "2026-11-21"
 license:
   - MIT
   - Apache-2.0
-doi: 10.5281/zenodo.24412232
+doi: 10.5281/zenodo.24412360
 identifiers:
   - type: doi
     value: 10.5281/zenodo.24238836
@@ -34,8 +34,8 @@ identifiers:
     value: 10.5281/zenodo.24238837
     description: Zenodo, version 1.1.2
   - type: doi
-    value: 10.5281/zenodo.24412232
-    description: Zenodo, version 1.3.1
+    value: 10.5281/zenodo.24412360
+    description: Zenodo, version 1.3.2
 repository-code: "https://github.com/uvar-apps/sesmesh"
 url: "https://uvar-apps.github.io/sesmesh/"
 keywords:

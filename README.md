@@ -198,18 +198,18 @@ If you use sesmesh in published work, please cite it, giving the version you
 used. Each release is archived on Zenodo with its own DOI:
 
 > Varetto, U. (2026). *sesmesh: Solvent Excluded Surface meshes for
-> molecules* (Version 1.3.1) [Computer software]. Zenodo.
-> https://doi.org/10.5281/zenodo.24412232
+> molecules* (Version 1.3.2) [Computer software]. Zenodo.
+> https://doi.org/10.5281/zenodo.24412360
 
 ```bibtex
 @software{varetto_sesmesh,
   author    = {Varetto, Ugo},
   title     = {{sesmesh: Solvent Excluded Surface meshes for molecules}},
-  version   = {1.3.1},
+  version   = {1.3.2},
   year      = {2026},
   publisher = {Zenodo},
-  doi       = {10.5281/zenodo.24412232},
-  url       = {https://doi.org/10.5281/zenodo.24412232}
+  doi       = {10.5281/zenodo.24412360},
+  url       = {https://doi.org/10.5281/zenodo.24412360}
 }
 ```
 

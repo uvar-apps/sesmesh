@@ -964,7 +964,7 @@ dependencies = [
 
 [[package]]
 name = "sesmesh"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "criterion",
  "fast-float2",
@@ -984,7 +984,7 @@ dependencies = [
 
 [[package]]
 name = "sesmesh-cli"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "clap",
  "clap_complete",
@@ -998,7 +998,7 @@ dependencies = [
 
 [[package]]
 name = "sesmesh-gpu"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "libloading",
  "thiserror",
@@ -1006,7 +1006,7 @@ dependencies = [
 
 [[package]]
 name = "sesmesh-testkit"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "proptest",
 ]
@@ -1310,7 +1310,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "1.3.1"
+version = "1.3.2"
 dependencies = [
  "anyhow",
  "clap",

@@ -6,6 +6,14 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-11-21
+
+### Fixed
+
+- Cite version 1.3.2 with its Zenodo DOI (10.5281/zenodo.24412360) in `CITATION.cff`, the
+  README and the website; 1.3.1 cited a wrong DOI (10.5281/zenodo.24412232). Code and
+  output are unchanged from 1.3.0.
+
 ## [1.3.1] - 2026-11-21
 
 ### Removed
@@ -599,7 +607,8 @@ listed in `docs/release.md` and GitHub issue #19).
 - XYZ reader no longer pre-allocates from an untrusted atom count (found by
   fuzzing: a count of 377 777 773 requested 36 GB).
 
-[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/uvar-apps/sesmesh/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/uvar-apps/sesmesh/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/uvar-apps/sesmesh/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/uvar-apps/sesmesh/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/uvar-apps/sesmesh/compare/v1.1.2...v1.2.0
